@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
-import { BookOpen, Mail, Lock, User } from "lucide-react";
+import { BookOpen, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +19,8 @@ const Auth = () => {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+  const [showSigninPassword, setShowSigninPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   const handleAuthSuccess = (data: { token: string; user: { role: string } }) => {
     window.localStorage.setItem("lms_token", data.token);
@@ -27,7 +29,7 @@ const Auth = () => {
     if (data.user.role === "admin") {
       navigate("/admin");
     } else {
-      navigate("/dashboard");
+      navigate("/");
     }
   };
 
@@ -94,11 +96,18 @@ const Auth = () => {
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Password"
-                    type="password"
-                    className="pl-10"
+                    type={showSigninPassword ? "text" : "password"}
+                    className="pl-10 pr-10"
                     value={signinPassword}
                     onChange={(e) => setSigninPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowSigninPassword((prev) => !prev)}
+                  >
+                    {showSigninPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
                 <Button
                   className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
@@ -138,11 +147,18 @@ const Auth = () => {
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Password"
-                    type="password"
-                    className="pl-10"
+                    type={showSignupPassword ? "text" : "password"}
+                    className="pl-10 pr-10"
                     value={signupPassword}
                     onChange={(e) => setSignupPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowSignupPassword((prev) => !prev)}
+                  >
+                    {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
                 <Button
                   className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
