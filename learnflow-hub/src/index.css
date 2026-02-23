@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 60% 18%;
+    --primary-foreground: 45 100% 96%;
+
+    --secondary: 45 93% 58%;
+    --secondary-foreground: 222 60% 18%;
+
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 45 93% 58%;
+    --accent-foreground: 222 60% 18%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 222 60% 18%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 222 60% 18%;
+    --sidebar-foreground: 220 20% 97%;
+    --sidebar-primary: 45 93% 58%;
+    --sidebar-primary-foreground: 222 60% 18%;
+    --sidebar-accent: 222 50% 25%;
+    --sidebar-accent-foreground: 220 20% 97%;
+    --sidebar-border: 222 50% 25%;
+    --sidebar-ring: 45 93% 58%;
+
+    /* Custom tokens */
+    --gold: 45 93% 58%;
+    --gold-light: 45 93% 72%;
+    --gold-dark: 45 80% 45%;
+    --navy: 222 60% 18%;
+    --navy-light: 222 40% 30%;
+    --navy-dark: 222 70% 10%;
+    --success: 152 60% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-body: 'Plus Jakarta Sans', sans-serif;
+
+    --gradient-hero: linear-gradient(135deg, hsl(222 60% 18%) 0%, hsl(222 70% 10%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(45 93% 58%) 0%, hsl(35 95% 55%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 20% 97%) 100%);
+
+    --shadow-card: 0 4px 20px -4px hsl(222 60% 18% / 0.08);
+    --shadow-card-hover: 0 12px 32px -8px hsl(222 60% 18% / 0.15);
+    --shadow-gold: 0 8px 24px -4px hsl(45 93% 58% / 0.4);
+  }
+
+  .dark {
+    --background: 222 70% 10%;
+    --foreground: 220 20% 97%;
+    --card: 222 60% 14%;
+    --card-foreground: 220 20% 97%;
+    --popover: 222 60% 14%;
+    --popover-foreground: 220 20% 97%;
+    --primary: 45 93% 58%;
+    --primary-foreground: 222 60% 18%;
+    --secondary: 222 40% 30%;
+    --secondary-foreground: 220 20% 97%;
+    --muted: 222 40% 20%;
+    --muted-foreground: 220 14% 60%;
+    --accent: 45 93% 58%;
+    --accent-foreground: 222 60% 18%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 40% 22%;
+    --input: 222 40% 22%;
+    --ring: 45 93% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+}
+
+@layer utilities {
+  .text-gradient-gold {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .bg-gradient-gold {
+    background: var(--gradient-gold);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-card-hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .shadow-gold {
+    box-shadow: var(--shadow-gold);
+  }
+}
