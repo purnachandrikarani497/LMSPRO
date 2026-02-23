@@ -37,6 +37,38 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
     const { title, description, thumbnail, instructor, category, price, level } = req.body;
 
+    if (
+      !title ||
+      !title.trim() ||
+      title.trim().length < 2 ||
+      !description ||
+      !description.trim() ||
+      description.trim().length < 2 ||
+      !thumbnail ||
+      !thumbnail.trim() ||
+      thumbnail.trim().length < 2 ||
+      !instructor ||
+      !instructor.trim() ||
+      instructor.trim().length < 2 ||
+      !category ||
+      !category.trim() ||
+      category.trim().length < 2 ||
+      typeof price !== "number" ||
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      return res.status(400).json({
+        message: "All fields are required, must be at least 2 characters, and price must be a positive number"
+      });
+    }
+
+    const priceDigitsLength = price.toString().replace(/\D/g, "").length;
+    if (priceDigitsLength > 9) {
+      return res.status(400).json({
+        message: "Price cannot exceed 9 digits"
+      });
+    }
+
     const payload = {
       title,
       description,
@@ -44,7 +76,8 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
       instructor,
       category,
       price,
-      level
+      level,
+      isPublished: true
     };
 
     if (req.user && req.user._id && mongoose.Types.ObjectId.isValid(req.user._id)) {
