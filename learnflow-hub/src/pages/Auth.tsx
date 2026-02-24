@@ -9,6 +9,71 @@ import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 
+const nameMaxLength = 40;
+const emailMaxLength = 50;
+const passwordMinLength = 6;
+const passwordMaxLength = 12;
+
+type SigninErrors = {
+  email?: string;
+  password?: string;
+};
+
+type SignupErrors = {
+  name?: string;
+  email?: string;
+  password?: string;
+};
+
+const validateName = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Full name is required";
+  }
+  if (trimmed.length < 2) {
+    return "Full name must be at least 2 characters";
+  }
+  if (trimmed.length > nameMaxLength) {
+    return `Full name must be at most ${nameMaxLength} characters`;
+  }
+  return null;
+};
+
+const validateEmail = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Email is required";
+  }
+  if (trimmed.length < 2) {
+    return "Email must be at least 2 characters";
+  }
+  if (trimmed.length > emailMaxLength) {
+    return `Email must be at most ${emailMaxLength} characters`;
+  }
+  if (!trimmed.includes("@")) {
+    return "Email must include @";
+  }
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(trimmed)) {
+    return "Enter a valid email address";
+  }
+  return null;
+};
+
+const validatePassword = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Password is required";
+  }
+  if (trimmed.length < passwordMinLength) {
+    return `Password must be at least ${passwordMinLength} characters`;
+  }
+  if (trimmed.length > passwordMaxLength) {
+    return `Password must be at most ${passwordMaxLength} characters`;
+  }
+  return null;
+};
+
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "signin";
@@ -21,6 +86,8 @@ const Auth = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [showSigninPassword, setShowSigninPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signinErrors, setSigninErrors] = useState<SigninErrors>({});
+  const [signupErrors, setSignupErrors] = useState<SignupErrors>({});
 
   const handleAuthSuccess = (data: { token: string; user: { role: string } }) => {
     window.localStorage.setItem("lms_token", data.token);
@@ -30,7 +97,7 @@ const Auth = () => {
   };
 
   const loginMutation = useMutation({
-    mutationFn: () => api.login({ email: signinEmail, password: signinPassword }),
+    mutationFn: () => api.login({ email: signinEmail.trim(), password: signinPassword }),
     onSuccess: (data) => handleAuthSuccess(data),
     onError: () => {
       toast({ title: "Sign in failed", description: "Check your credentials", variant: "destructive" });
@@ -40,8 +107,8 @@ const Auth = () => {
   const registerMutation = useMutation({
     mutationFn: () =>
       api.register({
-        name: signupName,
-        email: signupEmail,
+        name: signupName.trim(),
+        email: signupEmail.trim(),
         password: signupPassword,
         role: "student"
       }),
@@ -53,6 +120,44 @@ const Auth = () => {
       toast({ title: "Sign up failed", description: "Please try again with different details", variant: "destructive" });
     }
   });
+
+  const handleSignin = () => {
+    const emailError = validateEmail(signinEmail);
+    const passwordError = validatePassword(signinPassword);
+    const nextErrors: SigninErrors = {};
+    if (emailError) {
+      nextErrors.email = emailError;
+    }
+    if (passwordError) {
+      nextErrors.password = passwordError;
+    }
+    setSigninErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+    loginMutation.mutate();
+  };
+
+  const handleSignup = () => {
+    const nameError = validateName(signupName);
+    const emailError = validateEmail(signupEmail);
+    const passwordError = validatePassword(signupPassword);
+    const nextErrors: SignupErrors = {};
+    if (nameError) {
+      nextErrors.name = nameError;
+    }
+    if (emailError) {
+      nextErrors.email = emailError;
+    }
+    if (passwordError) {
+      nextErrors.password = passwordError;
+    }
+    setSignupErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+    registerMutation.mutate();
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-hero p-4">
@@ -85,8 +190,28 @@ const Auth = () => {
                     type="email"
                     className="pl-10"
                     value={signinEmail}
-                    onChange={(e) => setSigninEmail(e.target.value)}
+                    maxLength={emailMaxLength}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length > emailMaxLength) {
+                        return;
+                      }
+                      setSigninEmail(value);
+                      setSigninErrors((prev) => {
+                        const error = validateEmail(value);
+                        const next = { ...prev };
+                        if (error) {
+                          next.email = error;
+                        } else {
+                          delete next.email;
+                        }
+                        return next;
+                      });
+                    }}
                   />
+                  {signinErrors.email && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.email}</p>
+                  )}
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -95,7 +220,24 @@ const Auth = () => {
                     type={showSigninPassword ? "text" : "password"}
                     className="pl-10 pr-10"
                     value={signinPassword}
-                    onChange={(e) => setSigninPassword(e.target.value)}
+                    maxLength={passwordMaxLength}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length > passwordMaxLength) {
+                        return;
+                      }
+                      setSigninPassword(value);
+                      setSigninErrors((prev) => {
+                        const error = validatePassword(value);
+                        const next = { ...prev };
+                        if (error) {
+                          next.password = error;
+                        } else {
+                          delete next.password;
+                        }
+                        return next;
+                      });
+                    }}
                   />
                   <button
                     type="button"
@@ -104,10 +246,13 @@ const Auth = () => {
                   >
                     {showSigninPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                  {signinErrors.password && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.password}</p>
+                  )}
                 </div>
                 <Button
                   className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
-                  onClick={() => loginMutation.mutate()}
+                  onClick={handleSignin}
                   disabled={loginMutation.isPending}
                 >
                   Sign In
@@ -126,8 +271,28 @@ const Auth = () => {
                     placeholder="Full Name"
                     className="pl-10"
                     value={signupName}
-                    onChange={(e) => setSignupName(e.target.value)}
+                    maxLength={nameMaxLength}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length > nameMaxLength) {
+                        return;
+                      }
+                      setSignupName(value);
+                      setSignupErrors((prev) => {
+                        const error = validateName(value);
+                        const next = { ...prev };
+                        if (error) {
+                          next.name = error;
+                        } else {
+                          delete next.name;
+                        }
+                        return next;
+                      });
+                    }}
                   />
+                  {signupErrors.name && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.name}</p>
+                  )}
                 </div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -136,8 +301,28 @@ const Auth = () => {
                     type="email"
                     className="pl-10"
                     value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
+                    maxLength={emailMaxLength}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length > emailMaxLength) {
+                        return;
+                      }
+                      setSignupEmail(value);
+                      setSignupErrors((prev) => {
+                        const error = validateEmail(value);
+                        const next = { ...prev };
+                        if (error) {
+                          next.email = error;
+                        } else {
+                          delete next.email;
+                        }
+                        return next;
+                      });
+                    }}
                   />
+                  {signupErrors.email && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.email}</p>
+                  )}
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -146,7 +331,24 @@ const Auth = () => {
                     type={showSignupPassword ? "text" : "password"}
                     className="pl-10 pr-10"
                     value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
+                    maxLength={passwordMaxLength}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length > passwordMaxLength) {
+                        return;
+                      }
+                      setSignupPassword(value);
+                      setSignupErrors((prev) => {
+                        const error = validatePassword(value);
+                        const next = { ...prev };
+                        if (error) {
+                          next.password = error;
+                        } else {
+                          delete next.password;
+                        }
+                        return next;
+                      });
+                    }}
                   />
                   <button
                     type="button"
@@ -155,10 +357,13 @@ const Auth = () => {
                   >
                     {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                  {signupErrors.password && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.password}</p>
+                  )}
                 </div>
                 <Button
                   className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
-                  onClick={() => registerMutation.mutate()}
+                  onClick={handleSignup}
                   disabled={registerMutation.isPending}
                 >
                   Create Account
