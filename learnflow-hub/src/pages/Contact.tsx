@@ -17,8 +17,8 @@ const Contact = () => {
     let next = value.replace(/[^A-Za-z\s]/g, "");
     if (next.length > 30) {
       toast({
-        title: "Name too long",
-        description: "Name must be at most 30 characters.",
+        title: "Name is too long",
+        description: "Use at most 30 characters.",
         variant: "destructive"
       });
       next = next.slice(0, 30);
@@ -30,8 +30,8 @@ const Contact = () => {
     let next = value.replace(/[^A-Za-z\s]/g, "");
     if (next.length > 150) {
       toast({
-        title: "Message too long",
-        description: "Message must be at most 150 characters.",
+        title: "Message is too long",
+        description: "Use at most 150 characters.",
         variant: "destructive"
       });
       next = next.slice(0, 150);
@@ -48,7 +48,7 @@ const Contact = () => {
     if (!trimmedName || !trimmedEmail || !trimmedMessage) {
       toast({
         title: "Missing information",
-        description: "All fields are required and cannot be empty or spaces only.",
+        description: "All fields are required.",
         variant: "destructive"
       });
       return;
@@ -57,7 +57,7 @@ const Contact = () => {
     if (!/^[A-Za-z\s]+$/.test(trimmedName)) {
       toast({
         title: "Invalid name",
-        description: "Name can contain only letters and spaces.",
+        description: "Use only letters and spaces.",
         variant: "destructive"
       });
       return;
@@ -66,7 +66,7 @@ const Contact = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       toast({
         title: "Invalid email",
-        description: "Please enter a valid email address with @ symbol.",
+        description: "Enter a valid email address.",
         variant: "destructive"
       });
       return;
@@ -75,7 +75,7 @@ const Contact = () => {
     if (!/^[A-Za-z\s]+$/.test(trimmedMessage)) {
       toast({
         title: "Invalid message",
-        description: "Message can contain only letters and spaces.",
+        description: "Use only letters and spaces.",
         variant: "destructive"
       });
       return;
@@ -116,6 +116,7 @@ const Contact = () => {
                 maxLength={30}
                 onChange={(e) => handleNameChange(e.target.value)}
               />
+              <p className="mt-1 text-xs text-muted-foreground">{name.length}/30</p>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-foreground">Email</label>
@@ -135,6 +136,7 @@ const Contact = () => {
                 maxLength={150}
                 onChange={(e) => handleMessageChange(e.target.value)}
               />
+              <p className="mt-1 text-xs text-muted-foreground">{message.length}/150</p>
             </div>
             <Button type="submit" className="bg-gradient-gold text-primary shadow-gold hover:opacity-90">
               Submit

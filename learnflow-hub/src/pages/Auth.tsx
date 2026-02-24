@@ -28,13 +28,13 @@ type SignupErrors = {
 const validateName = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
-    return "Full name is required";
+    return "Enter your full name";
   }
   if (trimmed.length < 2) {
-    return "Full name must be at least 2 characters";
+    return "Use at least 2 characters";
   }
   if (trimmed.length > nameMaxLength) {
-    return `Full name must be at most ${nameMaxLength} characters`;
+    return `Use at most ${nameMaxLength} characters`;
   }
   return null;
 };
@@ -42,16 +42,16 @@ const validateName = (value: string) => {
 const validateEmail = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
-    return "Email is required";
+    return "Enter your email";
   }
   if (trimmed.length < 2) {
-    return "Email must be at least 2 characters";
+    return "Use at least 2 characters";
   }
   if (trimmed.length > emailMaxLength) {
-    return `Email must be at most ${emailMaxLength} characters`;
+    return `Use at most ${emailMaxLength} characters`;
   }
   if (!trimmed.includes("@")) {
-    return "Email must include @";
+    return "Include @ in your email";
   }
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(trimmed)) {
@@ -63,13 +63,13 @@ const validateEmail = (value: string) => {
 const validatePassword = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
-    return "Password is required";
+    return "Enter your password";
   }
   if (trimmed.length < passwordMinLength) {
-    return `Password must be at least ${passwordMinLength} characters`;
+    return `Use at least ${passwordMinLength} characters`;
   }
   if (trimmed.length > passwordMaxLength) {
-    return `Password must be at most ${passwordMaxLength} characters`;
+    return `Use at most ${passwordMaxLength} characters`;
   }
   return null;
 };
@@ -100,7 +100,7 @@ const Auth = () => {
     mutationFn: () => api.login({ email: signinEmail.trim(), password: signinPassword }),
     onSuccess: (data) => handleAuthSuccess(data),
     onError: () => {
-      toast({ title: "Sign in failed", description: "Check your credentials", variant: "destructive" });
+      toast({ title: "Sign in failed", description: "Please check your credentials", variant: "destructive" });
     }
   });
 
@@ -117,7 +117,7 @@ const Auth = () => {
       handleAuthSuccess(data);
     },
     onError: () => {
-      toast({ title: "Sign up failed", description: "Please try again with different details", variant: "destructive" });
+      toast({ title: "Sign up failed", description: "Try again with different details", variant: "destructive" });
     }
   });
 
@@ -209,6 +209,9 @@ const Auth = () => {
                       });
                     }}
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {signinEmail.length}/{emailMaxLength}
+                  </p>
                   {signinErrors.email && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.email}</p>
                   )}
@@ -246,6 +249,9 @@ const Auth = () => {
                   >
                     {showSigninPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {signinPassword.length}/{passwordMaxLength}
+                  </p>
                   {signinErrors.password && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.password}</p>
                   )}
@@ -290,6 +296,9 @@ const Auth = () => {
                       });
                     }}
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {signupName.length}/{nameMaxLength}
+                  </p>
                   {signupErrors.name && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.name}</p>
                   )}
@@ -320,6 +329,9 @@ const Auth = () => {
                       });
                     }}
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {signupEmail.length}/{emailMaxLength}
+                  </p>
                   {signupErrors.email && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.email}</p>
                   )}
@@ -357,6 +369,9 @@ const Auth = () => {
                   >
                     {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {signupPassword.length}/{passwordMaxLength}
+                  </p>
                   {signupErrors.password && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.password}</p>
                   )}
