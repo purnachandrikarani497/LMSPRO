@@ -15,6 +15,25 @@ import certificateRoutes from "./routes/certificates.js";
 const app = express();
 
 app.set("trust proxy", 1);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        config.clientUrl,
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8080"
+      ];
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"]
+  })
+);
 app.use(helmet());
 app.use(
   rateLimit({
@@ -23,27 +42,6 @@ app.use(
   })
 );
 
-const allowedOrigins = [
-  config.clientUrl,
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:8080"
-];
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        return callback(null, true);
-      }
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(null, false);
-    },
-    credentials: true
-  })
-);
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));

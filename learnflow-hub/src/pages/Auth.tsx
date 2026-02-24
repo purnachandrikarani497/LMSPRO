@@ -183,32 +183,34 @@ const Auth = () => {
 
             <TabsContent value="signin">
               <div className="space-y-4">
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Email"
-                    type="email"
-                    className="pl-10"
-                    value={signinEmail}
-                    maxLength={emailMaxLength}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value.length > emailMaxLength) {
-                        return;
-                      }
-                      setSigninEmail(value);
-                      setSigninErrors((prev) => {
-                        const error = validateEmail(value);
-                        const next = { ...prev };
-                        if (error) {
-                          next.email = error;
-                        } else {
-                          delete next.email;
+                <div>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Email"
+                      type="email"
+                      className="pl-10"
+                      value={signinEmail}
+                      maxLength={emailMaxLength}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length > emailMaxLength) {
+                          return;
                         }
-                        return next;
-                      });
-                    }}
-                  />
+                        setSigninEmail(value);
+                        setSigninErrors((prev) => {
+                          const error = validateEmail(value);
+                          const next = { ...prev };
+                          if (error) {
+                            next.email = error;
+                          } else {
+                            delete next.email;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {signinEmail.length}/{emailMaxLength}
                   </p>
@@ -216,39 +218,41 @@ const Auth = () => {
                     <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.email}</p>
                   )}
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Password"
-                    type={showSigninPassword ? "text" : "password"}
-                    className="pl-10 pr-10"
-                    value={signinPassword}
-                    maxLength={passwordMaxLength}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value.length > passwordMaxLength) {
-                        return;
-                      }
-                      setSigninPassword(value);
-                      setSigninErrors((prev) => {
-                        const error = validatePassword(value);
-                        const next = { ...prev };
-                        if (error) {
-                          next.password = error;
-                        } else {
-                          delete next.password;
+                <div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Password"
+                      type={showSigninPassword ? "text" : "password"}
+                      className="pl-10 pr-10"
+                      value={signinPassword}
+                      maxLength={passwordMaxLength}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length > passwordMaxLength) {
+                          return;
                         }
-                        return next;
-                      });
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowSigninPassword((prev) => !prev)}
-                  >
-                    {showSigninPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                        setSigninPassword(value);
+                        setSigninErrors((prev) => {
+                          const error = validatePassword(value);
+                          const next = { ...prev };
+                          if (error) {
+                            next.password = error;
+                          } else {
+                            delete next.password;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowSigninPassword((prev) => !prev)}
+                    >
+                      {showSigninPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {signinPassword.length}/{passwordMaxLength}
                   </p>
@@ -271,31 +275,33 @@ const Auth = () => {
 
             <TabsContent value="signup">
               <div className="space-y-4">
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Full Name"
-                    className="pl-10"
-                    value={signupName}
-                    maxLength={nameMaxLength}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value.length > nameMaxLength) {
-                        return;
-                      }
-                      setSignupName(value);
-                      setSignupErrors((prev) => {
-                        const error = validateName(value);
-                        const next = { ...prev };
-                        if (error) {
-                          next.name = error;
-                        } else {
-                          delete next.name;
+                <div>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Full Name"
+                      className="pl-10"
+                      value={signupName}
+                      maxLength={nameMaxLength}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length > nameMaxLength) {
+                          return;
                         }
-                        return next;
-                      });
-                    }}
-                  />
+                        setSignupName(value);
+                        setSignupErrors((prev) => {
+                          const error = validateName(value);
+                          const next = { ...prev };
+                          if (error) {
+                            next.name = error;
+                          } else {
+                            delete next.name;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {signupName.length}/{nameMaxLength}
                   </p>
@@ -303,32 +309,34 @@ const Auth = () => {
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.name}</p>
                   )}
                 </div>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Email"
-                    type="email"
-                    className="pl-10"
-                    value={signupEmail}
-                    maxLength={emailMaxLength}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value.length > emailMaxLength) {
-                        return;
-                      }
-                      setSignupEmail(value);
-                      setSignupErrors((prev) => {
-                        const error = validateEmail(value);
-                        const next = { ...prev };
-                        if (error) {
-                          next.email = error;
-                        } else {
-                          delete next.email;
+                <div>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Email"
+                      type="email"
+                      className="pl-10"
+                      value={signupEmail}
+                      maxLength={emailMaxLength}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length > emailMaxLength) {
+                          return;
                         }
-                        return next;
-                      });
-                    }}
-                  />
+                        setSignupEmail(value);
+                        setSignupErrors((prev) => {
+                          const error = validateEmail(value);
+                          const next = { ...prev };
+                          if (error) {
+                            next.email = error;
+                          } else {
+                            delete next.email;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {signupEmail.length}/{emailMaxLength}
                   </p>
@@ -336,39 +344,41 @@ const Auth = () => {
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.email}</p>
                   )}
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Password"
-                    type={showSignupPassword ? "text" : "password"}
-                    className="pl-10 pr-10"
-                    value={signupPassword}
-                    maxLength={passwordMaxLength}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value.length > passwordMaxLength) {
-                        return;
-                      }
-                      setSignupPassword(value);
-                      setSignupErrors((prev) => {
-                        const error = validatePassword(value);
-                        const next = { ...prev };
-                        if (error) {
-                          next.password = error;
-                        } else {
-                          delete next.password;
+                <div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Password"
+                      type={showSignupPassword ? "text" : "password"}
+                      className="pl-10 pr-10"
+                      value={signupPassword}
+                      maxLength={passwordMaxLength}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length > passwordMaxLength) {
+                          return;
                         }
-                        return next;
-                      });
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowSignupPassword((prev) => !prev)}
-                  >
-                    {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                        setSignupPassword(value);
+                        setSignupErrors((prev) => {
+                          const error = validatePassword(value);
+                          const next = { ...prev };
+                          if (error) {
+                            next.password = error;
+                          } else {
+                            delete next.password;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowSignupPassword((prev) => !prev)}
+                    >
+                      {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {signupPassword.length}/{passwordMaxLength}
                   </p>
