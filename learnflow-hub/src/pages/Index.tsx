@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import CourseCard from "@/components/CourseCard";
 import Footer from "@/components/Footer";
-import { categories, type Course } from "@/lib/mockData";
+import { categories as staticCategories, type Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { api, type ApiCourse } from "@/lib/api";
@@ -34,6 +34,34 @@ const Index = () => {
         image: c.thumbnail || "",
         featured: false
       }));
+
+  const categoryCounts = new Map<string, number>();
+  (apiCourses || []).forEach((course) => {
+    const name = (course.category && course.category.trim()) || "General";
+    categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
+  });
+
+  const dynamicCategoriesFromData =
+    categoryCounts.size > 0
+      ? Array.from(categoryCounts.entries())
+        .filter(([, count]) => count > 0)
+        .map(([name, count]) => {
+          const base = staticCategories.find((cat) => cat.name === name);
+          return {
+            name,
+            icon: base?.icon ?? "📚",
+            count
+          };
+        })
+      : [];
+
+  const dynamicCategories =
+    dynamicCategoriesFromData.length > 0 ? dynamicCategoriesFromData : staticCategories;
+
+  const totalCourses =
+    dynamicCategories.length > 0
+      ? dynamicCategories.reduce((acc, cat) => acc + (cat.count ?? 0), 0)
+      : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,12 +92,24 @@ const Index = () => {
           </p>
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          {categories.map((cat, i) => (
+          <Link
+            to="/courses"
+            key="all-categories"
+            className="group flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 animate-fade-in"
+            style={{ animationDelay: "0s" }}
+          >
+            <span className="text-3xl">📚</span>
+            <span className="text-sm font-semibold text-card-foreground">All Courses</span>
+            <span className="text-xs text-muted-foreground">
+              {totalCourses} courses
+            </span>
+          </Link>
+          {dynamicCategories.map((cat, i) => (
             <Link
-              to="/courses"
+              to={`/courses?category=${encodeURIComponent(cat.name)}`}
               key={cat.name}
               className="group flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 animate-fade-in"
-              style={{ animationDelay: `${i * 0.05}s` }}
+              style={{ animationDelay: `${(i + 1) * 0.05}s` }}
             >
               <span className="text-3xl">{cat.icon}</span>
               <span className="text-sm font-semibold text-card-foreground">{cat.name}</span>

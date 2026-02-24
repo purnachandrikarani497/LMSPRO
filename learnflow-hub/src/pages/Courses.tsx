@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,11 +9,18 @@ import { categories, type Course } from "@/lib/mockData";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiCourse } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
+import { useSearchParams } from "react-router-dom";
 
 const Courses = () => {
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
+  const [category, setCategory] = useState(searchParams.get("category") || "all");
   const [level, setLevel] = useState("all");
+
+  useEffect(() => {
+    const param = searchParams.get("category") || "all";
+    setCategory(param);
+  }, [searchParams]);
 
   const { data: apiCourses, isLoading } = useQuery<ApiCourse[]>({
     queryKey: ["courses"],

@@ -3,6 +3,7 @@ import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 
 const plans = [
   {
@@ -56,9 +57,11 @@ const Pricing = () => (
                   <li key={feature}>{feature}</li>
                 ))}
               </ul>
-              <Button className="w-full bg-gradient-gold text-primary shadow-gold hover:opacity-90">
-                Get started
-              </Button>
+              <Link to="/auth?tab=signup">
+                <Button className="w-full bg-gradient-gold text-primary shadow-gold hover:opacity-90">
+                  Get started
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         ))}
