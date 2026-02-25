@@ -1,5 +1,3 @@
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Helmet } from "react-helmet-async";
 
 const About = () => (
@@ -35,7 +33,6 @@ const About = () => (
         </div>
       </div>
     </main>
-    <Footer />
   </div>
 );
 

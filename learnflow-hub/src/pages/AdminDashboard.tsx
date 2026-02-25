@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, Users, DollarSign, BookOpen, TrendingUp, ListChecks, HelpCircle, Download } from "lucide-react";
+import { Plus, Edit, Trash2, Users, BookOpen, TrendingUp, ListChecks, HelpCircle, Upload, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,15 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { categories } from "@/lib/mockData";
 import type { Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiAdminEnrollment, ApiCourse } from "@/lib/api";
+import { api, ApiAdminEnrollment, ApiCourse, getThumbnailSrc } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { format, startOfWeek, startOfMonth, startOfYear } from "date-fns";
 
 interface StatCardProps {
   icon: typeof BookOpen;
@@ -62,20 +60,21 @@ const AdminDashboard = () => {
     queryFn: () => api.getCourses()
   });
 
-  const { data: adminEnrollments, isLoading: enrollmentsLoading } = useQuery<ApiAdminEnrollment[]>({
+  const { data: adminEnrollments } = useQuery<ApiAdminEnrollment[]>({
     queryKey: ["admin-enrollments"],
     queryFn: () => api.getAllEnrollments()
   });
 
   const [coursesList, setCoursesList] = useState<Course[]>([]);
-  const [enrollmentList, setEnrollmentList] = useState<ApiAdminEnrollment[]>([]);
-  const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "", description: "", instructor: "", category: "Development",
     price: "", level: "Beginner" as Course["level"], image: "",
   });
+  const [uploading, setUploading] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!apiCourses || apiCourses.length === 0) {
@@ -86,24 +85,30 @@ const AdminDashboard = () => {
   }, [apiCourses]);
 
   useEffect(() => {
-    if (!adminEnrollments || adminEnrollments.length === 0) {
-      setEnrollmentList([]);
-      return;
-    }
-    setEnrollmentList(adminEnrollments);
-  }, [adminEnrollments]);
+    return () => { previewBlobUrl && URL.revokeObjectURL(previewBlobUrl); };
+  }, [previewBlobUrl]);
 
   const resetForm = () => {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
     setForm({ title: "", description: "", instructor: "", category: "Development", price: "", level: "Beginner", image: "" });
     setEditingId(null);
+    setPreviewError(false);
   };
 
   const handleEdit = (course: Course) => {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
     setForm({
       title: course.title, description: course.description, instructor: course.instructor,
       category: course.category, price: String(course.price), level: course.level, image: course.image,
     });
     setEditingId(course.id);
+    setPreviewError(false);
     setDialogOpen(true);
   };
 
@@ -197,45 +202,10 @@ const AdminDashboard = () => {
     }
   });
 
-  const handleDeleteEnrollment = (id: string) => {
-    setEnrollmentList(prev => prev.filter(e => e._id !== id));
-    toast({ title: "Deleted", description: "Payment record removed from view" });
-  };
-
-  const filteredEnrollments = (() => {
-    if (timeRange === "all") return enrollmentList;
-    const now = new Date();
-    const start =
-      timeRange === "week" ? startOfWeek(now) :
-      timeRange === "month" ? startOfMonth(now) :
-      startOfYear(now);
-    return enrollmentList.filter(e => new Date(e.createdAt) >= start);
-  })();
-
-  const downloadCSV = (rows: ApiAdminEnrollment[], filename: string) => {
-    const header = ["Course","Student","Email","Price","EnrolledOn"].join(",");
-    const data = rows.map(e => [
-      (e.course?.title ?? "Deleted Course").replace(/,/g, " "),
-      (e.student?.name ?? "Deleted Student").replace(/,/g, " "),
-      (e.student?.email ?? "-").replace(/,/g, " "),
-      String(e.course?.price ?? 0),
-      format(new Date(e.createdAt), "dd MMM yyyy")
-    ].join(","));
-    const csv = [header, ...data].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadReceipt = (enrollment: ApiAdminEnrollment) => {
-    downloadCSV([enrollment], `receipt-${enrollment._id}`);
-  };
+  const uniqueStudents =
+    adminEnrollments && adminEnrollments.length > 0
+      ? new Set(adminEnrollments.filter((e) => e.student).map((e) => e.student!._id)).size
+      : 0;
 
   const handleSubmit = () => {
     const title = form.title.trim();
@@ -350,15 +320,15 @@ const AdminDashboard = () => {
 
     if (!image) {
       toast({
-        title: "Image URL is required",
-        description: "Please provide an image URL for the course (no spaces only)",
+        title: "Thumbnail is required",
+        description: "Upload an image or paste an image URL",
         variant: "destructive"
       });
       return;
     }
     if (image.length === 1) {
       toast({
-        title: "Image URL too short",
+        title: "Invalid thumbnail",
         description: "Image URL must be at least 2 characters",
         variant: "destructive"
       });
@@ -374,14 +344,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const totalRevenue =
-    adminEnrollments?.reduce((sum, enrollment) => sum + (enrollment.course?.price ?? 0), 0) ?? 0;
-
-  const uniqueStudents =
-    adminEnrollments && adminEnrollments.length > 0
-      ? new Set(adminEnrollments.filter(e => e.student).map((enrollment) => enrollment.student._id)).size
-      : 0;
-
   const avgRating =
     coursesList.length > 0
       ? (
@@ -395,7 +357,6 @@ const AdminDashboard = () => {
       <Helmet>
         <title>Admin Dashboard – LearnHub LMS</title>
       </Helmet>
-      <Navbar />
       <div className="container mx-auto px-4 py-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -501,6 +462,7 @@ const AdminDashboard = () => {
                 <Input
                   type="number"
                   placeholder="Price ($)"
+                  className="input-no-spinner"
                   value={form.price}
                   onChange={(e) => {
                     const digitsOnly = e.target.value.replace(/\D/g, "");
@@ -509,26 +471,86 @@ const AdminDashboard = () => {
                     }
                   }}
                 />
-                <Input
-                  placeholder="Image URL"
-                  value={form.image}
-                  required
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value.trim().length === 0 && value.length > 0) {
-                      setForm({ ...form, image: "" });
-                      return;
-                    }
-                    if (value.length === 200) {
-                      toast({
-                        title: "Image URL max length reached",
-                        description: "Image URL cannot exceed 200 characters",
-                        variant: "destructive"
-                      });
-                    }
-                    setForm({ ...form, image: value });
-                  }}
-                />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Course thumbnail</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      id="thumbnail-upload"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast({ title: "File too large", description: "Max 5MB", variant: "destructive" });
+                          return;
+                        }
+                        if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+                        const blobUrl = URL.createObjectURL(file);
+                        setPreviewBlobUrl(blobUrl);
+                        setPreviewError(false);
+                        setUploading(true);
+                        try {
+                          const { url, key } = await api.uploadThumbnail(file);
+                          setForm((prev) => ({ ...prev, image: key || url }));
+                          toast({ title: "Image uploaded", description: "Thumbnail ready" });
+                        } catch (err) {
+                          URL.revokeObjectURL(blobUrl);
+                          setPreviewBlobUrl(null);
+                          toast({
+                            title: "Upload failed",
+                            description: err instanceof Error ? err.message : "Please try again",
+                            variant: "destructive"
+                          });
+                        } finally {
+                          setUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2 shrink-0"
+                      onClick={() => document.getElementById("thumbnail-upload")?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      {uploading ? "Uploading…" : "Upload image"}
+                    </Button>
+                    <Input
+                      placeholder="Upload image or paste URL"
+                      value={form.image}
+                      className="flex-1 min-w-0"
+                      onChange={(e) => {
+                        if (previewBlobUrl) {
+                          URL.revokeObjectURL(previewBlobUrl);
+                          setPreviewBlobUrl(null);
+                        }
+                        setForm({ ...form, image: e.target.value });
+                        setPreviewError(false);
+                      }}
+                    />
+                  </div>
+                  {(form.image || previewBlobUrl) && (
+                    <div className="mt-1 flex h-24 w-40 items-center justify-center overflow-hidden rounded border border-border bg-muted/50">
+                      {previewError && !previewBlobUrl ? (
+                        <p className="px-2 text-center text-xs text-muted-foreground">
+                          Could not load preview. Use &quot;Upload image&quot; or paste a valid URL.
+                        </p>
+                      ) : (
+                        <img
+                          src={previewBlobUrl ? previewBlobUrl : getThumbnailSrc(form.image) || form.image}
+                          alt="Preview"
+                          className="h-full w-full object-cover"
+                          onLoad={() => setPreviewError(false)}
+                          onError={() => !previewBlobUrl && setPreviewError(true)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
                 <Button
                   onClick={handleSubmit}
                   className="bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
@@ -541,10 +563,9 @@ const AdminDashboard = () => {
           </Dialog>
         </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard icon={BookOpen} label="Total Courses" value={String(coursesList.length)} />
           <StatCard icon={Users} label="Total Students" value={uniqueStudents.toString()} />
-          <StatCard icon={DollarSign} label="Total Revenue" value={`$${totalRevenue.toFixed(2)}`} />
           <StatCard icon={TrendingUp} label="Avg Rating" value={avgRating} />
         </div>
 
@@ -565,7 +586,11 @@ const AdminDashboard = () => {
                 <TableRow key={course.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <img src={course.image} alt="" className="hidden h-10 w-14 rounded-md object-cover sm:block" />
+                      <img
+                        src={getThumbnailSrc(course.image) || course.image || ""}
+                        alt=""
+                        className="hidden h-10 w-14 rounded-md object-cover sm:block"
+                      />
                       <div>
                         <p className="font-medium text-card-foreground text-sm line-clamp-1">{course.title}</p>
                         <p className="text-xs text-muted-foreground">{course.instructor}</p>
@@ -584,6 +609,11 @@ const AdminDashboard = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Link to={`/admin/course/${course.id}`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Manage lessons">
+                          <Settings className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </Link>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(course)}>
                         <Edit className="h-4 w-4 text-muted-foreground" />
                       </Button>
@@ -606,96 +636,6 @@ const AdminDashboard = () => {
           </Table>
         </div>
 
-        <div className="mt-12">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="font-heading text-xl font-semibold text-foreground flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-secondary" />
-                Completed Payments
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                All courses where enrollment and payment have been completed.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select value={timeRange} onValueChange={(v) => setTimeRange(v as typeof timeRange)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Time Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
-                  <SelectItem value="all">All</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => downloadCSV(filteredEnrollments, `payments-${timeRange}`)}
-                disabled={filteredEnrollments.length === 0}
-              >
-                <Download className="h-4 w-4" /> Download CSV
-              </Button>
-            </div>
-          </div>
-          {enrollmentsLoading && (
-            <p className="mt-4 text-sm text-muted-foreground">Loading payment details...</p>
-          )}
-          {!enrollmentsLoading && (filteredEnrollments.length === 0) && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              No completed payments found yet.
-            </p>
-          )}
-          {filteredEnrollments && filteredEnrollments.length > 0 && (
-            <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-card">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Course</TableHead>
-                    <TableHead className="hidden sm:table-cell">Student</TableHead>
-                    <TableHead className="hidden md:table-cell">Email</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead className="hidden md:table-cell">Enrolled On</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredEnrollments.map((enrollment) => (
-                    <TableRow key={enrollment._id}>
-                      <TableCell className="text-sm font-medium text-card-foreground">
-                        {enrollment.course?.title || "Deleted Course"}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                        {enrollment.student?.name || "Deleted Student"}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                        {enrollment.student?.email || "-"}
-                      </TableCell>
-                      <TableCell className="text-sm font-semibold">
-                        ${enrollment.course?.price?.toFixed(2) ?? "0.00"}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                        {format(new Date(enrollment.createdAt), "dd MMM yyyy")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => downloadReceipt(enrollment)}>
-                            <Download className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteEnrollment(enrollment._id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-
         <div className="mt-6 rounded-xl border border-dashed border-border bg-card/40 p-4 text-xs text-muted-foreground flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/15">
             <ListChecks className="h-4 w-4 text-secondary" />
@@ -711,7 +651,6 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
-      <Footer />
     </div>
   );
 };

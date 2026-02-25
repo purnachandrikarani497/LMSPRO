@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Navbar from "@/components/Navbar";
 import CourseCard from "@/components/CourseCard";
-import Footer from "@/components/Footer";
 import { categories, type Course } from "@/lib/mockData";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiCourse } from "@/lib/api";
@@ -63,7 +61,6 @@ const Courses = () => {
         <meta property="og:title" content="All Courses – LearnHub LMS" />
         <meta property="og:type" content="website" />
       </Helmet>
-      <Navbar />
       <div className="container mx-auto px-4 py-10">
         <h1 className="font-heading text-3xl font-bold text-foreground sm:text-4xl">All Courses</h1>
         <p className="mt-2 text-muted-foreground">Browse our full catalog of expert-led courses</p>
@@ -107,9 +104,9 @@ const Courses = () => {
           {isLoading && sourceCourses.length === 0 ? "Loading courses..." : `${filtered.length} courses found`}
         </p>
 
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((course, i) => (
-            <div key={course.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
+            <div key={course.id} className="animate-fade-in" style={{ animationDelay: `${i * 0.03}s` }}>
               <CourseCard course={course} />
             </div>
           ))}
@@ -121,7 +118,6 @@ const Courses = () => {
           </div>
         )}
       </div>
-      <Footer />
     </div>
   );
 };

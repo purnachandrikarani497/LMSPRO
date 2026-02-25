@@ -1,10 +1,8 @@
 import { ArrowRight, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import CourseCard from "@/components/CourseCard";
-import Footer from "@/components/Footer";
 import { categories as staticCategories, type Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
@@ -78,7 +76,6 @@ const Index = () => {
         />
         <meta property="og:type" content="website" />
       </Helmet>
-      <Navbar />
       <HeroSection />
 
       {/* Categories */}
@@ -205,8 +202,6 @@ const Index = () => {
           </Link>
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 };

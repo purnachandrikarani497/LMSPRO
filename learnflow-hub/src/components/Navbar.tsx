@@ -11,11 +11,35 @@ interface StoredUser {
   role: UserRole;
 }
 
-const Navbar = () => {
+interface NavbarProps {
+  /** When true, show logo and nav links (Home, Courses, etc.). When false, compact nav for admin sidebar layout. */
+  showFullNav?: boolean;
+}
+
+const Navbar = ({ showFullNav = true }: NavbarProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<StoredUser | null>(null);
+
+  const links = showFullNav
+    ? user?.role === "admin"
+      ? [
+          { to: "/", label: "Home" },
+          { to: "/courses", label: "Courses" },
+          { to: "/admin", label: "Admin" }
+        ]
+      : user?.role === "student"
+        ? [
+            { to: "/", label: "Home" },
+            { to: "/courses", label: "Courses" },
+            { to: "/dashboard", label: "My Learning" }
+          ]
+        : [
+            { to: "/", label: "Home" },
+            { to: "/courses", label: "Courses" }
+          ]
+    : [];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,29 +79,19 @@ const Navbar = () => {
     navigate("/auth?tab=signin");
   };
 
-  const links =
-    user && user.role === "admin"
-      ? [
-          { to: "/", label: "Home" },
-          { to: "/courses", label: "Courses" },
-          { to: "/admin", label: "Admin" }
-        ]
-      : [
-          { to: "/", label: "Home" },
-          { to: "/courses", label: "Courses" },
-          { to: "/dashboard", label: "My Learning" }
-        ];
-
   return (
     <nav className="sticky top-0 z-50 border-b border-border/50 bg-card/80 backdrop-blur-xl">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
-            <BookOpen className="h-5 w-5 text-primary" />
-          </div>
-          <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
-        </Link>
-
+        {showFullNav ? (
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
+              <BookOpen className="h-5 w-5 text-primary" />
+            </div>
+            <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
+          </Link>
+        ) : (
+          <div />
+        )}
         <div className="hidden items-center gap-1 md:flex">
           {links.map((link) => (
             <Link
@@ -93,7 +107,6 @@ const Navbar = () => {
             </Link>
           ))}
         </div>
-
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
@@ -142,17 +155,21 @@ const Navbar = () => {
 
       {mobileOpen && (
         <div className="border-t border-border bg-card px-4 py-4 md:hidden animate-fade-in">
-          {links.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              onClick={() => setMobileOpen(false)}
-              className="block rounded-lg px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {link.label}
-            </Link>
-          ))}
-          <div className="mt-4 flex gap-2">
+          {links.length > 0 && (
+            <div className="space-y-1 pb-4">
+              {links.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setMobileOpen(false)}
+                  className="block rounded-lg px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
             {user ? (
               <>
                 <Link to="/profile" className="flex-1" onClick={() => setMobileOpen(false)}>

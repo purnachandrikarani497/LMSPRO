@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -56,7 +54,6 @@ const Profile = () => {
       <Helmet>
         <title>Profile – LearnHub LMS</title>
       </Helmet>
-      <Navbar />
       <main className="container mx-auto px-4 py-10 max-w-2xl">
         <h1 className="font-heading text-3xl font-bold text-foreground">My Profile</h1>
         <p className="mt-2 text-muted-foreground">View and edit your basic account details.</p>
@@ -89,7 +86,6 @@ const Profile = () => {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };

@@ -1,5 +1,3 @@
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Helmet } from "react-helmet-async";
 
 const PrivacyPolicy = () => (
@@ -11,7 +9,6 @@ const PrivacyPolicy = () => (
         content="Understand how LearnHub handles data, privacy, and security for learners and organizations."
       />
     </Helmet>
-    <Navbar />
     <main className="container mx-auto px-4 py-10">
       <div className="mx-auto max-w-3xl space-y-6 text-sm leading-relaxed text-muted-foreground">
         <h1 className="font-heading text-3xl font-bold text-foreground sm:text-4xl">Privacy Policy</h1>
@@ -29,7 +26,6 @@ const PrivacyPolicy = () => (
         </p>
       </div>
     </main>
-    <Footer />
   </div>
 );
 

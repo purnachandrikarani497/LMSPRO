@@ -2,18 +2,20 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Index from "@/pages/Index";
 import Courses from "@/pages/Courses";
 import CourseDetail from "@/pages/CourseDetail";
 import StudentDashboard from "@/pages/StudentDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminCoursePage from "@/pages/AdminCoursePage";
+import AdminCompletedPayments from "@/pages/AdminCompletedPayments";
+import MainLayout from "@/components/MainLayout";
 import Auth from "@/pages/Auth";
 import ResetPassword from "@/pages/ResetPassword";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/NotFound";
-import LessonViewer from "@/pages/LessonViewer";
 import QuizPage from "@/pages/QuizPage";
 import Payment from "@/pages/Payment";
 import Certificates from "@/pages/Certificates";
@@ -82,73 +84,72 @@ const App = () => (
         >
           <ScrollToTop />
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/courses" element={<Courses />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/for-business" element={<ForBusiness />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/careers" element={<Careers />} />
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/help-center" element={<HelpCenter />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/course/:id" element={<CourseDetail />} />
-            <Route
-              path="/course/:courseId/lesson/:lessonId"
-              element={
-                <ProtectedRoute role="student">
-                  <LessonViewer />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/course/:courseId/payment"
-              element={
-                <ProtectedRoute role="student">
-                  <Payment />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/course/:courseId/quiz"
-              element={
-                <ProtectedRoute role="student">
-                  <QuizPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute role="student">
-                  <StudentDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute role="admin">
-                  <AdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/certificates"
-              element={
-                <ProtectedRoute role="student">
-                  <Certificates />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<Index />} />
+              <Route path="courses" element={<Courses />} />
+              <Route path="pricing" element={<Pricing />} />
+              <Route path="for-business" element={<ForBusiness />} />
+              <Route path="about" element={<About />} />
+              <Route path="careers" element={<Careers />} />
+              <Route path="blog" element={<Blog />} />
+              <Route path="help-center" element={<HelpCenter />} />
+              <Route path="contact" element={<Contact />} />
+              <Route path="privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="course/:id" element={<CourseDetail />} />
+              <Route
+                path="course/:courseId/lesson/:lessonId"
+                element={
+                  <ProtectedRoute role="student">
+                    <CourseDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="course/:courseId/payment"
+                element={
+                  <ProtectedRoute role="student">
+                    <Payment />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="course/:courseId/quiz"
+                element={
+                  <ProtectedRoute role="student">
+                    <QuizPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="dashboard"
+                element={
+                  <ProtectedRoute role="student">
+                    <StudentDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="admin" element={<ProtectedRoute role="admin"><Outlet /></ProtectedRoute>}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="course/:id" element={<AdminCoursePage />} />
+                <Route path="payments" element={<AdminCompletedPayments />} />
+              </Route>
+              <Route
+                path="certificates"
+                element={
+                  <ProtectedRoute role="student">
+                    <Certificates />
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />

@@ -1,5 +1,3 @@
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from "react-helmet-async";
 
@@ -30,7 +28,6 @@ const Blog = () => (
         content="Read product updates, best practices, and ideas for creating better online learning experiences."
       />
     </Helmet>
-    <Navbar />
     <main className="container mx-auto px-4 py-10">
       <div className="mx-auto max-w-3xl">
         <h1 className="font-heading text-3xl font-bold text-foreground sm:text-4xl">Blog</h1>
@@ -52,7 +49,6 @@ const Blog = () => (
         </div>
       </div>
     </main>
-    <Footer />
   </div>
 );
 

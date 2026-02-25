@@ -1,74 +1,94 @@
-import { Star, Clock, BookOpen, Users } from "lucide-react";
+import { useState } from "react";
+import { Star, Clock, Users, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
+import { getThumbnailSrc } from "@/lib/api";
 import type { Course } from "@/lib/mockData";
 
 interface CourseCardProps {
   course: Course;
   showProgress?: boolean;
   progress?: number;
+  /** Smaller card with reduced icon for dense grids (e.g. My Learning) */
+  compact?: boolean;
 }
 
 const levelColors: Record<string, string> = {
-  Beginner: "bg-success/10 text-success border-success/20",
-  Intermediate: "bg-secondary/20 text-secondary-foreground border-secondary/30",
-  Advanced: "bg-destructive/10 text-destructive border-destructive/20",
+  Beginner: "bg-emerald-500/95 text-white",
+  Intermediate: "bg-amber-500/95 text-white",
+  Advanced: "bg-rose-500/95 text-white",
 };
 
-const CourseCard = ({ course, showProgress, progress }: CourseCardProps) => {
+const renderStars = (rating: number, compact?: boolean) => {
+  const full = Math.min(5, Math.floor(rating));
+  const size = compact ? "h-3 w-3" : "h-4 w-4";
+  return Array.from({ length: 5 }, (_, i) => (
+    <Star key={i} className={`${size} ${i < full ? "fill-amber-400 text-amber-400" : "text-gray-200"}`} />
+  ));
+};
+
+const CourseCard = ({ course, showProgress, progress, compact }: CourseCardProps) => {
+  const [imgError, setImgError] = useState(false);
+  const thumbSrc = getThumbnailSrc(course.image) || course.image;
+
   return (
     <Link
       to={`/course/${course.id}`}
-      className="group block overflow-hidden rounded-xl border border-border bg-card shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1"
+      className="group block overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md hover:border-gray-300"
     >
-      <div className="relative aspect-video overflow-hidden">
-        <img
-          src={course.image}
-          alt={course.title}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          loading="lazy"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-foreground/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-        <Badge className={`absolute left-3 top-3 ${levelColors[course.level]} text-xs font-medium`}>
+      <div className="relative aspect-video overflow-hidden bg-gray-100">
+        {!imgError && thumbSrc ? (
+          <img
+            src={thumbSrc}
+            alt={course.title}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-200 to-gray-100">
+            <BookOpen className={compact ? "h-6 w-6 text-gray-400" : "h-12 w-12 text-gray-400"} />
+          </div>
+        )}
+        <span
+          className={`absolute left-2 top-2 rounded px-2 py-0.5 font-medium ${levelColors[course.level] ?? levelColors.Beginner} ${compact ? "text-[9px]" : "text-xs"}`}
+        >
           {course.level}
-        </Badge>
-        <div className="absolute right-3 top-3 rounded-md bg-card/90 px-2 py-1 text-sm font-bold text-foreground backdrop-blur-sm">
-          ${course.price}
-        </div>
+        </span>
       </div>
 
-      <div className="p-5">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-secondary">
+      <div className={compact ? "p-3" : "p-4"}>
+        <p className={`mb-1 font-semibold uppercase tracking-widest text-amber-600 ${compact ? "text-[9px]" : "text-[10px]"}`}>
           {course.category}
         </p>
-        <h3 className="mb-2 font-heading text-base font-semibold leading-snug text-card-foreground line-clamp-2 group-hover:text-secondary transition-colors">
+        <h3 className={`mb-1.5 line-clamp-2 font-bold leading-snug text-gray-900 transition-colors group-hover:text-amber-600 ${compact ? "text-xs" : "text-sm"}`}>
           {course.title}
         </h3>
-        <p className="mb-3 text-sm text-muted-foreground">{course.instructor}</p>
+        <p className={`mb-2 text-gray-600 ${compact ? "text-[10px]" : "text-xs"}`}>{course.instructor}</p>
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Star className="h-3.5 w-3.5 fill-secondary text-secondary" />
-            {course.rating}
-          </span>
-          <span className="flex items-center gap-1">
-            <Users className="h-3.5 w-3.5" />
-            {course.students.toLocaleString()}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            {course.duration}
-          </span>
+        <div className={`mb-2 flex items-center gap-1.5 ${compact ? "text-[10px]" : "text-xs"}`}>
+          <span className="font-semibold text-gray-900">{course.rating.toFixed(1)}</span>
+          <div className="flex gap-0.5">{renderStars(course.rating, compact)}</div>
+          <span className="text-gray-500">({course.students.toLocaleString()})</span>
+        </div>
+
+        <div className={`flex items-center justify-between gap-2 ${compact ? "text-xs" : ""}`}>
+          <span className={compact ? "text-sm font-bold text-gray-900" : "text-lg font-bold text-gray-900"}>${course.price}</span>
+          {course.duration && (
+            <span className={`flex items-center gap-1 text-gray-500 ${compact ? "text-[10px]" : "text-xs"}`}>
+              <Clock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+              {course.duration}
+            </span>
+          )}
         </div>
 
         {showProgress && progress !== undefined && (
-          <div className="mt-4">
-            <div className="mb-1 flex justify-between text-xs">
-              <span className="text-muted-foreground">{progress}% complete</span>
+          <div className={compact ? "mt-2" : "mt-3"}>
+            <div className={`mb-1 flex justify-between text-gray-500 ${compact ? "text-[10px]" : "text-xs"}`}>
+              <span>{progress}% complete</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className={`overflow-hidden rounded-full bg-gray-200 ${compact ? "h-1" : "h-1.5"}`}>
               <div
-                className="h-full rounded-full bg-gradient-gold transition-all"
+                className="h-full rounded-full bg-amber-500 transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>

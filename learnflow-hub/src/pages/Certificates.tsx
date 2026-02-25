@@ -1,5 +1,3 @@
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiCertificate } from "@/lib/api";
 import { format } from "date-fns";
@@ -81,7 +79,6 @@ const Certificates = () => {
           ))}
         </div>
       </main>
-      <Footer />
     </div>
   );
 };

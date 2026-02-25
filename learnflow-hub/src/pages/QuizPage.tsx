@@ -1,7 +1,5 @@
 import { useParams, Link } from "react-router-dom";
 import { useState } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -66,7 +64,6 @@ const QuizPage = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-lg text-muted-foreground">Loading quiz...</p>
         </div>
@@ -77,7 +74,6 @@ const QuizPage = () => {
   if ((isError && !course) || !course) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-lg text-muted-foreground">Quiz not found</p>
           <Link to="/courses" className="mt-4 inline-block text-primary hover:underline">
@@ -99,7 +95,6 @@ const QuizPage = () => {
           content={`Quiz for course ${course.title}`}
         />
       </Helmet>
-      <Navbar />
       <main className="container mx-auto px-4 py-10">
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -171,7 +166,6 @@ const QuizPage = () => {
           </div>
         )}
       </main>
-      <Footer />
     </div>
   );
 };

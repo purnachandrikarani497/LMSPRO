@@ -1,5 +1,3 @@
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Helmet } from "react-helmet-async";
 
@@ -12,7 +10,6 @@ const HelpCenter = () => (
         content="Find answers to common questions about using the LearnHub learning platform."
       />
     </Helmet>
-    <Navbar />
     <main className="container mx-auto px-4 py-10">
       <div className="mx-auto max-w-3xl">
         <h1 className="font-heading text-3xl font-bold text-foreground sm:text-4xl">Help Center</h1>
@@ -46,7 +43,6 @@ const HelpCenter = () => (
         </div>
       </div>
     </main>
-    <Footer />
   </div>
 );
 

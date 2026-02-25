@@ -1,4 +1,42 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+
+export function getThumbnailSrc(thumbnail: string | undefined): string {
+  if (!thumbnail) return "";
+  if (thumbnail.startsWith("thumbnails/"))
+    return `${API_BASE_URL}/upload/thumb?key=${encodeURIComponent(thumbnail)}`;
+  if (thumbnail.startsWith("http")) {
+    try {
+      const url = new URL(thumbnail);
+      const keyMatch = url.pathname.match(/^\/(thumbnails\/[^?]+)/);
+      if (keyMatch) {
+        return `${API_BASE_URL}/upload/thumb?key=${encodeURIComponent(keyMatch[1])}`;
+      }
+    } catch {
+      /* ignore */
+    }
+    return `${API_BASE_URL}/upload/proxy?url=${encodeURIComponent(thumbnail)}`;
+  }
+  return thumbnail;
+}
+
+export function getVideoSrc(videoUrl: string | undefined): string {
+  if (!videoUrl) return "";
+  if (videoUrl.startsWith("videos/")) {
+    return `${API_BASE_URL}/upload/video?key=${encodeURIComponent(videoUrl)}`;
+  }
+  try {
+    const url = new URL(videoUrl);
+    if (url.pathname.includes("/upload/video") && url.searchParams.has("key")) {
+      const key = url.searchParams.get("key");
+      if (key?.startsWith("videos/")) {
+        return `${API_BASE_URL}/upload/video?key=${encodeURIComponent(key)}`;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return videoUrl;
+}
 
 const getToken = () => {
   if (typeof window === "undefined") return null;
@@ -7,7 +45,7 @@ const getToken = () => {
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-async function request<T>(path: string, method: HttpMethod, body?: unknown): Promise<T> {
+async function request<T>(path: string, method: HttpMethod, body?: unknown, retryCount = 0): Promise<T> {
   const token = getToken();
   const headers: HeadersInit = {
     "Content-Type": "application/json"
@@ -22,6 +60,17 @@ async function request<T>(path: string, method: HttpMethod, body?: unknown): Pro
   });
   if (!response.ok) {
     const text = await response.text();
+    if (response.status === 503 && retryCount < 2) {
+      try {
+        const data = JSON.parse(text);
+        if (data?.code === "DB_DISCONNECTED") {
+          await new Promise((r) => setTimeout(r, 1000 * (retryCount + 1)));
+          return request<T>(path, method, body, retryCount + 1);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
     throw new Error(text || "Request failed");
   }
   return response.json() as Promise<T>;
@@ -57,6 +106,8 @@ export interface ApiCourse {
     title: string;
     videoUrl?: string;
     content?: string;
+    duration?: string;
+    resources?: string[];
   }[];
   quiz?: {
     question: string;
@@ -117,6 +168,9 @@ export const api = {
   getCourse(id: string) {
     return request<ApiCourse>(`/courses/${id}`, "GET");
   },
+  getCourseAdmin(id: string) {
+    return request<ApiCourse>(`/courses/${id}/admin`, "GET");
+  },
   createCourse(data: {
     title: string;
     description: string;
@@ -141,6 +195,15 @@ export const api = {
   },
   deleteCourse(id: string) {
     return request<{ message: string }>(`/courses/${id}`, "DELETE");
+  },
+  addLesson(courseId: string, data: { title: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
+    return request<{ _id: string; title: string }>(`/courses/${courseId}/lessons`, "POST", data);
+  },
+  updateLesson(courseId: string, lessonId: string, data: { title?: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
+    return request<{ _id: string; title: string }>(`/courses/${courseId}/lessons/${lessonId}`, "PUT", data);
+  },
+  deleteLesson(courseId: string, lessonId: string) {
+    return request<{ message: string }>(`/courses/${courseId}/lessons/${lessonId}`, "DELETE");
   },
   enroll(courseId: string) {
     return request<ApiEnrollment>("/enrollments", "POST", { courseId });
@@ -167,5 +230,37 @@ export const api = {
   },
   getCertificates() {
     return request<ApiCertificate[]>("/certificates", "GET");
+  },
+  async uploadThumbnail(file: File): Promise<{ url: string; key: string }> {
+    const token = getToken();
+    if (!token) throw new Error("Not authenticated");
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API_BASE_URL}/upload/thumbnail`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Upload failed");
+    }
+    return response.json();
+  },
+  async uploadVideo(file: File): Promise<{ url: string; key: string }> {
+    const token = getToken();
+    if (!token) throw new Error("Not authenticated");
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API_BASE_URL}/upload/video`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Upload failed");
+    }
+    return response.json();
   }
 };

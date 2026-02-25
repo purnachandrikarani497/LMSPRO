@@ -1,6 +1,4 @@
 import { useState, type FormEvent } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -100,7 +98,6 @@ const Contact = () => {
           content="Contact the LearnHub team with questions about the platform, pricing, or partnerships."
         />
       </Helmet>
-      <Navbar />
       <main className="container mx-auto px-4 py-10">
         <div className="mx-auto max-w-2xl">
           <h1 className="font-heading text-3xl font-bold text-foreground sm:text-4xl">Contact</h1>
@@ -144,7 +141,6 @@ const Contact = () => {
           </form>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };

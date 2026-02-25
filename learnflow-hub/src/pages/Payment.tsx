@@ -1,7 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { CreditCard } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -89,7 +87,6 @@ const Payment = () => {
   if (isLoading && !course) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-lg text-muted-foreground">Loading payment details...</p>
         </div>
@@ -100,7 +97,6 @@ const Payment = () => {
   if ((isError && !course) || !course) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-lg text-muted-foreground">Course not found</p>
           <Link to="/courses" className="mt-4 inline-block text-primary hover:underline">
@@ -116,7 +112,6 @@ const Payment = () => {
       <Helmet>
         <title>Payment – {course.title}</title>
       </Helmet>
-      <Navbar />
       <main className="container mx-auto px-4 py-10">
         <div className="grid gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-4">
@@ -194,7 +189,6 @@ const Payment = () => {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };

@@ -5,6 +5,7 @@ const lessonSchema = new mongoose.Schema(
     title: { type: String, required: true },
     videoUrl: { type: String },
     content: { type: String },
+    duration: { type: String },
     resources: [{ type: String }]
   },
   { _id: true }

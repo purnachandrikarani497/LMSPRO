@@ -1,10 +1,9 @@
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Play, CheckCircle2, ArrowLeft, BookOpen } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import { Play, CheckCircle2, ArrowLeft, BookOpen, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse } from "@/lib/api";
+import { api, ApiCourse, getVideoSrc } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 
@@ -13,6 +12,11 @@ const LessonViewer = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVideoError(null);
+  }, [lessonId]);
 
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["course", courseId],
@@ -38,7 +42,6 @@ const LessonViewer = () => {
   if (isLoading || !course) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-lg text-muted-foreground">Loading lesson...</p>
         </div>
@@ -53,7 +56,6 @@ const LessonViewer = () => {
   if (!currentLesson) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-lg text-muted-foreground">No lessons available for this course.</p>
         </div>
@@ -64,13 +66,18 @@ const LessonViewer = () => {
   const currentIndex = lessons.findIndex((lesson) => lesson._id === currentLesson._id);
   const nextLesson = currentIndex >= 0 && currentIndex + 1 < lessons.length ? lessons[currentIndex + 1] : null;
 
+  const rawVideoUrl = currentLesson.videoUrl || "";
+  const videoUrl = getVideoSrc(rawVideoUrl) || rawVideoUrl;
+  const isEmbedUrl =
+    /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawVideoUrl) ||
+    rawVideoUrl.includes("/embed/");
+
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
         <title>{currentLesson.title} – {course.title}</title>
         <meta name="description" content={currentLesson.content || course.description} />
       </Helmet>
-      <Navbar />
       <main className="container mx-auto px-4 py-8">
         <div className="mb-4 flex items-center justify-between">
           <button
@@ -93,19 +100,52 @@ const LessonViewer = () => {
         <div className="grid gap-8 lg:grid-cols-[2fr,1fr]">
           <section className="space-y-6">
             <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-              <div className="aspect-video flex items-center justify-center bg-muted">
-                {currentLesson.videoUrl ? (
-                  <iframe
-                    src={currentLesson.videoUrl}
-                    title={currentLesson.title}
-                    className="h-full w-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
+              <div className="aspect-video flex items-center justify-center overflow-hidden bg-muted">
+                {videoError ? (
+                  <div className="flex flex-col items-center gap-3 p-6 text-center">
+                    <AlertCircle className="h-12 w-12 text-amber-500" />
+                    <p className="font-medium">Video could not be loaded</p>
+                    <p className="text-sm text-muted-foreground">{videoError}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Use a direct link to .mp4 or .webm. Test with: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+                    </p>
+                  </div>
+                ) : currentLesson.videoUrl ? (
+                  isEmbedUrl ? (
+                    <iframe
+                      src={videoUrl}
+                      title={currentLesson.title}
+                      className="h-full w-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <video
+                      src={videoUrl}
+                      controls
+                      className="h-full w-full object-contain"
+                      playsInline
+                      preload="metadata"
+                      onError={() =>
+                        setVideoError(
+                          "The URL may be invalid, blocked by CORS, or in an unsupported format. Try an MP4 from a public CDN."
+                        )
+                      }
+                    >
+                      <track kind="captions" />
+                      Your browser does not support the video tag.
+                    </video>
+                  )
                 ) : (
                   <div className="flex flex-col items-center gap-3 text-muted-foreground">
                     <Play className="h-10 w-10" />
                     <p>No video for this lesson</p>
+                    <p className="text-xs">
+                      Add a direct .mp4 or .webm URL, or a YouTube/Vimeo embed link
+                    </p>
+                    <p className="text-xs">
+                      Test URL: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+                    </p>
                   </div>
                 )}
               </div>
@@ -176,7 +216,6 @@ const LessonViewer = () => {
           </aside>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };

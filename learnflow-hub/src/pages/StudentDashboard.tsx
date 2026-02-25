@@ -1,7 +1,5 @@
 import { BookOpen, Clock, Award, TrendingUp } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import CourseCard from "@/components/CourseCard";
-import Footer from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiEnrollment, ApiProgress } from "@/lib/api";
 import { useEffect, useState } from "react";
@@ -106,7 +104,6 @@ const StudentDashboard = () => {
       <Helmet>
         <title>Student Dashboard – LearnHub LMS</title>
       </Helmet>
-      <Navbar />
       <div className="container mx-auto px-4 py-10">
         <h1 className="font-heading text-3xl font-bold text-foreground">My Learning</h1>
         <p className="mt-2 text-muted-foreground">Track your progress and continue learning</p>
@@ -119,7 +116,7 @@ const StudentDashboard = () => {
         </div>
 
         <h2 className="mt-12 font-heading text-xl font-semibold text-foreground">Continue Learning</h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {enrollments?.filter(e => e.course).map((enrollment) => {
             const course = enrollment.course;
             const id = course._id || course.id || "";
@@ -128,6 +125,7 @@ const StudentDashboard = () => {
             return (
               <CourseCard
                 key={id}
+                compact
                 course={{
                   id,
                   title: course.title,
@@ -153,7 +151,6 @@ const StudentDashboard = () => {
           )}
         </div>
       </div>
-      <Footer />
     </div>
   );
 };
