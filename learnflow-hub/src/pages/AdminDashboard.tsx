@@ -325,11 +325,11 @@ const AdminDashboard = () => {
   };
 
   const totalRevenue =
-    adminEnrollments?.reduce((sum, enrollment) => sum + (enrollment.course.price ?? 0), 0) ?? 0;
+    adminEnrollments?.reduce((sum, enrollment) => sum + (enrollment.course?.price ?? 0), 0) ?? 0;
 
   const uniqueStudents =
     adminEnrollments && adminEnrollments.length > 0
-      ? new Set(adminEnrollments.map((enrollment) => enrollment.student._id)).size
+      ? new Set(adminEnrollments.filter(e => e.student).map((enrollment) => enrollment.student._id)).size
       : 0;
 
   const avgRating =
@@ -592,16 +592,16 @@ const AdminDashboard = () => {
                   {adminEnrollments.map((enrollment) => (
                     <TableRow key={enrollment._id}>
                       <TableCell className="text-sm font-medium text-card-foreground">
-                        {enrollment.course.title}
+                        {enrollment.course?.title || "Deleted Course"}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                        {enrollment.student.name || "Student"}
+                        {enrollment.student?.name || "Deleted Student"}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                        {enrollment.student.email || "-"}
+                        {enrollment.student?.email || "-"}
                       </TableCell>
                       <TableCell className="text-sm font-semibold">
-                        ${enrollment.course.price?.toFixed(2) ?? "0.00"}
+                        ${enrollment.course?.price?.toFixed(2) ?? "0.00"}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                         {format(new Date(enrollment.createdAt), "dd MMM yyyy")}

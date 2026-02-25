@@ -46,10 +46,11 @@ const StudentDashboard = () => {
     const loadProgress = async () => {
       if (!enrollments) return;
       const entries = await Promise.all(
-        enrollments.map(async (enrollment) => {
+        enrollments.filter(e => e.course).map(async (enrollment) => {
           try {
-            const progress = await api.getProgress(enrollment.course._id || enrollment.course.id || "");
-            return [enrollment.course._id || enrollment.course.id || "", progress] as const;
+            const id = enrollment.course._id || enrollment.course.id || "";
+            const progress = await api.getProgress(id);
+            return [id, progress] as const;
           } catch {
             return [enrollment.course._id || enrollment.course.id || "", undefined] as const;
           }
@@ -68,6 +69,7 @@ const StudentDashboard = () => {
   const certificatesCount =
     enrollments && enrollments.length > 0
       ? enrollments.reduce((count, enrollment) => {
+          if (!enrollment.course) return count;
           const id = enrollment.course._id || enrollment.course.id || "";
           const progress = progressMap[id];
           return count + (progress?.status === "completed" ? 1 : 0);
@@ -77,6 +79,7 @@ const StudentDashboard = () => {
     enrollments && enrollments.length > 0
       ? Math.round(
           enrollments.reduce((sum, enrollment) => {
+            if (!enrollment.course) return sum;
             const id = enrollment.course._id || enrollment.course.id || "";
             const progress = progressMap[id];
             const value = progress ? (progress.status === "completed" ? 100 : 50) : 0;
@@ -88,6 +91,7 @@ const StudentDashboard = () => {
     enrollments && enrollments.length > 0
       ? Math.round(
           enrollments.reduce((sum, enrollment) => {
+            if (!enrollment.course) return sum;
             const id = enrollment.course._id || enrollment.course.id || "";
             const progress = progressMap[id];
             const percent = progress ? (progress.status === "completed" ? 100 : 50) : 0;
@@ -116,7 +120,7 @@ const StudentDashboard = () => {
 
         <h2 className="mt-12 font-heading text-xl font-semibold text-foreground">Continue Learning</h2>
         <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {enrollments?.map((enrollment) => {
+          {enrollments?.filter(e => e.course).map((enrollment) => {
             const course = enrollment.course;
             const id = course._id || course.id || "";
             const progress = progressMap[id];
