@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, Users, DollarSign, BookOpen, TrendingUp, ListChecks, HelpCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Users, DollarSign, BookOpen, TrendingUp, ListChecks, HelpCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ import { Helmet } from "react-helmet-async";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiAdminEnrollment, ApiCourse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, startOfWeek, startOfMonth, startOfYear } from "date-fns";
 
 interface StatCardProps {
   icon: typeof BookOpen;
@@ -68,6 +68,8 @@ const AdminDashboard = () => {
   });
 
   const [coursesList, setCoursesList] = useState<Course[]>([]);
+  const [enrollmentList, setEnrollmentList] = useState<ApiAdminEnrollment[]>([]);
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -82,6 +84,14 @@ const AdminDashboard = () => {
     }
     setCoursesList(apiCourses.map(mapApiCourseToCourse));
   }, [apiCourses]);
+
+  useEffect(() => {
+    if (!adminEnrollments || adminEnrollments.length === 0) {
+      setEnrollmentList([]);
+      return;
+    }
+    setEnrollmentList(adminEnrollments);
+  }, [adminEnrollments]);
 
   const resetForm = () => {
     setForm({ title: "", description: "", instructor: "", category: "Development", price: "", level: "Beginner", image: "" });
@@ -186,6 +196,46 @@ const AdminDashboard = () => {
       });
     }
   });
+
+  const handleDeleteEnrollment = (id: string) => {
+    setEnrollmentList(prev => prev.filter(e => e._id !== id));
+    toast({ title: "Deleted", description: "Payment record removed from view" });
+  };
+
+  const filteredEnrollments = (() => {
+    if (timeRange === "all") return enrollmentList;
+    const now = new Date();
+    const start =
+      timeRange === "week" ? startOfWeek(now) :
+      timeRange === "month" ? startOfMonth(now) :
+      startOfYear(now);
+    return enrollmentList.filter(e => new Date(e.createdAt) >= start);
+  })();
+
+  const downloadCSV = (rows: ApiAdminEnrollment[], filename: string) => {
+    const header = ["Course","Student","Email","Price","EnrolledOn"].join(",");
+    const data = rows.map(e => [
+      (e.course?.title ?? "Deleted Course").replace(/,/g, " "),
+      (e.student?.name ?? "Deleted Student").replace(/,/g, " "),
+      (e.student?.email ?? "-").replace(/,/g, " "),
+      String(e.course?.price ?? 0),
+      format(new Date(e.createdAt), "dd MMM yyyy")
+    ].join(","));
+    const csv = [header, ...data].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadReceipt = (enrollment: ApiAdminEnrollment) => {
+    downloadCSV([enrollment], `receipt-${enrollment._id}`);
+  };
 
   const handleSubmit = () => {
     const title = form.title.trim();
@@ -567,16 +617,37 @@ const AdminDashboard = () => {
                 All courses where enrollment and payment have been completed.
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Select value={timeRange} onValueChange={(v) => setTimeRange(v as typeof timeRange)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Time Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => downloadCSV(filteredEnrollments, `payments-${timeRange}`)}
+                disabled={filteredEnrollments.length === 0}
+              >
+                <Download className="h-4 w-4" /> Download CSV
+              </Button>
+            </div>
           </div>
           {enrollmentsLoading && (
             <p className="mt-4 text-sm text-muted-foreground">Loading payment details...</p>
           )}
-          {!enrollmentsLoading && (!adminEnrollments || adminEnrollments.length === 0) && (
+          {!enrollmentsLoading && (filteredEnrollments.length === 0) && (
             <p className="mt-4 text-sm text-muted-foreground">
               No completed payments found yet.
             </p>
           )}
-          {adminEnrollments && adminEnrollments.length > 0 && (
+          {filteredEnrollments && filteredEnrollments.length > 0 && (
             <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-card">
               <Table>
                 <TableHeader>
@@ -586,10 +657,11 @@ const AdminDashboard = () => {
                     <TableHead className="hidden md:table-cell">Email</TableHead>
                     <TableHead>Price</TableHead>
                     <TableHead className="hidden md:table-cell">Enrolled On</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {adminEnrollments.map((enrollment) => (
+                  {filteredEnrollments.map((enrollment) => (
                     <TableRow key={enrollment._id}>
                       <TableCell className="text-sm font-medium text-card-foreground">
                         {enrollment.course?.title || "Deleted Course"}
@@ -605,6 +677,16 @@ const AdminDashboard = () => {
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                         {format(new Date(enrollment.createdAt), "dd MMM yyyy")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => downloadReceipt(enrollment)}>
+                            <Download className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteEnrollment(enrollment._id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
