@@ -105,6 +105,12 @@ export const api = {
   me() {
     return request<{ user: ApiUser }>("/auth/me", "GET");
   },
+  forgotPassword(email: string) {
+    return request<{ message: string; devLink?: string; token?: string }>("/auth/forgot-password", "POST", { email });
+  },
+  resetPassword(data: { email: string; token: string; newPassword: string }) {
+    return request<{ message: string }>("/auth/reset-password", "POST", data);
+  },
   getCourses() {
     return request<ApiCourse[]>("/courses", "GET");
   },

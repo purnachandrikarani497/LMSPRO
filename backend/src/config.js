@@ -9,5 +9,13 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   adminEmail: process.env.ADMIN_EMAIL || "admin@learnhub.com",
-  adminPassword: process.env.ADMIN_PASSWORD || "admin123"
+  adminPassword: process.env.ADMIN_PASSWORD || "admin123",
+  email: {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    secure: process.env.SMTP_SECURE === "true",
+    from: process.env.FROM_EMAIL
+  }
 };

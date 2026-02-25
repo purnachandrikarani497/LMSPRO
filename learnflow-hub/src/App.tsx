@@ -10,6 +10,7 @@ import CourseDetail from "@/pages/CourseDetail";
 import StudentDashboard from "@/pages/StudentDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
 import Auth from "@/pages/Auth";
+import ResetPassword from "@/pages/ResetPassword";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/NotFound";
 import LessonViewer from "@/pages/LessonViewer";
@@ -149,6 +150,7 @@ const App = () => (
               }
             />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

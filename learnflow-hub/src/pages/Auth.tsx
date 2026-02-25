@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
-import { BookOpen, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { BookOpen, Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -88,6 +89,15 @@ const Auth = () => {
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [signinErrors, setSigninErrors] = useState<SigninErrors>({});
   const [signupErrors, setSignupErrors] = useState<SignupErrors>({});
+  
+  // Forgot password states
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [isLinkSent, setIsLinkSent] = useState(false);
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleAuthSuccess = (data: { token: string; user: { role: string } }) => {
     window.localStorage.setItem("lms_token", data.token);
@@ -118,6 +128,43 @@ const Auth = () => {
     },
     onError: () => {
       toast({ title: "Sign up failed", description: "Try again with different details", variant: "destructive" });
+    }
+  });
+
+  const forgotPasswordMutation = useMutation({
+    mutationFn: () => api.forgotPassword(forgotEmail.trim()),
+    onSuccess: (data) => {
+      toast({ title: "Link sent", description: data.message });
+      setIsLinkSent(true);
+      if (data.token) {
+        setResetToken(data.token);
+      }
+      // In development, log the link
+      if (data.devLink) {
+        console.log("Password Reset Link:", data.devLink);
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Request failed", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: (data: { email: string; token: string; newPassword: string }) => api.resetPassword(data),
+    onSuccess: (data) => {
+      toast({ title: "Success", description: data.message });
+      setIsDialogOpen(false);
+      setIsLinkSent(false);
+      setShowResetPassword(false);
+      setForgotEmail("");
+      setResetToken("");
+      setNewPassword("");
+      setConfirmPassword("");
+      // Pre-fill login with the reset email
+      setSigninEmail(forgotEmail);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Reset failed", description: error.message, variant: "destructive" });
     }
   });
 
@@ -267,9 +314,123 @@ const Auth = () => {
                 >
                   Sign In
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  <Link to="#" className="text-secondary hover:underline">Forgot password?</Link>
-                </p>
+                <div className="text-center">
+                  <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                    setIsDialogOpen(open);
+                    if (!open) {
+                      setIsLinkSent(false);
+                      setShowResetPassword(false);
+                      setForgotEmail("");
+                      setResetToken("");
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }
+                  }}>
+                    <DialogTrigger asChild>
+                      <button className="text-xs text-secondary hover:underline">Forgot password?</button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {showResetPassword ? "Update Password" : "Forgot Password"}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {!isLinkSent 
+                            ? "Enter your email to receive a password reset link." 
+                            : showResetPassword 
+                              ? "Enter your new password below." 
+                              : "We've sent a link to your email. You can also update it right here."}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        {!isLinkSent ? (
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Email Address"
+                              type="email"
+                              value={forgotEmail}
+                              onChange={(e) => setForgotEmail(e.target.value)}
+                            />
+                            <Button 
+                              className="w-full bg-gradient-gold text-primary font-semibold" 
+                              onClick={() => forgotPasswordMutation.mutate()}
+                              disabled={forgotPasswordMutation.isPending || !forgotEmail}
+                            >
+                              {forgotPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}
+                            </Button>
+                          </div>
+                        ) : !showResetPassword ? (
+                          <div className="text-center space-y-4">
+                            <div className="flex justify-center">
+                              <CheckCircle2 className="h-12 w-12 text-green-500" />
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              A reset link has been sent to your email.
+                            </p>
+                            <Button 
+                              className="w-full bg-gradient-gold text-primary font-semibold" 
+                              onClick={() => setShowResetPassword(true)}
+                            >
+                              Update Password Here
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              className="w-full text-xs" 
+                              onClick={() => setIsDialogOpen(false)}
+                            >
+                              Close
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                            <div className="space-y-2">
+                              <Input
+                                placeholder="New Password"
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Input
+                                placeholder="Confirm Password"
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                              />
+                              {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                                <p className="text-xs text-destructive">Passwords do not match</p>
+                              )}
+                            </div>
+                            <Button 
+                              className="w-full bg-gradient-gold text-primary font-semibold" 
+                              onClick={() => resetPasswordMutation.mutate({
+                                email: forgotEmail.trim(),
+                                token: resetToken,
+                                newPassword: newPassword
+                              })}
+                              disabled={
+                                resetPasswordMutation.isPending || 
+                                !newPassword || 
+                                newPassword !== confirmPassword ||
+                                newPassword.length < passwordMinLength
+                              }
+                            >
+                              {resetPasswordMutation.isPending ? "Updating..." : "Update Password"}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              className="w-full text-xs" 
+                              onClick={() => setShowResetPassword(false)}
+                            >
+                              Back
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </div>
             </TabsContent>
 
