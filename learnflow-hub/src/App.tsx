@@ -24,6 +24,7 @@ import Blog from "@/pages/Blog";
 import HelpCenter from "@/pages/HelpCenter";
 import Contact from "@/pages/Contact";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,7 @@ const App = () => (
             v7_relativeSplatPath: true
           }}
         >
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/courses" element={<Courses />} />
