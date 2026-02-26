@@ -1,7 +1,7 @@
 import { BookOpen, Clock, Award, TrendingUp } from "lucide-react";
 import CourseCard from "@/components/CourseCard";
 import { useQuery } from "@tanstack/react-query";
-import { api, ApiEnrollment, ApiProgress } from "@/lib/api";
+import { api, ApiEnrollment, ApiProgress, mapApiCourseToCourse } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 
@@ -126,21 +126,7 @@ const StudentDashboard = () => {
               <CourseCard
                 key={id}
                 compact
-                course={{
-                  id,
-                  title: course.title,
-                  description: course.description,
-                  instructor: course.instructor || "Instructor",
-                  category: course.category || "General",
-                  price: course.price ?? 0,
-                  rating: course.rating ?? 0,
-                  students: course.students ?? 0,
-                  duration: course.duration || "",
-                  lessons: course.lessons?.length ?? 0,
-                  level: (course.level as "Beginner" | "Intermediate" | "Advanced") || "Beginner",
-                  image: course.thumbnail || "",
-                  featured: false
-                }}
+                course={mapApiCourseToCourse(course)}
                 showProgress
                 progress={percent}
               />

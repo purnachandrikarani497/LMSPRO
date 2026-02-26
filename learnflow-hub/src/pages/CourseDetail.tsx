@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getVideoSrc } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getVideoSrc, mapApiCourseToCourse } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
@@ -62,25 +62,8 @@ const CourseDetail = () => {
   const isEnrolled = enrollments?.some((e) => (e.course?._id || e.course?.id) === courseParam) ?? false;
   const completedLessonIds = new Set(progress?.lessonsCompleted ?? []);
 
-  const course = apiCourse
-    ? {
-        id: apiCourse._id || apiCourse.id || "",
-        title: apiCourse.title,
-        description: apiCourse.description,
-        instructor: apiCourse.instructor || "Instructor",
-        category: apiCourse.category || "General",
-        price: apiCourse.price ?? 0,
-        rating: apiCourse.rating ?? 0,
-        students: apiCourse.students ?? 0,
-        duration: apiCourse.duration || "",
-        lessons: apiCourse.lessons ?? [],
-        level: (apiCourse.level as "Beginner" | "Intermediate" | "Advanced") || "Beginner",
-        image: apiCourse.thumbnail || "",
-        updatedAt: (apiCourse as ApiCourse & { updatedAt?: string }).updatedAt
-      }
-    : null;
-
-  const lessons = course?.lessons ?? [];
+  const course = apiCourse ? mapApiCourseToCourse(apiCourse) : null;
+  const lessons = course?.lessonItems ?? [];
   const selectedLesson = lessonId ? lessons.find((l) => l._id === lessonId) ?? lessons[0] : null;
   const selectedIndex = selectedLesson ? lessons.findIndex((l) => l._id === selectedLesson._id) : -1;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;

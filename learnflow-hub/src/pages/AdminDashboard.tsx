@@ -12,7 +12,7 @@ import type { Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiAdminEnrollment, ApiCourse, getThumbnailSrc } from "@/lib/api";
+import { api, ApiAdminEnrollment, ApiCourse, getThumbnailSrc, mapApiCourseToCourse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface StatCardProps {
@@ -22,20 +22,6 @@ interface StatCardProps {
   trend?: string;
 }
 
-const mapApiCourseToCourse = (course: ApiCourse): Course => ({
-  id: course._id || course.id || "",
-  title: course.title,
-  description: course.description,
-  instructor: course.instructor || "Instructor",
-  category: course.category || "General",
-  price: course.price ?? 0,
-  rating: course.rating ?? 0,
-  students: course.students ?? 0,
-  duration: course.duration || "",
-  lessons: course.lessons?.length ?? 0,
-  level: (course.level as Course["level"]) || "Beginner",
-  image: course.thumbnail || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=400&fit=crop"
-});
 
 const StatCard = ({ icon: Icon, label, value, trend }: StatCardProps) => (
   <div className="rounded-xl border border-border bg-card p-5 shadow-card">
@@ -98,6 +84,8 @@ const AdminDashboard = () => {
     setPreviewError(false);
   };
 
+  const fallbackImage = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=400&fit=crop";
+
   const handleEdit = (course: Course) => {
     if (previewBlobUrl) {
       URL.revokeObjectURL(previewBlobUrl);
@@ -116,17 +104,8 @@ const AdminDashboard = () => {
     setCoursesList((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const createMutation = useMutation<ApiCourse, Error, void>({
-    mutationFn: () =>
-      api.createCourse({
-        title: form.title,
-        description: form.description,
-        thumbnail: form.image,
-        instructor: form.instructor,
-        category: form.category,
-        price: Number(form.price),
-        level: form.level
-      }),
+  const createMutation = useMutation<ApiCourse, Error, { title: string; description: string; thumbnail?: string; instructor: string; category: string; price: number; level: string; isPublished: boolean }>({
+    mutationFn: (data) => api.createCourse(data),
     onSuccess: (createdCourse) => {
       toast({ title: "Course created", description: "The course has been saved" });
       setCoursesList((prev) => [...prev, mapApiCourseToCourse(createdCourse)]);
@@ -154,17 +133,8 @@ const AdminDashboard = () => {
     }
   });
 
-  const updateMutation = useMutation<ApiCourse, Error, void>({
-    mutationFn: () =>
-      api.updateCourse(editingId || "", {
-        title: form.title,
-        description: form.description,
-        thumbnail: form.image,
-        instructor: form.instructor,
-        category: form.category,
-        price: Number(form.price),
-        level: form.level
-      }),
+  const updateMutation = useMutation<ApiCourse, Error, { id: string; data: { title: string; description: string; thumbnail?: string; instructor: string; category: string; price: number; level: string; isPublished: boolean } }>({
+    mutationFn: ({ id, data }) => api.updateCourse(id, data),
     onSuccess: (updatedCourse) => {
       toast({ title: "Course updated", description: "Changes have been saved" });
       setCoursesList((prev) =>
@@ -337,10 +307,21 @@ const AdminDashboard = () => {
 
     setForm((prev) => ({ ...prev, price: priceDigits, title, description, instructor, image }));
 
+    const mutationData = {
+      title,
+      description,
+      thumbnail: image,
+      instructor,
+      category: form.category,
+      price: priceNumber,
+      level: form.level,
+      isPublished: true
+    };
+
     if (editingId) {
-      updateMutation.mutate();
+      updateMutation.mutate({ id: editingId, data: mutationData });
     } else {
-      createMutation.mutate();
+      createMutation.mutate(mutationData);
     }
   };
 
@@ -545,7 +526,13 @@ const AdminDashboard = () => {
                           alt="Preview"
                           className="h-full w-full object-cover"
                           onLoad={() => setPreviewError(false)}
-                          onError={() => !previewBlobUrl && setPreviewError(true)}
+                          onError={(e) => {
+                            if (!previewBlobUrl) {
+                              setPreviewError(true);
+                              // Try to use a fallback placeholder if the URL/key fails
+                              (e.target as HTMLImageElement).src = fallbackImage;
+                            }
+                          }}
                         />
                       )}
                     </div>
@@ -586,11 +573,17 @@ const AdminDashboard = () => {
                 <TableRow key={course.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <img
-                        src={getThumbnailSrc(course.image) || course.image || ""}
-                        alt=""
-                        className="hidden h-10 w-14 rounded-md object-cover sm:block"
-                      />
+                      <div className="hidden h-10 w-14 overflow-hidden rounded-md bg-muted sm:block">
+                        <img
+                          src={getThumbnailSrc(course.image) || course.image || ""}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = fallbackImage;
+                            (e.target as HTMLImageElement).style.opacity = "0.5";
+                          }}
+                        />
+                      </div>
                       <div>
                         <p className="font-medium text-card-foreground text-sm line-clamp-1">{course.title}</p>
                         <p className="text-xs text-muted-foreground">{course.instructor}</p>

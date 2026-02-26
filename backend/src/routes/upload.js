@@ -181,6 +181,7 @@ router.get("/thumb", async (req, res) => {
     const buf = await obj.Body.transformToByteArray();
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.setHeader("Content-Type", contentType);
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.send(Buffer.from(buf));
   } catch (err) {
     console.error("Thumbnail fetch error:", err?.message || err);
@@ -216,6 +217,7 @@ router.get("/proxy", async (req, res) => {
       const buf = await obj.Body.transformToByteArray();
       res.setHeader("Cache-Control", "public, max-age=3600");
       res.setHeader("Content-Type", contentType);
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       res.send(Buffer.from(buf));
     } else {
       const r = await fetch(url, { headers: { Accept: "image/*" } });
@@ -224,6 +226,7 @@ router.get("/proxy", async (req, res) => {
       const buf = await r.arrayBuffer();
       res.setHeader("Cache-Control", "public, max-age=3600");
       res.setHeader("Content-Type", contentType);
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       res.send(Buffer.from(buf));
     }
   } catch (err) {

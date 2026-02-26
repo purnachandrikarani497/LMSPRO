@@ -9,6 +9,14 @@ export interface Course {
   students: number;
   duration: string;
   lessons: number;
+  lessonItems?: {
+    _id?: string;
+    title: string;
+    videoUrl?: string;
+    content?: string;
+    duration?: string;
+    resources?: string[];
+  }[];
   level: "Beginner" | "Intermediate" | "Advanced";
   image: string;
   featured?: boolean;

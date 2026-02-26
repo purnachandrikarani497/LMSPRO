@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CourseCard from "@/components/CourseCard";
 import { categories, type Course } from "@/lib/mockData";
 import { useQuery } from "@tanstack/react-query";
-import { api, ApiCourse } from "@/lib/api";
+import { api, ApiCourse, mapApiCourseToCourse } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useSearchParams } from "react-router-dom";
 
@@ -25,26 +25,13 @@ const Courses = () => {
     queryFn: () => api.getCourses()
   });
 
-  const sourceCourses: Course[] =
-    (apiCourses || []).map((c): Course => ({
-      id: c._id || c.id || "",
-      title: c.title,
-      description: c.description,
-      instructor: c.instructor || "Instructor",
-      category: c.category || "General",
-      price: c.price ?? 0,
-      rating: c.rating ?? 0,
-      students: c.students ?? 0,
-      duration: c.duration || "",
-      lessons: c.lessons?.length ?? 0,
-      level: (c.level as Course["level"]) || "Beginner",
-      image: c.thumbnail || "",
-      featured: false
-    }));
+  const sourceCourses: Course[] = (apiCourses || []).map(mapApiCourseToCourse);
 
   const filtered = sourceCourses.filter((c) => {
-    const matchSearch = c.title.toLowerCase().includes(search.toLowerCase()) ||
-      c.instructor.toLowerCase().includes(search.toLowerCase());
+    const title = c.title || "";
+    const instructor = c.instructor || "";
+    const matchSearch = title.toLowerCase().includes(search.toLowerCase()) ||
+      instructor.toLowerCase().includes(search.toLowerCase());
     const matchCat = category === "all" || c.category === category;
     const matchLevel = level === "all" || c.level === level;
     return matchSearch && matchCat && matchLevel;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Star, Clock, Users, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getThumbnailSrc } from "@/lib/api";
@@ -28,7 +28,14 @@ const renderStars = (rating: number, compact?: boolean) => {
 
 const CourseCard = ({ course, showProgress, progress, compact }: CourseCardProps) => {
   const [imgError, setImgError] = useState(false);
-  const thumbSrc = getThumbnailSrc(course.image) || course.image;
+  const thumbSrc = getThumbnailSrc(course.image);
+
+  // Reset image error state when course image changes
+  useEffect(() => {
+    setImgError(false);
+  }, [course.image]);
+
+  const fallbackImage = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=400&fit=crop";
 
   return (
     <Link
@@ -36,7 +43,7 @@ const CourseCard = ({ course, showProgress, progress, compact }: CourseCardProps
       className="group block overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md hover:border-gray-300"
     >
       <div className="relative aspect-video overflow-hidden bg-gray-100">
-        {!imgError && thumbSrc ? (
+        {thumbSrc && !imgError ? (
           <img
             src={thumbSrc}
             alt={course.title}
@@ -46,7 +53,11 @@ const CourseCard = ({ course, showProgress, progress, compact }: CourseCardProps
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-200 to-gray-100">
-            <BookOpen className={compact ? "h-6 w-6 text-gray-400" : "h-12 w-12 text-gray-400"} />
+            {imgError && thumbSrc ? (
+               <img src={fallbackImage} alt="" className="h-full w-full object-cover opacity-50" />
+            ) : (
+               <BookOpen className={compact ? "h-6 w-6 text-gray-400" : "h-12 w-12 text-gray-400"} />
+            )}
           </div>
         )}
         <span

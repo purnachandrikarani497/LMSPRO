@@ -40,7 +40,12 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"]
   })
 );
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false
+  })
+);
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,

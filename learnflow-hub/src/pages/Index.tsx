@@ -6,7 +6,7 @@ import CourseCard from "@/components/CourseCard";
 import { categories as staticCategories, type Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
-import { api, type ApiCourse } from "@/lib/api";
+import { api, type ApiCourse, mapApiCourseToCourse } from "@/lib/api";
 
 const Index = () => {
   const { data: apiCourses, isLoading } = useQuery<ApiCourse[]>({
@@ -17,21 +17,7 @@ const Index = () => {
   const featured: Course[] =
     (apiCourses || [])
       .slice(0, 3)
-      .map((c): Course => ({
-        id: c._id || c.id || "",
-        title: c.title,
-        description: c.description,
-        instructor: c.instructor || "Instructor",
-        category: c.category || "General",
-        price: c.price ?? 0,
-        rating: c.rating ?? 0,
-        students: c.students ?? 0,
-        duration: c.duration || "",
-        lessons: c.lessons?.length ?? 0,
-        level: (c.level as Course["level"]) || "Beginner",
-        image: c.thumbnail || "",
-        featured: false
-      }));
+      .map(mapApiCourseToCourse);
 
   const categoryCounts = new Map<string, number>();
   (apiCourses || []).forEach((course) => {

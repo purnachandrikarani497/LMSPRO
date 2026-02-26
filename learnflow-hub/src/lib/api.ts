@@ -1,21 +1,73 @@
+import { type Course } from "./mockData";
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+
+export const mapApiCourseToCourse = (c: ApiCourse): Course => {
+  const course: Course = {
+    id: String(c._id || c.id || Math.random().toString(36).substr(2, 9)),
+    title: c.title || "Untitled Course",
+    description: c.description || "",
+    instructor: c.instructor || "Instructor",
+    category: c.category || "General",
+    price: Number(c.price ?? 0),
+    rating: Number(c.rating ?? 0),
+    students: Number(c.students ?? 0),
+    duration: c.duration || "",
+    lessons: c.lessons?.length ?? 0,
+    lessonItems: c.lessons || [],
+    level: (c.level as Course["level"]) || "Beginner",
+    image: c.thumbnail || "",
+    featured: false
+  };
+  return course;
+};
 
 export function getThumbnailSrc(thumbnail: string | undefined): string {
   if (!thumbnail) return "";
-  if (thumbnail.startsWith("thumbnails/"))
+  
+  // 1. Handle blob URLs (previews)
+  if (thumbnail.startsWith("blob:")) return thumbnail;
+
+  // 2. Handle proxy URLs (already processed)
+  if (thumbnail.includes("/upload/thumb") || thumbnail.includes("/upload/proxy")) {
+    return thumbnail;
+  }
+
+  // 3. Handle S3 keys (e.g., "thumbnails/uuid.jpg")
+  if (thumbnail.startsWith("thumbnails/")) {
     return `${API_BASE_URL}/upload/thumb?key=${encodeURIComponent(thumbnail)}`;
+  }
+    
+  // 4. Handle HTTP/HTTPS URLs
   if (thumbnail.startsWith("http")) {
     try {
       const url = new URL(thumbnail);
-      const keyMatch = url.pathname.match(/^\/(thumbnails\/[^?]+)/);
+      const path = url.pathname;
+      const host = url.hostname.toLowerCase();
+      
+      // Extract key from S3 URL and proxy via backend
+      const keyMatch = path.match(/(thumbnails\/[^?]+)/);
       if (keyMatch) {
         return `${API_BASE_URL}/upload/thumb?key=${encodeURIComponent(keyMatch[1])}`;
       }
+      
+      // Direct access for public CDNs
+      if (host.includes("unsplash.com") || host.includes("imgur.com")) {
+        return thumbnail;
+      }
+      
+      // Proxy for other S3/external URLs to handle potential private access/CORS
+      return `${API_BASE_URL}/upload/proxy?url=${encodeURIComponent(thumbnail)}`;
     } catch {
-      /* ignore */
+      return thumbnail;
     }
-    return `${API_BASE_URL}/upload/proxy?url=${encodeURIComponent(thumbnail)}`;
   }
+  
+  // 5. Handle potential raw filenames
+  if (thumbnail.includes(".") && !thumbnail.includes("/")) {
+     return `${API_BASE_URL}/upload/thumb?key=${encodeURIComponent("thumbnails/" + thumbnail)}`;
+  }
+
   return thumbnail;
 }
 
@@ -179,6 +231,7 @@ export const api = {
     category?: string;
     price?: number;
     level?: string;
+    isPublished?: boolean;
   }) {
     return request<ApiCourse>("/courses", "POST", data);
   },
@@ -190,6 +243,7 @@ export const api = {
     category?: string;
     price?: number;
     level?: string;
+    isPublished?: boolean;
   }) {
     return request<ApiCourse>(`/courses/${id}`, "PUT", data);
   },
