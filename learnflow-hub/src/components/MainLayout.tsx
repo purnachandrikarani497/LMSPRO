@@ -55,7 +55,6 @@ const MainLayout = () => {
   ];
 
   const adminLinks = [
-    ...baseLinks,
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/payments", label: "Completed Payments", icon: CreditCard }
   ];

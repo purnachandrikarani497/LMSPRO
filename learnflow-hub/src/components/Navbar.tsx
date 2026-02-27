@@ -25,8 +25,6 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
   const links = showFullNav
     ? user?.role === "admin"
       ? [
-          { to: "/", label: "Home" },
-          { to: "/courses", label: "Courses" },
           { to: "/admin", label: "Admin" }
         ]
       : user?.role === "student"
