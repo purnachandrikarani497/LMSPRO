@@ -10,8 +10,8 @@ import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 
-const nameMaxLength = 40;
-const emailMaxLength = 50;
+const nameMaxLength = 50;
+const emailMaxLength = 30;
 const passwordMinLength = 6;
 const passwordMaxLength = 12;
 
@@ -37,6 +37,10 @@ const validateName = (value: string) => {
   if (trimmed.length > nameMaxLength) {
     return `Use at most ${nameMaxLength} characters`;
   }
+  const namePattern = /^[a-zA-Z\s]+$/;
+  if (!namePattern.test(trimmed)) {
+    return "Name can only contain letters";
+  }
   return null;
 };
 
@@ -54,9 +58,9 @@ const validateEmail = (value: string) => {
   if (!trimmed.includes("@")) {
     return "Include @ in your email";
   }
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailPattern = /^[a-zA-Z0-9@]+$/;
   if (!emailPattern.test(trimmed)) {
-    return "Enter a valid email address";
+    return "Email can only contain alphanumeric characters and @";
   }
   return null;
 };
@@ -238,12 +242,20 @@ const Auth = () => {
                       type="email"
                       className="pl-10"
                       value={signinEmail}
-                      maxLength={emailMaxLength}
                       onChange={(e) => {
                         const value = e.target.value;
                         if (value.length > emailMaxLength) {
+                          toast({ title: "Limit reached", description: `Email cannot exceed ${emailMaxLength} characters`, variant: "destructive" });
                           return;
                         }
+                        
+                        // Check for invalid characters immediately for popup
+                        const emailCharPattern = /^[a-zA-Z0-9@]*$/;
+                        if (!emailCharPattern.test(value)) {
+                          toast({ title: "Invalid character", description: "Email can only contain alphanumeric characters and @", variant: "destructive" });
+                          return;
+                        }
+
                         setSigninEmail(value);
                         setSigninErrors((prev) => {
                           const error = validateEmail(value);
@@ -443,12 +455,20 @@ const Auth = () => {
                       placeholder="Full Name"
                       className="pl-10"
                       value={signupName}
-                      maxLength={nameMaxLength}
                       onChange={(e) => {
                         const value = e.target.value;
                         if (value.length > nameMaxLength) {
+                          toast({ title: "Limit reached", description: `Name cannot exceed ${nameMaxLength} characters`, variant: "destructive" });
                           return;
                         }
+
+                        // Check for invalid characters immediately for popup
+                        const nameCharPattern = /^[a-zA-Z\s]*$/;
+                        if (!nameCharPattern.test(value)) {
+                          toast({ title: "Invalid character", description: "Name can only contain letters", variant: "destructive" });
+                          return;
+                        }
+
                         setSignupName(value);
                         setSignupErrors((prev) => {
                           const error = validateName(value);
@@ -478,12 +498,20 @@ const Auth = () => {
                       type="email"
                       className="pl-10"
                       value={signupEmail}
-                      maxLength={emailMaxLength}
                       onChange={(e) => {
                         const value = e.target.value;
                         if (value.length > emailMaxLength) {
+                          toast({ title: "Limit reached", description: `Email cannot exceed ${emailMaxLength} characters`, variant: "destructive" });
                           return;
                         }
+
+                        // Check for invalid characters immediately for popup
+                        const emailCharPattern = /^[a-zA-Z0-9@]*$/;
+                        if (!emailCharPattern.test(value)) {
+                          toast({ title: "Invalid character", description: "Email can only contain alphanumeric characters and @", variant: "destructive" });
+                          return;
+                        }
+
                         setSignupEmail(value);
                         setSignupErrors((prev) => {
                           const error = validateEmail(value);
