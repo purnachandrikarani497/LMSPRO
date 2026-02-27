@@ -28,8 +28,68 @@ const Profile = () => {
     }
   }, []);
 
+  const handleNameChange = (value: string) => {
+    // Only allow letters and spaces
+    const filteredValue = value.replace(/[^A-Za-z\s]/g, "");
+    
+    if (value.length > 30) {
+      toast({
+        title: "Max limit reached",
+        description: "Full Name cannot exceed 30 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setName(filteredValue);
+  };
+
+  const handleEmailChange = (value: string) => {
+    // Only allow alphanumeric, @, and .
+    const filteredValue = value.replace(/[^A-Za-z0-9@.]/g, "");
+
+    if (value.length > 30) {
+      toast({
+        title: "Max limit reached",
+        description: "Email cannot exceed 30 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEmail(filteredValue);
+  };
+
   const handleSave = () => {
     if (typeof window === "undefined") return;
+
+    if (!name.trim()) {
+      toast({
+        title: "Missing Name",
+        description: "Please enter your full name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!email.trim()) {
+      toast({
+        title: "Missing Email",
+        description: "Please enter your email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!email.includes("@")) {
+      toast({
+        title: "Invalid email",
+        description: "Email must contain @ character.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const rawUser = window.localStorage.getItem("lms_user");
     let stored: StoredUser = {};
     if (rawUser) {
@@ -41,8 +101,8 @@ const Profile = () => {
     }
     const updated: StoredUser = {
       ...stored,
-      name: name || stored.name,
-      email: email || stored.email
+      name: name.trim(),
+      email: email.trim()
     };
     window.localStorage.setItem("lms_user", JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("lms_user_updated"));
@@ -63,16 +123,16 @@ const Profile = () => {
             <label className="mb-1 block text-sm font-medium text-card-foreground">Full Name</label>
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Your name"
             />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-card-foreground">Email</label>
             <Input
-              type="email"
+              type="text"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => handleEmailChange(e.target.value)}
               placeholder="you@example.com"
             />
           </div>
