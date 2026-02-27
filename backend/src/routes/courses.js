@@ -114,6 +114,85 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
   }
 });
 
+router.post("/:id/sections", requireAuth, requireRole(["admin"]), async (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: "Section title is required" });
+    }
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    if (!course.sections) {
+      course.sections = [];
+    }
+    const newSection = { title: title.trim(), lessons: [] };
+    course.sections.push(newSection);
+    await course.save();
+    res.status(201).json(course.sections[course.sections.length - 1]);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to create section" });
+  }
+});
+
+router.post("/:id/sections/:sectionId/lessons", requireAuth, requireRole(["admin"]), async (req, res) => {
+  try {
+    const { id, sectionId } = req.params;
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    if (!course.sections) {
+      course.sections = [];
+    }
+    const section = course.sections.id(sectionId);
+    if (!section) {
+      return res.status(404).json({ message: "Section not found" });
+    }
+    section.lessons.push(req.body);
+    await course.save();
+    res.status(201).json(section.lessons[section.lessons.length - 1]);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to add lesson to section" });
+  }
+});
+
+router.put("/:id/sections/:sectionId", requireAuth, requireRole(["admin"]), async (req, res) => {
+  try {
+    const { id, sectionId } = req.params;
+    const { title } = req.body;
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    const section = course.sections.id(sectionId);
+    if (!section) {
+      return res.status(404).json({ message: "Section not found" });
+    }
+    if (typeof title === "string") section.title = title.trim();
+    await course.save();
+    res.json(section);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update section" });
+  }
+});
+
+router.delete("/:id/sections/:sectionId", requireAuth, requireRole(["admin"]), async (req, res) => {
+  try {
+    const { id, sectionId } = req.params;
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    course.sections.pull(sectionId);
+    await course.save();
+    res.json({ message: "Section deleted" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete section" });
+  }
+});
+
 router.post("/:id/lessons", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);

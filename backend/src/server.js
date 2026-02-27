@@ -1,3 +1,22 @@
+// prepend timestamp to all console output and avoid dumping full Error objects
+const _origConsoleLog = console.log;
+const _origConsoleWarn = console.warn;
+const _origConsoleError = console.error;
+["log", "warn", "error", "info"].forEach((fn) => {
+  const orig = console[fn];
+  console[fn] = (...args) => {
+    const ts = new Date().toISOString();
+    const sanitized = args.map((a) => {
+      if (a instanceof Error) {
+        // production should not leak stack, keep message only
+        return process.env.NODE_ENV === "production" ? a.message : a.stack;
+      }
+      return a;
+    });
+    orig.call(console, ts, ...sanitized);
+  };
+});
+
 import express from "express";
 import mongoose from "mongoose";
 import dns from "node:dns";
@@ -115,25 +134,44 @@ const connectWithRetry = async (retries = 5) => {
   }
 };
 
+// prevent log flooding when the network is flapping
+let _lastDbLog = 0;
+function _dbLog(msg) {
+  const now = Date.now();
+  if (now - _lastDbLog > 5000) {
+    console.log(msg);
+    _lastDbLog = now;
+  }
+}
+
 mongoose.connection.on("disconnected", () => {
-  console.warn("MongoDB disconnected – will auto-reconnect");
+  _dbLog("MongoDB disconnected – will auto-reconnect");
 });
 
 mongoose.connection.on("reconnected", () => {
-  console.log("MongoDB reconnected");
+  _dbLog("MongoDB reconnected");
 });
 
 mongoose.connection.on("error", (err) => {
-  console.error("MongoDB connection error:", err.message);
+  console.error("MongoDB connection error:", err);
 });
 
-connectWithRetry()
-  .then(() => {
+// generic error handler to avoid unformatted stack traces in responses
+app.use((err, req, res, next) => {
+  // express will pass here for uncaught async errors
+  console.error("Unhandled server error:", err);
+  res.status(500).json({ message: "Internal server error" });
+});
+
+// start server after DB connects
+(async () => {
+  try {
+    await connectWithRetry();
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);
     });
-  })
-  .catch((error) => {
+  } catch (error) {
     console.error("Failed to connect to MongoDB after retries", error);
     process.exit(1);
-  });
+  }
+})();

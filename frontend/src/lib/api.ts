@@ -2,7 +2,31 @@ import { type Course } from "./mockData";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
+export const getUserRoleFromToken = (): "admin" | "student" | null => {
+  if (typeof window === "undefined") return null;
+  const token = window.localStorage.getItem("lms_token");
+  if (!token) return null;
+  
+  try {
+    // JWT format: header.payload.signature
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    
+    // Decode base64url
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return decoded.role || null;
+  } catch {
+    return null;
+  }
+};
+
 export const mapApiCourseToCourse = (c: ApiCourse): Course => {
+  // Flatten lessons from sections if they exist, otherwise use flat lessons array
+  let allLessons = c.lessons || [];
+  if (c.sections && c.sections.length > 0) {
+    allLessons = c.sections.flatMap(s => s.lessons || []);
+  }
+  
   const course: Course = {
     id: String(c._id || c.id || Math.random().toString(36).substr(2, 9)),
     title: c.title || "Untitled Course",
@@ -13,8 +37,8 @@ export const mapApiCourseToCourse = (c: ApiCourse): Course => {
     rating: Number(c.rating ?? 0),
     students: Number(c.students ?? 0),
     duration: c.duration || "",
-    lessons: c.lessons?.length ?? 0,
-    lessonItems: c.lessons || [],
+    lessons: allLessons.length,
+    lessonItems: allLessons,
     level: (c.level as Course["level"]) || "Beginner",
     image: c.thumbnail || "",
     featured: false
@@ -161,6 +185,18 @@ export interface ApiCourse {
     duration?: string;
     resources?: string[];
   }[];
+  sections?: {
+    _id?: string;
+    title: string;
+    lessons?: {
+      _id?: string;
+      title: string;
+      videoUrl?: string;
+      content?: string;
+      duration?: string;
+      resources?: string[];
+    }[];
+  }[];
   quiz?: {
     question: string;
     options: string[];
@@ -252,6 +288,18 @@ export const api = {
   },
   addLesson(courseId: string, data: { title: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
     return request<{ _id: string; title: string }>(`/courses/${courseId}/lessons`, "POST", data);
+  },
+  addSection(courseId: string, data: { title: string }) {
+    return request<{ _id: string; title: string; lessons: any[] }>(`/courses/${courseId}/sections`, "POST", data);
+  },
+  addLessonToSection(courseId: string, sectionId: string, data: { title: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
+    return request<{ _id: string; title: string }>(`/courses/${courseId}/sections/${sectionId}/lessons`, "POST", data);
+  },
+  updateSection(courseId: string, sectionId: string, data: { title: string }) {
+    return request<{ _id: string; title: string; lessons: any[] }>(`/courses/${courseId}/sections/${sectionId}`, "PUT", data);
+  },
+  deleteSection(courseId: string, sectionId: string) {
+    return request<{ message: string }>(`/courses/${courseId}/sections/${sectionId}`, "DELETE");
   },
   updateLesson(courseId: string, lessonId: string, data: { title?: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
     return request<{ _id: string; title: string }>(`/courses/${courseId}/lessons/${lessonId}`, "PUT", data);

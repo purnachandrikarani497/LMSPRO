@@ -11,6 +11,14 @@ const lessonSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const sectionSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    lessons: [lessonSchema]
+  },
+  { _id: true }
+);
+
 const questionSchema = new mongoose.Schema(
   {
     question: { type: String, required: true },
@@ -33,6 +41,7 @@ const courseSchema = new mongoose.Schema(
     students: { type: Number, default: 0 },
     duration: { type: String },
     level: { type: String },
+    sections: [sectionSchema],
     lessons: [lessonSchema],
     quiz: [questionSchema],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

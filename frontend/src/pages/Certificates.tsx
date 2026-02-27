@@ -3,6 +3,7 @@ import { api, ApiCertificate } from "@/lib/api";
 import { format } from "date-fns";
 import { Award } from "lucide-react";
 import { Helmet } from "react-helmet-async";
+import Navbar from "@/components/Navbar";
 
 type CertificateWithUrl = ApiCertificate & { url?: string };
 

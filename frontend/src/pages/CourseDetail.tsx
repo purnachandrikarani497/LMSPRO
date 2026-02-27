@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, CheckCircle2, AlertCircle } from "lucide-react";
+import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, CheckCircle2, AlertCircle, ChevronRight, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getVideoSrc, mapApiCourseToCourse } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getVideoSrc, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,6 +16,8 @@ const CourseDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const userRole = getUserRoleFromToken();
 
   useEffect(() => {
     setVideoError(null);
@@ -68,6 +70,20 @@ const CourseDetail = () => {
   const selectedIndex = selectedLesson ? lessons.findIndex((l) => l._id === selectedLesson._id) : -1;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;
 
+  // Get sections if available, otherwise create default section from lessons
+  const sections = apiCourse?.sections && apiCourse.sections.length > 0
+    ? apiCourse.sections
+    : lessons.length > 0
+    ? [{ title: "Course Content", lessons }]
+    : [];
+
+  // Expand first section by default
+  useEffect(() => {
+    if (sections.length > 0 && expandedSections.size === 0) {
+      setExpandedSections(new Set([sections[0].title]));
+    }
+  }, [sections]);
+
   const totalDuration = course?.lessonItems?.reduce((acc, l) => {
     const d = l.duration?.match(/(\d+)/);
     return acc + (d ? parseInt(d[1], 10) : 0);
@@ -99,6 +115,69 @@ const CourseDetail = () => {
     );
   }
 
+  // Admin view
+  if (userRole === "admin") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <Link
+            to="/courses"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Courses
+          </Link>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold text-gray-900">{course.title}</h1>
+                <p className="mt-2 text-gray-600">{course.description}</p>
+                <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                  <span className="text-gray-600">
+                    <strong>Instructor:</strong> {course.instructor}
+                  </span>
+                  <span className="text-gray-600">
+                    <strong>Category:</strong> {course.category}
+                  </span>
+                  <span className="text-gray-600">
+                    <strong>Level:</strong> {course.level}
+                  </span>
+                  <span className="text-gray-600">
+                    <strong>Price:</strong> ${course.price}
+                  </span>
+                </div>
+              </div>
+              <Button
+                onClick={() => navigate(`/admin/course/${course.id}`)}
+                className="gap-2 bg-amber-500 hover:bg-amber-600"
+              >
+                <Edit className="h-4 w-4" />
+                Edit Course
+              </Button>
+            </div>
+
+            <div className="mt-8 border-t pt-6">
+              <h2 className="text-lg font-bold text-gray-900">Course Content</h2>
+              <p className="mt-2 text-sm text-gray-600">{course.lessons} lessons</p>
+              <div className="mt-4 space-y-3">
+                {sections && sections.length > 0 ? (
+                  sections.map((section) => (
+                    <div key={section.title} className="rounded border border-gray-200 p-3">
+                      <p className="font-medium text-gray-900">{section.title}</p>
+                      <p className="text-xs text-gray-500">{section.lessons?.length || 0} lessons</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No lessons added yet</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Helmet>
@@ -112,26 +191,6 @@ const CourseDetail = () => {
         )}
       </Helmet>
 
-      <div className="border-b border-gray-200 bg-white">
-        <div className="container mx-auto px-4">
-          <nav className="flex gap-6 overflow-x-auto py-3">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`whitespace-nowrap border-b-2 pb-2 text-sm font-medium transition-colors ${
-                  activeTab === tab
-                    ? "border-gray-900 text-gray-900"
-                    : "border-transparent text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
-
       <div className="container mx-auto px-4 py-8">
         <Link
           to="/courses"
@@ -141,7 +200,7 @@ const CourseDetail = () => {
         </Link>
 
         <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 ml-24">
             {/* Video player - plays in container when lesson selected */}
             <div className="aspect-video w-full overflow-hidden rounded-lg bg-gray-900">
               {isEnrolled && selectedLesson ? (
@@ -273,12 +332,6 @@ const CourseDetail = () => {
               <span className="text-gray-600">{totalHours} Total</span>
             </div>
 
-            {course.updatedAt && (
-              <p className="text-sm text-gray-600">
-                Last updated {new Date(course.updatedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-              </p>
-            )}
-
             <p className="text-sm text-gray-600">Language: English</p>
 
             {/* Description */}
@@ -287,6 +340,28 @@ const CourseDetail = () => {
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
                 {course.description}
               </p>
+            </div>
+
+            {/* tabs navigation moved here to mimic Udemy layout.
+              Position as sticky so it stays visible when scrolling through the
+              long overview content, just like Udemy keeps the section selector
+              pinned below the header/video area. */}
+            <div className="mt-8 border-b border-gray-200 bg-white sticky top-24 z-10">
+              <nav className="flex gap-6 overflow-x-auto py-3">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`whitespace-nowrap border-b-2 pb-2 text-sm font-medium transition-colors ${
+                      activeTab === tab
+                        ? "border-gray-900 text-gray-900"
+                        : "border-transparent text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </nav>
             </div>
 
             {activeTab === "Overview" && course.lessonItems && course.lessonItems.length > 0 && (
@@ -305,8 +380,8 @@ const CourseDetail = () => {
           </div>
 
           {/* Right sidebar */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-24 space-y-4">
+          <div className="lg:col-span-1 flex flex-col h-[calc(100vh-120px)]">
+            <div className="sticky top-24 space-y-4 flex-shrink-0">
               {!isEnrolled && (
                 <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                   <img
@@ -330,69 +405,112 @@ const CourseDetail = () => {
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Course content */}
-              <div className="rounded-lg border border-gray-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gray-900">Course content</h3>
-                </div>
-                <div className="mt-3 max-h-80 space-y-1 overflow-y-auto">
-                  {course.lessonItems && course.lessonItems.length > 0 ? (
-                    course.lessonItems.map((lesson, i) => {
-                      const lid = lesson._id;
-                      const completed = lid ? completedLessonIds.has(lid) : false;
-                      const canOpen = isEnrolled && !!lid;
+            {/* Course content - Takes remaining space with scroll */}
+            <div className="rounded-lg border border-gray-200 bg-white p-4 flex flex-col flex-grow min-h-0 mt-4">
+              <div className="flex items-center justify-between flex-shrink-0">
+                <h3 className="font-bold text-gray-900">Course content</h3>
+              </div>
+              <div className="mt-3 space-y-2 overflow-y-auto flex-grow">
+                  {sections && sections.length > 0 ? (
+                    sections.map((section) => {
+                      const isExpanded = expandedSections.has(section.title);
+                      const sectionLessons = section.lessons || [];
+                      const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
+                      
                       return (
-                        <div
-                          key={lesson._id || i}
-                          className={`flex items-start gap-2 rounded border px-3 py-2 text-sm ${
-                            canOpen
-                              ? "cursor-pointer border-gray-200 bg-white hover:border-amber-400 hover:bg-amber-50/50"
-                              : "border-gray-100 bg-gray-50/50"
-                          } ${selectedLesson?._id === lid ? "border-amber-400 bg-amber-50/50" : ""}`}
-                          onClick={() => {
-                            if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
-                          }}
-                          role={canOpen ? "button" : undefined}
-                        >
-                          {completed ? (
-                            <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
-                          ) : (
-                            <span className="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
-                              {canOpen ? (
-                                <Play className="h-2.5 w-2.5" />
+                        <div key={section.title} className="border-b border-gray-200 last:border-b-0">
+                          {/* Section header */}
+                          <button
+                            onClick={() => {
+                              setExpandedSections(prev => {
+                                const next = new Set(prev);
+                                if (next.has(section.title)) {
+                                  next.delete(section.title);
+                                } else {
+                                  next.add(section.title);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="w-full flex items-center gap-2 py-3 px-2 hover:bg-gray-50 transition rounded"
+                          >
+                            <ChevronRight
+                              className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                            />
+                            <div className="flex-1 text-left">
+                              <p className="font-medium text-gray-900 text-sm">{section.title}</p>
+                              <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
+                            </div>
+                          </button>
+
+                          {/* Section lessons */}
+                          {isExpanded && (
+                            <div className="space-y-1 pl-6 pb-2">
+                              {sectionLessons && sectionLessons.length > 0 ? (
+                                sectionLessons.map((lesson, i) => {
+                                  const lid = lesson._id;
+                                  const completed = lid ? completedLessonIds.has(lid) : false;
+                                  const canOpen = isEnrolled && !!lid;
+                                  return (
+                                    <div
+                                      key={lesson._id || i}
+                                      className={`flex items-start gap-2 rounded border px-3 py-2 text-sm ${
+                                        canOpen
+                                          ? "cursor-pointer border-gray-200 bg-white hover:border-amber-400 hover:bg-amber-50/50"
+                                          : "border-gray-100 bg-gray-50/50"
+                                      } ${selectedLesson?._id === lid ? "border-amber-400 bg-amber-50/50" : ""}`}
+                                      onClick={() => {
+                                        if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                      }}
+                                      role={canOpen ? "button" : undefined}
+                                    >
+                                      {completed ? (
+                                        <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                      ) : (
+                                        <span className="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                          {canOpen ? (
+                                            <Play className="h-2.5 w-2.5" />
+                                          ) : (
+                                            <span className="text-gray-400">○</span>
+                                          )}
+                                        </span>
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
+                                        <div className="mt-1 flex items-center gap-2">
+                                          {lesson.duration && (
+                                            <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                          )}
+                                          {lesson.resources && lesson.resources.length > 0 && (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-6 gap-1 px-2 text-xs text-purple-600"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <FileText className="h-3 w-3" />
+                                              Resources
+                                              <ChevronDown className="h-3 w-3" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })
                               ) : (
-                                <span className="text-gray-400">○</span>
-                              )}
-                            </span>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
-                            <div className="mt-1 flex items-center gap-2">
-                              {lesson.duration && (
-                                <span className="text-xs text-gray-500">{lesson.duration}</span>
-                              )}
-                              {lesson.resources && lesson.resources.length > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 gap-1 px-2 text-xs text-purple-600"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <FileText className="h-3 w-3" />
-                                  Resources
-                                  <ChevronDown className="h-3 w-3" />
-                                </Button>
+                                <p className="py-2 text-center text-sm text-gray-500">No lessons in this section</p>
                               )}
                             </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })
                   ) : (
                     <p className="py-4 text-center text-sm text-gray-500">No lessons added yet</p>
                   )}
-                </div>
               </div>
             </div>
           </div>
