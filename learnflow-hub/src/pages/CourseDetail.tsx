@@ -68,7 +68,7 @@ const CourseDetail = () => {
   const selectedIndex = selectedLesson ? lessons.findIndex((l) => l._id === selectedLesson._id) : -1;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;
 
-  const totalDuration = course?.lessons?.reduce((acc, l) => {
+  const totalDuration = course?.lessonItems?.reduce((acc, l) => {
     const d = l.duration?.match(/(\d+)/);
     return acc + (d ? parseInt(d[1], 10) : 0);
   }, 0) ?? 0;
@@ -289,11 +289,11 @@ const CourseDetail = () => {
               </p>
             </div>
 
-            {activeTab === "Overview" && course.lessons && course.lessons.length > 0 && (
+            {activeTab === "Overview" && course.lessonItems && course.lessonItems.length > 0 && (
               <div>
                 <h2 className="text-lg font-bold text-gray-900">What you'll learn</h2>
                 <ul className="mt-3 space-y-2">
-                  {course.lessons.slice(0, 6).map((l, i) => (
+                  {course.lessonItems.slice(0, 6).map((l, i) => (
                     <li key={l._id || i} className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
                       {l.title}
@@ -337,8 +337,8 @@ const CourseDetail = () => {
                   <h3 className="font-bold text-gray-900">Course content</h3>
                 </div>
                 <div className="mt-3 max-h-80 space-y-1 overflow-y-auto">
-                  {course.lessons && course.lessons.length > 0 ? (
-                    course.lessons.map((lesson, i) => {
+                  {course.lessonItems && course.lessonItems.length > 0 ? (
+                    course.lessonItems.map((lesson, i) => {
                       const lid = lesson._id;
                       const completed = lid ? completedLessonIds.has(lid) : false;
                       const canOpen = isEnrolled && !!lid;

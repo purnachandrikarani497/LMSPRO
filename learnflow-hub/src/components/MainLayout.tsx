@@ -25,13 +25,13 @@ const MainLayout = () => {
   const location = useLocation();
 
   const loadUser = () => {
-    if (typeof window === "undefined") return;
-    const rawUser = window.localStorage.getItem("lms_user");
-    if (!rawUser) {
-      setUser(null);
-      return;
-    }
     try {
+      if (typeof window === "undefined") return;
+      const rawUser = window.localStorage.getItem("lms_user");
+      if (!rawUser) {
+        setUser(null);
+        return;
+      }
       setUser(JSON.parse(rawUser) as StoredUser);
     } catch {
       setUser(null);
@@ -86,18 +86,21 @@ const MainLayout = () => {
           </Link>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {sidebarLinks.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive(link) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <link.icon className="h-5 w-5 shrink-0" />
-              {link.label}
-            </Link>
-          ))}
+          {sidebarLinks.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive(link) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {Icon ? <Icon className="h-5 w-5 shrink-0" /> : null}
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
       )}
@@ -129,19 +132,22 @@ const MainLayout = () => {
               </button>
             </div>
             <nav className="space-y-1 p-3">
-              {sidebarLinks.map((link) => (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
-                    isActive(link) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  <link.icon className="h-5 w-5 shrink-0" />
-                  {link.label}
-                </Link>
-              ))}
+              {sidebarLinks.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
+                      isActive(link) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {Icon ? <Icon className="h-5 w-5 shrink-0" /> : null}
+                    {link.label}
+                  </Link>
+                );
+              })}
             </nav>
           </aside>
         </>
