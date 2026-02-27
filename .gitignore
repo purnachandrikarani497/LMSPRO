@@ -1,5 +1,5 @@
 .env
 backend/.env
-learnflow-hub/.env
+frontend/.env
 *.env.local
 .env.*.local
