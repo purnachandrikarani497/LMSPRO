@@ -29,35 +29,38 @@ const Profile = () => {
   }, []);
 
   const handleNameChange = (value: string) => {
-    // Only allow letters and spaces
-    const filteredValue = value.replace(/[^A-Za-z\s]/g, "");
-    
-    if (value.length > 30) {
+    if (value.length > 50) {
       toast({
         title: "Max limit reached",
-        description: "Full Name cannot exceed 30 characters.",
+        description: "Full Name cannot exceed 50 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (value && !/^[a-zA-Z\s]+$/.test(value)) {
+      toast({
+        title: "Invalid character",
+        description: "Name can only contain characters",
         variant: "destructive",
       });
       return;
     }
     
-    setName(filteredValue);
+    setName(value);
   };
 
   const handleEmailChange = (value: string) => {
-    // Only allow alphanumeric, @, and .
-    const filteredValue = value.replace(/[^A-Za-z0-9@.]/g, "");
-
-    if (value.length > 30) {
+    if (value.length > 50) {
       toast({
         title: "Max limit reached",
-        description: "Email cannot exceed 30 characters.",
+        description: "Email cannot exceed 50 characters.",
         variant: "destructive",
       });
       return;
     }
 
-    setEmail(filteredValue);
+    setEmail(value);
   };
 
   const handleSave = () => {
