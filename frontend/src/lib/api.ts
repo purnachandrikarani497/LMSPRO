@@ -322,7 +322,21 @@ export const api = {
     return request<{ message: string }>(`/courses/${courseId}/lessons/${lessonId}`, "DELETE");
   },
   enroll(courseId: string) {
-    return request<ApiEnrollment>("/enrollments", "POST", { courseId });
+    return request<{
+      orderId: string;
+      amount: number;
+      currency: string;
+      key: string;
+      courseId: string;
+    }>("/enrollments", "POST", { courseId });
+  },
+  verifyPayment(data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    courseId: string;
+  }) {
+    return request<ApiEnrollment>("/enrollments/verify", "POST", data);
   },
   getEnrollments() {
     return request<ApiEnrollment[]>("/enrollments", "GET");

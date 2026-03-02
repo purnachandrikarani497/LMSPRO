@@ -7,6 +7,14 @@ import { api, ApiCourse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 import { courses as mockCourses } from "@/lib/mockData";
+import { useEffect } from "react";
+
+// Add Razorpay type for TypeScript
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 type PaymentCourse = {
   id: string;
@@ -18,6 +26,17 @@ const Payment = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Load Razorpay script
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   const {
     data: apiCourse,
@@ -47,14 +66,77 @@ const Payment = () => {
         }
       : null;
 
-  const enrollMutation = useMutation({
-    mutationFn: () => api.enroll(apiCourse?._id || apiCourse?.id || ""),
+  const verifyMutation = useMutation({
+    mutationFn: (data: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+      courseId: string;
+    }) => api.verifyPayment(data),
     onSuccess: () => {
       toast({
         title: "Payment successful",
         description: "You have been enrolled in this course"
       });
       navigate("/dashboard");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Verification failed",
+        description: error.message || "Could not verify your payment",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const enrollMutation = useMutation({
+    mutationFn: () => api.enroll(apiCourse?._id || apiCourse?.id || ""),
+    onSuccess: (data) => {
+      // Data contains orderId, amount, currency, key
+      if (!window.Razorpay) {
+        toast({
+          title: "Payment error",
+          description: "Razorpay SDK not loaded",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const options = {
+        key: data.key,
+        amount: data.amount,
+        currency: data.currency,
+        name: "LearnHub",
+        description: `Enrollment for ${course?.title}`,
+        order_id: data.orderId,
+        handler: function (response: any) {
+          // This function is called after successful payment
+          verifyMutation.mutate({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            courseId: data.courseId
+          });
+        },
+        prefill: {
+          name: "Student Name",
+          email: "student@example.com",
+          contact: "9999999999"
+        },
+        theme: {
+          color: "#EAB308"
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", function (response: any) {
+        toast({
+          title: "Payment failed",
+          description: response.error.description,
+          variant: "destructive"
+        });
+      });
+      rzp.open();
     },
     onError: (error) => {
       let message = "Please try again later";
@@ -77,7 +159,7 @@ const Payment = () => {
         return;
       }
       toast({
-        title: "Payment failed",
+        title: "Payment initialization failed",
         description: message,
         variant: "destructive"
       });
