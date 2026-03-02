@@ -91,7 +91,13 @@ const ResetPassword = () => {
             Please enter your new password below to secure your account.
           </p>
 
-          <div className="space-y-4">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              resetPasswordMutation.mutate();
+            }}
+          >
             <div className="space-y-2">
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -131,8 +137,8 @@ const ResetPassword = () => {
             </div>
 
             <Button
+              type="submit"
               className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90 mt-4"
-              onClick={() => resetPasswordMutation.mutate()}
               disabled={
                 resetPasswordMutation.isPending || 
                 !newPassword || 
@@ -148,7 +154,7 @@ const ResetPassword = () => {
                 Back to Sign In
               </Link>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     </div>

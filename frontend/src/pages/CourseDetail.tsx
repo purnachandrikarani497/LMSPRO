@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, CheckCircle2, AlertCircle, ChevronRight, Edit } from "lucide-react";
+import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getVideoSrc, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getSecureVideoSrc, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
+import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,7 +69,9 @@ const CourseDetail = () => {
   const lessons = course?.lessonItems ?? [];
   const selectedLesson = lessonId ? lessons.find((l) => l._id === lessonId) ?? lessons[0] : null;
   const selectedIndex = selectedLesson ? lessons.findIndex((l) => l._id === selectedLesson._id) : -1;
+  const prevLesson = selectedIndex > 0 ? lessons[selectedIndex - 1] : null;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;
+  const [autoplay, setAutoplay] = useState(false);
 
   // Get sections if available, otherwise create default section from lessons
   const sections = apiCourse?.sections && apiCourse.sections.length > 0
@@ -194,10 +197,64 @@ const CourseDetail = () => {
       <div className="container mx-auto px-4 py-8">
         <Link
           to="/courses"
-          className="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+          className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Courses
         </Link>
+
+        {/* Udemy-style course header */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{course.title}</h1>
+            {isEnrolled && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("Reviews")}
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-600"
+                >
+                  <Star className="h-4 w-4" />
+                  Leave a rating
+                </button>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-600"
+                  >
+                    <Trophy className="h-4 w-4" />
+                    Your progress
+                  </button>
+                  <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-10 rounded-lg border border-gray-200 bg-white p-3 shadow-lg min-w-[180px]">
+                    <p className="text-sm font-medium text-gray-900">Progress</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {completedLessonIds.size} of {lessons.length} lessons completed
+                    </p>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
+                      <div
+                        className="h-full rounded-full bg-amber-500"
+                        style={{ width: `${lessons.length ? (completedLessonIds.size / lessons.length) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(window.location.href);
+                    toast({ title: "Link copied", description: "Course link copied to clipboard" });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-600"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </button>
+              </>
+            )}
+          </div>
+          <button type="button" className="rounded p-2 text-gray-500 hover:bg-gray-100" aria-label="More options">
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
+        </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6 ml-24">
@@ -215,32 +272,32 @@ const CourseDetail = () => {
                     ) : selectedLesson.videoUrl ? (
                       (() => {
                         const rawUrl = selectedLesson.videoUrl;
-                        const videoUrl = getVideoSrc(rawUrl) || rawUrl;
+                        const videoUrl = getSecureVideoSrc(rawUrl) || rawUrl;
                         const isEmbed =
                           /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawUrl) || rawUrl.includes("/embed/");
-                        return isEmbed ? (
-                          <iframe
+                        let watermark: string | undefined;
+                        try {
+                          const u = window.localStorage.getItem("lms_user");
+                          if (u) {
+                            const parsed = JSON.parse(u);
+                            watermark = parsed.email || parsed.name;
+                          }
+                        } catch {
+                          /* ignore */
+                        }
+                        return (
+                          <SecureVideoPlayer
                             src={videoUrl}
                             title={selectedLesson.title}
-                            className="h-full w-full border-0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
+                            isEmbed={isEmbed}
+                            watermarkText={watermark}
+                            onError={(msg) => setVideoError(msg)}
+                            className="h-full w-full"
+                            onPrev={prevLesson ? () => navigate(`/course/${course.id}/lesson/${prevLesson._id}`) : undefined}
+                            onNext={nextLesson ? () => navigate(`/course/${course.id}/lesson/${nextLesson._id}`) : undefined}
+                            autoplay={autoplay}
+                            onAutoplayChange={setAutoplay}
                           />
-                        ) : (
-                          <video
-                            src={videoUrl}
-                            controls
-                            className="h-full w-full object-contain"
-                            playsInline
-                            preload="metadata"
-                            onError={() =>
-                              setVideoError(
-                                "The URL may be invalid or in an unsupported format."
-                              )
-                            }
-                          >
-                            <track kind="captions" />
-                          </video>
                         );
                       })()
                     ) : (
@@ -310,9 +367,6 @@ const CourseDetail = () => {
                 </div>
               )}
             </div>
-
-            {/* Course title */}
-            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{course.title}</h1>
 
             {/* Stats */}
             <div className="flex flex-wrap gap-4 text-sm">

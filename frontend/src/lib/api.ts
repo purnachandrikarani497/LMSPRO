@@ -114,6 +114,20 @@ export function getVideoSrc(videoUrl: string | undefined): string {
   return videoUrl;
 }
 
+/** Returns video URL with auth token for protected streaming (backend validates token) */
+export function getSecureVideoSrc(videoUrl: string | undefined): string {
+  if (!videoUrl) return "";
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
+  const base = getVideoSrc(videoUrl);
+  if (!base) return "";
+  // For our backend proxy URLs, append token so backend can validate
+  if (base.includes("/upload/video")) {
+    const sep = base.includes("?") ? "&" : "?";
+    return token ? `${base}${sep}token=${encodeURIComponent(token)}` : base;
+  }
+  return base;
+}
+
 const getToken = () => {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem("lms_token");

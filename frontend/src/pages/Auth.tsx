@@ -222,7 +222,10 @@ const Auth = () => {
             </TabsList>
 
             <TabsContent value="signin">
-              <div className="space-y-4">
+              <form
+                className="space-y-4"
+                onSubmit={(e) => { e.preventDefault(); handleSignin(); }}
+              >
                 <div>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -301,8 +304,8 @@ const Auth = () => {
                   )}
                 </div>
                 <Button
+                  type="submit"
                   className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
-                  onClick={handleSignin}
                   disabled={loginMutation.isPending}
                 >
                   Sign In
@@ -337,7 +340,10 @@ const Auth = () => {
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         {!isLinkSent ? (
-                          <div className="space-y-2">
+                          <form
+                            className="space-y-2"
+                            onSubmit={(e) => { e.preventDefault(); forgotPasswordMutation.mutate(); }}
+                          >
                             <Input
                               placeholder="Email Address"
                               type="text"
@@ -352,13 +358,13 @@ const Auth = () => {
                               }}
                             />
                             <Button 
+                              type="submit"
                               className="w-full bg-gradient-gold text-primary font-semibold" 
-                              onClick={() => forgotPasswordMutation.mutate()}
                               disabled={forgotPasswordMutation.isPending || !forgotEmail}
                             >
                               {forgotPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}
                             </Button>
-                          </div>
+                          </form>
                         ) : !showResetPassword ? (
                           <div className="text-center space-y-4">
                             <div className="flex justify-center">
@@ -382,7 +388,17 @@ const Auth = () => {
                             </Button>
                           </div>
                         ) : (
-                          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                          <form
+                            className="space-y-4 animate-in fade-in slide-in-from-bottom-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              resetPasswordMutation.mutate({
+                                email: forgotEmail.trim(),
+                                token: resetToken,
+                                newPassword: newPassword
+                              });
+                            }}
+                          >
                             <div className="space-y-2">
                               <Input
                                 placeholder="New Password"
@@ -403,12 +419,8 @@ const Auth = () => {
                               )}
                             </div>
                             <Button 
+                              type="submit"
                               className="w-full bg-gradient-gold text-primary font-semibold" 
-                              onClick={() => resetPasswordMutation.mutate({
-                                email: forgotEmail.trim(),
-                                token: resetToken,
-                                newPassword: newPassword
-                              })}
                               disabled={
                                 resetPasswordMutation.isPending || 
                                 !newPassword || 
@@ -419,23 +431,27 @@ const Auth = () => {
                               {resetPasswordMutation.isPending ? "Updating..." : "Update Password"}
                             </Button>
                             <Button 
+                              type="button"
                               variant="ghost" 
                               className="w-full text-xs" 
                               onClick={() => setShowResetPassword(false)}
                             >
                               Back
                             </Button>
-                          </div>
+                          </form>
                         )}
                       </div>
                     </DialogContent>
                   </Dialog>
                 </div>
-              </div>
+              </form>
             </TabsContent>
 
             <TabsContent value="signup">
-              <div className="space-y-4">
+              <form
+                className="space-y-4"
+                onSubmit={(e) => { e.preventDefault(); handleSignup(); }}
+              >
                 <div>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -552,8 +568,8 @@ const Auth = () => {
                   )}
                 </div>
                 <Button
+                  type="submit"
                   className="w-full bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
-                  onClick={handleSignup}
                   disabled={registerMutation.isPending}
                 >
                   Create Account
@@ -561,7 +577,7 @@ const Auth = () => {
                 <p className="text-center text-xs text-muted-foreground">
                   By signing up, you agree to our Terms of Service
                 </p>
-              </div>
+              </form>
             </TabsContent>
           </Tabs>
         </div>

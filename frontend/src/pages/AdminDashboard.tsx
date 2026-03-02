@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, Users, BookOpen, TrendingUp, ListChecks, HelpCircle, Upload, Loader2, Settings } from "lucide-react";
+import { Plus, Edit, Trash2, Users, BookOpen, TrendingUp, ListChecks, HelpCircle, Upload, Loader2, Settings, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,6 +53,11 @@ const AdminDashboard = () => {
 
   const [coursesList, setCoursesList] = useState<Course[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"course" | "category" | "students" | "price" | "rating" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "", description: "", instructor: "", category: "Development",
@@ -333,6 +338,54 @@ const AdminDashboard = () => {
         ).toFixed(1)
       : "0.0";
 
+  const handleSort = (col: "course" | "category" | "students" | "price" | "rating") => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(col);
+      setSortDir("asc");
+    }
+    setPage(1);
+  };
+
+  const filtered = coursesList.filter((c) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (c.title || "").toLowerCase().includes(q) ||
+      (c.instructor || "").toLowerCase().includes(q) ||
+      (c.category || "").toLowerCase().includes(q)
+    );
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortBy) return 0;
+    let cmp = 0;
+    switch (sortBy) {
+      case "course":
+        cmp = (a.title || "").localeCompare(b.title || "");
+        break;
+      case "category":
+        cmp = (a.category || "").localeCompare(b.category || "");
+        break;
+      case "students":
+        cmp = (a.students ?? 0) - (b.students ?? 0);
+        break;
+      case "price":
+        cmp = (a.price ?? 0) - (b.price ?? 0);
+        break;
+      case "rating":
+        cmp = (a.rating ?? 0) - (b.rating ?? 0);
+        break;
+      default:
+        return 0;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
+
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
@@ -357,7 +410,10 @@ const AdminDashboard = () => {
                   Enter the course details below. All fields are required.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <form
+                className="grid gap-4 py-4"
+                onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+              >
                 <Input
                   placeholder="Course Title"
                   value={form.title}
@@ -539,13 +595,13 @@ const AdminDashboard = () => {
                   )}
                 </div>
                 <Button
-                  onClick={handleSubmit}
+                  type="submit"
                   className="bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
                   disabled={createMutation.isPending || updateMutation.isPending}
                 >
                   {editingId ? "Save Changes" : "Create Course"}
                 </Button>
-              </div>
+              </form>
             </DialogContent>
           </Dialog>
         </div>
@@ -556,20 +612,89 @@ const AdminDashboard = () => {
           <StatCard icon={TrendingUp} label="Avg Rating" value={avgRating} />
         </div>
 
-        <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-card">
+        <div className="mt-10 space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by title, instructor, or category..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                className="pl-10"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {filtered.length} of {coursesList.length} courses
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Course</TableHead>
-                <TableHead className="hidden sm:table-cell">Category</TableHead>
-                <TableHead className="hidden md:table-cell">Students</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead className="hidden md:table-cell">Rating</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => handleSort("course")}
+                    className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+                  >
+                    Course
+                    {sortBy === "course" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                  </button>
+                </TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("category")}
+                    className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+                  >
+                    Category
+                    {sortBy === "category" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                  </button>
+                </TableHead>
+                <TableHead className="hidden md:table-cell">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("students")}
+                    className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+                  >
+                    Students
+                    {sortBy === "students" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => handleSort("price")}
+                    className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+                  >
+                    Price
+                    {sortBy === "price" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                  </button>
+                </TableHead>
+                <TableHead className="hidden md:table-cell">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("rating")}
+                    className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+                  >
+                    Rating
+                    {sortBy === "rating" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                  </button>
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {coursesList.map((course) => (
+              {paginated.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    {filtered.length === 0 && searchQuery.trim()
+                      ? "No courses match your search. Try a different term."
+                      : "No courses yet. Add your first course above."}
+                  </TableCell>
+                </TableRow>
+              ) : paginated.map((course) => (
                 <TableRow key={course.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -627,7 +752,33 @@ const AdminDashboard = () => {
               ))}
             </TableBody>
           </Table>
-        </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" /> Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                >
+                  Next <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
 
         <div className="mt-6 rounded-xl border border-dashed border-border bg-card/40 p-4 text-xs text-muted-foreground flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/15">
@@ -642,6 +793,7 @@ const AdminDashboard = () => {
               Use this dashboard to manage courses. Lessons and quizzes can be attached to a course using backend tools or future admin screens.
             </p>
           </div>
+        </div>
         </div>
       </div>
     </div>

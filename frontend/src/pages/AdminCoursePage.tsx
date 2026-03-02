@@ -14,7 +14,7 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse } from "@/lib/api";
+import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
@@ -284,7 +284,7 @@ const AdminCoursePage = () => {
     try {
       const video = document.createElement("video");
       video.crossOrigin = "anonymous";
-      video.src = videoUrl;
+      video.src = getSecureVideoSrc(videoUrl) || videoUrl;
       
       const duration = await new Promise<number>((resolve) => {
         const timeout = setTimeout(() => resolve(NaN), 8000);
@@ -311,7 +311,7 @@ const AdminCoursePage = () => {
     try {
       const video = document.createElement("video");
       video.crossOrigin = "anonymous";
-      video.src = videoUrl;
+      video.src = getSecureVideoSrc(videoUrl) || videoUrl;
       video.currentTime = 1;
       await new Promise((resolve) => {
         video.addEventListener("seeked", resolve, { once: true });
@@ -414,7 +414,18 @@ const AdminCoursePage = () => {
               <img src={newLessonThumbnail} alt="thumbnail" className="w-32 h-24 object-cover rounded border border-gray-200" />
             </div>
           )}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <form
+            className="mt-4 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newLesson.title.trim()) {
+                toast({ title: "Title required", variant: "destructive" });
+                return;
+              }
+              addLessonMutation.mutate();
+            }}
+          >
+          <div className="grid gap-4 sm:grid-cols-2">
             <Input
               placeholder="Lesson title"
               value={newLesson.title}
@@ -472,18 +483,13 @@ const AdminCoursePage = () => {
             </div>
           </div>
           <Button
+            type="submit"
             className="mt-4 gap-2"
-            onClick={() => {
-              if (!newLesson.title.trim()) {
-                toast({ title: "Title required", variant: "destructive" });
-                return;
-              }
-              addLessonMutation.mutate();
-            }}
             disabled={addLessonMutation.isPending || !newLesson.title.trim()}
           >
             <Plus className="h-4 w-4" /> Add Lesson
           </Button>
+          </form>
         </div>
 
         {/* Lessons List by Section */}
@@ -504,7 +510,13 @@ const AdminCoursePage = () => {
                   className="rounded border border-gray-100 bg-gray-50/50 px-4 py-3"
                 >
                   {editingLessonId === lesson._id ? (
-                    <div className="space-y-3">
+                    <form
+                      className="space-y-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        updateLessonMutation.mutate({ lessonId: lesson._id!, data: editForm });
+                      }}
+                    >
                       {editThumbnail && (
                         <div>
                           <p className="text-sm font-medium text-gray-700 mb-2">Video Thumbnail</p>
@@ -571,14 +583,14 @@ const AdminCoursePage = () => {
                           Cancel
                         </Button>
                         <Button
+                          type="submit"
                           size="sm"
-                          onClick={() => updateLessonMutation.mutate({ lessonId: lesson._id!, data: editForm })}
                           disabled={updateLessonMutation.isPending || !editForm.title.trim()}
                         >
                           {updateLessonMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                         </Button>
                       </div>
-                    </div>
+                    </form>
                   ) : (
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">

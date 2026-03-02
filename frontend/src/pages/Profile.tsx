@@ -121,7 +121,10 @@ const Profile = () => {
         <h1 className="font-heading text-3xl font-bold text-foreground">My Profile</h1>
         <p className="mt-2 text-muted-foreground">View and edit your basic account details.</p>
 
-        <div className="mt-8 space-y-6 rounded-xl border border-border bg-card p-6 shadow-card">
+        <form
+          className="mt-8 space-y-6 rounded-xl border border-border bg-card p-6 shadow-card"
+          onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+        >
           <div>
             <label className="mb-1 block text-sm font-medium text-card-foreground">Full Name</label>
             <Input
@@ -141,13 +144,13 @@ const Profile = () => {
           </div>
           <div className="flex justify-end">
             <Button
-              onClick={handleSave}
+              type="submit"
               className="bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90"
             >
               Save Changes
             </Button>
           </div>
-        </div>
+        </form>
       </main>
     </div>
   );

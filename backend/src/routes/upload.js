@@ -6,7 +6,9 @@
  */
 import express from "express";
 import multer from "multer";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import jwt from "jsonwebtoken";
+import { pipeline } from "node:stream/promises";
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { config } from "../config.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { randomUUID } from "node:crypto";
@@ -148,19 +150,49 @@ router.post(
 
 router.get("/video", async (req, res) => {
   const key = req.query.key;
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   if (!key || typeof key !== "string" || !key.startsWith("videos/") || key.includes("..")) {
     return res.status(400).json({ message: "Invalid video key" });
+  }
+  if (!token) {
+    return res.status(401).json({ message: "Authentication required to stream video" });
+  }
+  try {
+    jwt.verify(token, config.jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
     return res.status(503).json({ message: "S3 not configured" });
   }
   try {
-    const obj = await s3.send(new GetObjectCommand({ Bucket: config.s3.bucket, Key: key }));
+    const rangeHeader = req.headers.range;
+    const getParams = { Bucket: config.s3.bucket, Key: key };
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) {
+      getParams.Range = rangeHeader;
+    }
+    const obj = await s3.send(new GetObjectCommand(getParams));
     const contentType = obj.ContentType || "video/mp4";
-    const buf = await obj.Body.transformToByteArray();
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    const contentLength = obj.ContentLength;
+    const contentRange = obj.ContentRange;
+
     res.setHeader("Content-Type", contentType);
-    res.send(Buffer.from(buf));
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, no-cache"); // Prevent caching for security
+
+    if (contentRange) {
+      res.status(206);
+      res.setHeader("Content-Range", contentRange);
+      if (contentLength != null) res.setHeader("Content-Length", contentLength);
+    }
+
+    if (obj.Body && typeof obj.Body.pipe === "function") {
+      await pipeline(obj.Body, res);
+    } else {
+      const buf = await obj.Body.transformToByteArray();
+      res.setHeader("Content-Length", buf.length);
+      res.send(Buffer.from(buf));
+    }
   } catch (err) {
     console.error("Video fetch error:", err?.message || err);
     res.status(502).json({ message: "Could not load video" });

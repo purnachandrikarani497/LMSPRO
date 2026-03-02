@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Play, CheckCircle2, ArrowLeft, BookOpen, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, getVideoSrc } from "@/lib/api";
+import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
+import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 
@@ -64,13 +65,25 @@ const LessonViewer = () => {
   }
 
   const currentIndex = lessons.findIndex((lesson) => lesson._id === currentLesson._id);
+  const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex >= 0 && currentIndex + 1 < lessons.length ? lessons[currentIndex + 1] : null;
+  const [autoplay, setAutoplay] = useState(false);
 
   const rawVideoUrl = currentLesson.videoUrl || "";
-  const videoUrl = getVideoSrc(rawVideoUrl) || rawVideoUrl;
+  const videoUrl = getSecureVideoSrc(rawVideoUrl) || rawVideoUrl;
   const isEmbedUrl =
     /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawVideoUrl) ||
     rawVideoUrl.includes("/embed/");
+  let watermark: string | undefined;
+  try {
+    const u = typeof window !== "undefined" && window.localStorage.getItem("lms_user");
+    if (u) {
+      const parsed = JSON.parse(u);
+      watermark = parsed.email || parsed.name;
+    }
+  } catch {
+    /* ignore */
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,31 +124,18 @@ const LessonViewer = () => {
                     </p>
                   </div>
                 ) : currentLesson.videoUrl ? (
-                  isEmbedUrl ? (
-                    <iframe
-                      src={videoUrl}
-                      title={currentLesson.title}
-                      className="h-full w-full border-0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <video
-                      src={videoUrl}
-                      controls
-                      className="h-full w-full object-contain"
-                      playsInline
-                      preload="metadata"
-                      onError={() =>
-                        setVideoError(
-                          "The URL may be invalid, blocked by CORS, or in an unsupported format. Try an MP4 from a public CDN."
-                        )
-                      }
-                    >
-                      <track kind="captions" />
-                      Your browser does not support the video tag.
-                    </video>
-                  )
+                  <SecureVideoPlayer
+                    src={videoUrl}
+                    title={currentLesson.title}
+                    isEmbed={isEmbedUrl}
+                    watermarkText={watermark}
+                    onError={(msg) => setVideoError(msg)}
+                    className="h-full w-full"
+                    onPrev={prevLesson ? () => navigate(`/course/${courseId}/lesson/${prevLesson._id}`) : undefined}
+                    onNext={nextLesson ? () => navigate(`/course/${courseId}/lesson/${nextLesson._id}`) : undefined}
+                    autoplay={autoplay}
+                    onAutoplayChange={setAutoplay}
+                  />
                 ) : (
                   <div className="flex flex-col items-center gap-3 text-muted-foreground">
                     <Play className="h-10 w-10" />

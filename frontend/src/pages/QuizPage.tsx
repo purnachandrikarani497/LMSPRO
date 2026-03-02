@@ -116,7 +116,13 @@ const QuizPage = () => {
           </p>
         )}
 
-        <div className="space-y-4">
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitMutation.mutate();
+          }}
+        >
           {quiz.map((question, index) => (
             <Card key={question.question}>
               <CardHeader>
@@ -152,12 +158,11 @@ const QuizPage = () => {
               </CardContent>
             </Card>
           ))}
-        </div>
 
         {quiz.length > 0 && (
           <div className="mt-8 flex justify-end">
             <Button
-              onClick={() => submitMutation.mutate()}
+              type="submit"
               disabled={submitMutation.isPending}
               className="px-8 bg-gradient-gold text-primary shadow-gold hover:opacity-90"
             >
@@ -165,6 +170,7 @@ const QuizPage = () => {
             </Button>
           </div>
         )}
+        </form>
       </main>
     </div>
   );
