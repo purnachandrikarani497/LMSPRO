@@ -12,6 +12,8 @@ import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from 
 import { config } from "../config.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { randomUUID } from "node:crypto";
+import { enqueueTranscode, getVideoStatus } from "../services/transcoder.js";
+import { Video } from "../models/Video.js";
 
 const router = express.Router();
 
@@ -140,6 +142,9 @@ router.post(
 
       const baseUrl = `${req.protocol}://${req.get("host")}`;
       const playUrl = `${baseUrl}/api/upload/video?key=${encodeURIComponent(key)}`;
+
+      enqueueTranscode(key);
+
       res.json({ url: playUrl, key });
     } catch (error) {
       console.error("Video upload error:", error);
@@ -264,6 +269,114 @@ router.get("/proxy", async (req, res) => {
   } catch (err) {
     console.error("Proxy fetch error:", err?.message || err);
     res.status(502).json({ message: "Could not fetch image" });
+  }
+});
+
+router.get("/hls/{*hlsPath}", async (req, res) => {
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  if (!token) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  try {
+    jwt.verify(token, config.jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+
+  const hlsPath = req.params.hlsPath;
+  const key = hlsPath.startsWith("hls/") ? hlsPath : `hls/${hlsPath}`;
+  if (!key || key.includes("..")) {
+    return res.status(400).json({ message: "Invalid HLS key" });
+  }
+
+  try {
+    const obj = await s3.send(new GetObjectCommand({ Bucket: config.s3.bucket, Key: key }));
+    const isPlaylist = key.endsWith(".m3u8");
+    const contentType = isPlaylist ? "application/vnd.apple.mpegurl" : "video/mp2t";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", isPlaylist ? "no-cache" : "public, max-age=3600");
+
+    if (isPlaylist) {
+      const buf = await obj.Body.transformToByteArray();
+      let playlist = Buffer.from(buf).toString("utf-8");
+      const tokenParam = `?token=${encodeURIComponent(token)}`;
+      const baseUrl = `${req.protocol}://${req.get("host")}/api/upload/hls/`;
+      const keyDir = key.substring(0, key.lastIndexOf("/") + 1);
+
+      playlist = playlist.replace(/^(?!#)(.+)$/gm, (match) => {
+        if (match.startsWith("http")) return match;
+        return `${baseUrl}${keyDir}${match}${match.endsWith(".m3u8") ? tokenParam : tokenParam}`;
+      });
+      res.send(playlist);
+    } else {
+      if (obj.Body && typeof obj.Body.pipe === "function") {
+        await pipeline(obj.Body, res);
+      } else {
+        const buf = await obj.Body.transformToByteArray();
+        res.setHeader("Content-Length", buf.length);
+        res.send(Buffer.from(buf));
+      }
+    }
+  } catch (err) {
+    console.error("HLS fetch error:", err?.message || err);
+    res.status(502).json({ message: "Could not load HLS content" });
+  }
+});
+
+router.get("/video-status", requireAuth, async (req, res) => {
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ message: "Missing key" });
+  const video = await Video.findOne({ originalKey: key }).lean();
+  if (!video) return res.json({ status: "none" });
+  res.json({
+    status: video.status,
+    hlsKey: video.hlsKey,
+    qualities: video.qualities,
+    error: video.error
+  });
+});
+
+router.post("/retranscode", requireAuth, requireRole(["admin"]), async (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ message: "Missing key" });
+  await Video.findOneAndUpdate({ originalKey: key }, { status: "pending", error: null }, { upsert: true });
+  enqueueTranscode(key);
+  res.json({ message: "Transcode queued" });
+});
+
+router.post("/transcode-all", requireAuth, requireRole(["admin"]), async (req, res) => {
+  try {
+    const Course = (await import("../models/Course.js")).default;
+    const courses = await Course.find({}).lean();
+    const keys = new Set();
+    for (const c of courses) {
+      for (const sec of c.sections || []) {
+        for (const les of sec.lessons || []) {
+          const url = les.videoUrl;
+          if (!url) continue;
+          const match = url.match(/[?&]key=([^&]+)/);
+          if (match) {
+            const k = decodeURIComponent(match[1]);
+            if (k.startsWith("videos/")) keys.add(k);
+          }
+        }
+      }
+    }
+    let queued = 0;
+    for (const k of keys) {
+      const existing = await Video.findOne({ originalKey: k });
+      if (!existing || existing.status === "failed") {
+        await Video.findOneAndUpdate({ originalKey: k }, { status: "pending", error: null }, { upsert: true });
+        enqueueTranscode(k);
+        queued++;
+      }
+    }
+    res.json({ message: `Queued ${queued} videos for transcoding`, total: keys.size, queued });
+  } catch (err) {
+    console.error("Transcode-all error:", err);
+    res.status(500).json({ message: "Failed to queue transcoding" });
   }
 });
 

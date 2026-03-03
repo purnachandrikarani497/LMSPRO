@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Video, Clock, Upload, Loader2, Pencil, X, FileVideo } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Video, Clock, Upload, Loader2, Pencil, X, FileVideo, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -16,12 +16,73 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
+import { api, ApiCourse, ApiVideoStatus, getSecureVideoSrc } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
 type LessonEdit = { title: string; videoUrl: string };
 type Section = { _id?: string; title: string; lessons?: any[] };
+
+function extractVideoKey(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url, window.location.origin);
+    const k = u.searchParams.get("key");
+    if (k?.startsWith("videos/")) return k;
+  } catch { /* ignore */ }
+  const m = url.match(/[?&]key=([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function HlsBadge({ videoUrl }: { videoUrl?: string }) {
+  const key = extractVideoKey(videoUrl);
+  const { data, refetch } = useQuery<ApiVideoStatus>({
+    queryKey: ["videoStatus", key],
+    queryFn: () => api.getVideoStatus(key!),
+    enabled: !!key,
+    staleTime: 15000,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      return s === "pending" || s === "processing" ? 5000 : false;
+    }
+  });
+
+  if (!key || !data || data.status === "none") return null;
+
+  const colors: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-800",
+    processing: "bg-blue-100 text-blue-800",
+    ready: "bg-green-100 text-green-800",
+    failed: "bg-red-100 text-red-800"
+  };
+
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <span className="inline-flex items-center gap-1">
+        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${colors[data.status] ?? "bg-gray-100 text-gray-600"}`}>
+          {data.status === "processing" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-0.5" />}
+          HLS: {data.status}
+          {data.qualities?.length ? ` (${data.qualities.join(", ")})` : ""}
+        </span>
+        {data.status === "failed" && (
+          <button
+            type="button"
+            title="Retry transcode"
+            onClick={() => { api.retranscode(key).then(() => refetch()); }}
+            className="text-red-600 hover:text-red-800"
+          >
+            <RefreshCw className="h-3 w-3" />
+          </button>
+        )}
+      </span>
+      {data.status === "failed" && data.error && (
+        <span className="text-[10px] text-red-600 max-w-[200px] truncate" title={data.error}>
+          {data.error}
+        </span>
+      )}
+    </span>
+  );
+}
 
 const AdminCoursePage = () => {
   const { id } = useParams();
@@ -669,9 +730,10 @@ const AdminCoursePage = () => {
                             </span>
                           )}
                           {lesson.videoUrl && (
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1.5">
                               <Video className="h-3 w-3" />
                               Video
+                              <HlsBadge videoUrl={lesson.videoUrl} />
                             </span>
                           )}
                         </div>

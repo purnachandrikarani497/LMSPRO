@@ -8,6 +8,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from "react";
+import Hls from "hls.js";
 import {
   Play,
   Pause,
@@ -36,6 +37,8 @@ function formatTime(seconds: number): string {
 
 export interface SecureVideoPlayerProps {
   src: string;
+  /** HLS master playlist URL — when provided, uses adaptive streaming */
+  hlsSrc?: string;
   poster?: string;
   title: string;
   isEmbed?: boolean;
@@ -66,6 +69,7 @@ export interface SecureVideoPlayerProps {
 
 export function SecureVideoPlayer({
   src,
+  hlsSrc,
   poster,
   title,
   isEmbed = false,
@@ -96,7 +100,66 @@ export function SecureVideoPlayer({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [hlsQualities, setHlsQualities] = useState<{ index: number; height: number; label: string }[]>([]);
+  const [activeQuality, setActiveQuality] = useState(-1);
+  const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    setHlsQualities([]);
+    setActiveQuality(-1);
+
+    if (hlsSrc && Hls.isSupported()) {
+      const hls = new Hls({ startLevel: -1 });
+      hlsRef.current = hls;
+      hls.loadSource(hlsSrc);
+      hls.attachMedia(v);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const levels = hls.levels.map((lvl, i) => ({
+          index: i,
+          height: lvl.height,
+          label: `${lvl.height}p`
+        }));
+        setHlsQualities([{ index: -1, height: 0, label: "Auto" }, ...levels]);
+        setActiveQuality(-1);
+      });
+
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          console.error("[HLS] Fatal error:", data.type, data.details);
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+          } else {
+            hls.destroy();
+            hlsRef.current = null;
+            onError?.("HLS streaming failed, falling back to direct playback.");
+          }
+        }
+      });
+
+      return () => {
+        hls.destroy();
+        hlsRef.current = null;
+      };
+    } else if (hlsSrc && v.canPlayType("application/vnd.apple.mpegurl")) {
+      v.src = hlsSrc;
+    }
+  }, [hlsSrc, src]);
+
+  const switchQuality = (levelIndex: number) => {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    hls.currentLevel = levelIndex;
+    setActiveQuality(levelIndex);
+    setShowSettingsMenu(false);
+  };
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -413,7 +476,7 @@ export function SecureVideoPlayer({
     >
       <video
         ref={videoRef}
-        src={src}
+        src={hlsRef.current ? undefined : src}
         poster={poster}
         title={title}
         playsInline
@@ -585,6 +648,22 @@ export function SecureVideoPlayer({
                     >
                       Keyboard shortcuts
                     </button>
+                    {hlsQualities.length > 0 && (
+                      <div className="border-t border-white/10 pt-1 mt-1">
+                        <span className="px-3 py-1 text-xs text-white/60 block">Quality</span>
+                        {hlsQualities.map((q) => (
+                          <button
+                            key={q.index}
+                            type="button"
+                            onClick={() => switchQuality(q.index)}
+                            className={`w-full px-3 py-1.5 text-left text-sm hover:bg-white/5 ${activeQuality === q.index ? "text-amber-400 font-medium" : "text-white"}`}
+                          >
+                            {q.label}
+                            {activeQuality === q.index && " ✓"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

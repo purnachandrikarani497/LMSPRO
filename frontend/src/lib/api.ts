@@ -114,6 +114,13 @@ export function getVideoSrc(videoUrl: string | undefined): string {
   return videoUrl;
 }
 
+/** Returns HLS master playlist URL with auth token */
+export function getHlsUrl(hlsKey: string): string {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
+  const url = `${API_BASE_URL}/upload/hls/${hlsKey}`;
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+}
+
 /** Returns video URL with auth token for protected streaming (backend validates token) */
 export function getSecureVideoSrc(videoUrl: string | undefined): string {
   if (!videoUrl) return "";
@@ -263,6 +270,13 @@ export interface ApiProgress {
 export interface ApiWatchTimestamps {
   timestamps: Record<string, number>;
   durations: Record<string, number>;
+}
+
+export interface ApiVideoStatus {
+  status: "none" | "pending" | "processing" | "ready" | "failed";
+  hlsKey?: string;
+  qualities?: string[];
+  error?: string;
 }
 
 export interface ApiCertificate {
@@ -443,5 +457,11 @@ export const api = {
   },
   async uploadVideo(file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
     return uploadWithProgress(`${API_BASE_URL}/upload/video`, file, onProgress);
+  },
+  getVideoStatus(key: string) {
+    return request<ApiVideoStatus>(`/upload/video-status?key=${encodeURIComponent(key)}`, "GET");
+  },
+  retranscode(key: string) {
+    return request<{ message: string }>("/upload/retranscode", "POST", { key });
   }
 };
