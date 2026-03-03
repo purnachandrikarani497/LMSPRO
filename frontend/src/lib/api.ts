@@ -254,8 +254,15 @@ export interface ApiProgress {
   _id: string;
   course: string;
   lessonsCompleted: string[];
+  watchTimestamps?: Record<string, number>;
+  lessonDurations?: Record<string, number>;
   status: "in_progress" | "completed";
   score: number;
+}
+
+export interface ApiWatchTimestamps {
+  timestamps: Record<string, number>;
+  durations: Record<string, number>;
 }
 
 export interface ApiCertificate {
@@ -415,6 +422,15 @@ export const api = {
     return request<{ score: number; progress: ApiProgress }>(`/progress/${courseId}/quiz/submit`, "POST", {
       answers
     });
+  },
+  saveWatchTimestamp(courseId: string, lessonId: string, timestamp: number, duration?: number) {
+    return request<{ lessonId: string; timestamp: number }>(`/progress/${courseId}/lessons/${lessonId}/timestamp`, "POST", {
+      timestamp,
+      ...(duration != null ? { duration } : {})
+    });
+  },
+  getWatchTimestamps(courseId: string) {
+    return request<ApiWatchTimestamps>(`/progress/${courseId}/timestamps`, "GET");
   },
   generateCertificate(courseId: string) {
     return request<ApiCertificate>(`/certificates/${courseId}`, "POST");

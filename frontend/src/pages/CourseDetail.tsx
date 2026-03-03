@@ -1,14 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getSecureVideoSrc, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, getThumbnailSrc, getSecureVideoSrc, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
 const tabs = ["Overview", "Q&A", "Notes", "Announcements", "Reviews", "Learning tools"];
+
+function formatWatchTime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 const CourseDetail = () => {
   const { id, courseId, lessonId } = useParams<{ id?: string; courseId?: string; lessonId?: string }>();
@@ -47,6 +54,35 @@ const CourseDetail = () => {
     enabled: hasToken && !!courseParam && (enrollments?.some((e) => (e.course?._id || e.course?.id) === courseParam) ?? false),
     retry: false
   });
+
+  const { data: watchData } = useQuery<ApiWatchTimestamps>({
+    queryKey: ["watchTimestamps", courseParam],
+    queryFn: () => api.getWatchTimestamps(courseParam),
+    enabled: hasToken && !!courseParam && (enrollments?.some((e) => (e.course?._id || e.course?.id) === courseParam) ?? false),
+    retry: false
+  });
+
+  const watchTimestamps = watchData?.timestamps ?? {};
+  const watchDurations = watchData?.durations ?? {};
+
+  const saveTimestampRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleTimeReport = useCallback((currentTime: number, videoDuration: number) => {
+    if (!courseParam || !lessonId) return;
+    queryClient.setQueryData<ApiWatchTimestamps>(["watchTimestamps", courseParam], (old) => ({
+      timestamps: { ...(old?.timestamps ?? {}), [lessonId]: currentTime },
+      durations: { ...(old?.durations ?? {}), [lessonId]: videoDuration }
+    }));
+    if (saveTimestampRef.current) clearTimeout(saveTimestampRef.current);
+    saveTimestampRef.current = setTimeout(() => {
+      api.saveWatchTimestamp(courseParam, lessonId, currentTime, videoDuration).catch(() => {});
+    }, 300);
+  }, [courseParam, lessonId, queryClient]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimestampRef.current) clearTimeout(saveTimestampRef.current);
+    };
+  }, []);
 
   const completeMutation = useMutation({
     mutationFn: () => api.completeLesson(courseParam, lessonId || ""),
@@ -192,6 +228,170 @@ const CourseDetail = () => {
     );
   }
 
+  // Non-enrolled: show course detail landing page
+  if (!isEnrolled && !lessonId) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Helmet>
+          <title>{course.title} – LearnHub Course</title>
+          <meta name="description" content={course.description} />
+          <meta property="og:title" content={`${course.title} – LearnHub Course`} />
+          <meta property="og:description" content={course.description} />
+          <meta property="og:type" content="article" />
+          {course.image && (
+            <meta property="og:image" content={getThumbnailSrc(course.image) || course.image} />
+          )}
+        </Helmet>
+
+        {/* Hero section */}
+        <div className="bg-gray-900 text-white">
+          <div className="container mx-auto px-4 py-10 lg:py-16">
+            <div className="grid gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-4">
+                <Link
+                  to="/courses"
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-300 hover:text-white"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Back to Courses
+                </Link>
+                <h1 className="text-3xl font-bold sm:text-4xl">{course.title}</h1>
+                <p className="text-lg text-gray-300 leading-relaxed">{course.description}</p>
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                  <span className="flex items-center gap-1">
+                    <span className="font-semibold text-amber-400">{course.rating.toFixed(1)}</span>
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-4 w-4 ${i < Math.floor(course.rating) ? "fill-amber-400 text-amber-400" : "text-gray-500"}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-gray-400">({course.students.toLocaleString()} ratings)</span>
+                  </span>
+                  <span className="text-gray-400">{course.students.toLocaleString()} students</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+                  {course.instructor && <span>Created by <span className="text-amber-400 underline">{course.instructor}</span></span>}
+                  {course.category && <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {course.category}</span>}
+                  {course.level && <span className="capitalize">{course.level}</span>}
+                  <span>Language: English</span>
+                </div>
+              </div>
+
+              {/* Enroll card */}
+              <div className="lg:col-span-1">
+                <div className="overflow-hidden rounded-lg bg-white shadow-lg">
+                  {course.image && (
+                    <img
+                      src={getThumbnailSrc(course.image) || course.image}
+                      alt={course.title}
+                      className="aspect-video w-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
+                  <div className="p-6 space-y-4">
+                    <div className="text-3xl font-bold text-gray-900">${course.price}</div>
+                    <Button
+                      size="lg"
+                      className="w-full bg-amber-500 font-semibold text-white hover:bg-amber-600 text-lg py-6"
+                      onClick={() => navigate(`/course/${course.id}/payment`)}
+                    >
+                      Enroll now
+                    </Button>
+                    <p className="text-center text-xs text-gray-500">30-day money-back guarantee</p>
+                    <div className="border-t pt-4 space-y-2 text-sm text-gray-600">
+                      <p className="font-semibold text-gray-900">This course includes:</p>
+                      <p className="flex items-center gap-2"><Play className="h-4 w-4 text-gray-400" /> {totalHours} of video content</p>
+                      <p className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-gray-400" /> {course.lessons} lessons</p>
+                      <p className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-gray-400" /> Certificate of completion</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Course content */}
+        <div className="container mx-auto px-4 py-10">
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-8">
+              {/* What you'll learn */}
+              {lessons.length > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-white p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">What you'll learn</h2>
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {lessons.slice(0, 8).map((l, i) => (
+                      <li key={l._id || i} className="flex items-start gap-2 text-sm text-gray-700">
+                        <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
+                        {l.title}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Course content sections */}
+              {sections.length > 0 && (
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Course content</h2>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {sections.length} sections &middot; {lessons.length} lessons &middot; {totalHours} total length
+                  </p>
+                  <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                    {sections.map((section) => {
+                      const isExpanded = expandedSections.has(section.title);
+                      const sectionLessons = section.lessons || [];
+                      return (
+                        <div key={section.title} className="border-b border-gray-200 last:border-b-0">
+                          <button
+                            onClick={() => {
+                              setExpandedSections(prev => {
+                                const next = new Set(prev);
+                                if (next.has(section.title)) next.delete(section.title);
+                                else next.add(section.title);
+                                return next;
+                              });
+                            }}
+                            className="w-full flex items-center justify-between bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                              <p className="font-bold text-gray-900 text-sm">{section.title}</p>
+                            </div>
+                            <span className="text-xs text-gray-500">{sectionLessons.length} lessons</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="divide-y divide-gray-100">
+                              {sectionLessons.map((lesson, i) => (
+                                <div key={lesson._id || i} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600">
+                                  <Play className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                                  <span className="flex-1">{lesson.title}</span>
+                                  {lesson.duration && <span className="text-xs text-gray-400">{lesson.duration}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* About */}
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-3">About this course</h2>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{course.description}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Helmet>
@@ -206,7 +406,10 @@ const CourseDetail = () => {
       </Helmet>
 
       {/* Course top navbar */}
-      <div className={`sticky top-0 z-30 flex items-center gap-4 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 py-2 transition-[padding] duration-300 ${sidebarCollapsed ? "" : "lg:pr-[350px]"}`}>
+      <div className="sticky top-0 z-30 flex items-center gap-4 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 py-2">
+        <Link to="/dashboard" className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Back to My Learning">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
         <Link to="/" className="flex items-center gap-2 flex-shrink-0">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-gold">
             <BookOpen className="h-4 w-4 text-primary" />
@@ -317,6 +520,8 @@ const CourseDetail = () => {
                           onAutoplayChange={setAutoplay}
                           isExpanded={sidebarCollapsed}
                           onExpandToggle={() => setSidebarCollapsed(prev => !prev)}
+                          initialTime={selectedLesson._id ? watchTimestamps[selectedLesson._id] : undefined}
+                          onTimeReport={handleTimeReport}
                         />
                       );
                     })()
@@ -480,6 +685,11 @@ const CourseDetail = () => {
                             const completed = lid ? completedLessonIds.has(lid) : false;
                             const canOpen = isEnrolled && !!lid;
                             const isActive = selectedLesson?._id === lid;
+                            const savedTs = lid ? watchTimestamps[lid] : undefined;
+                            const savedDur = lid ? watchDurations[lid] : undefined;
+                            const watchPct = savedTs != null && savedDur && savedDur > 0
+                              ? Math.min(100, Math.round((savedTs / savedDur) * 100))
+                              : 0;
                             return (
                               <div
                                 key={lesson._id || i}
@@ -514,6 +724,9 @@ const CourseDetail = () => {
                                     {isActive && (
                                       <span className="text-xs font-medium text-amber-600">Now playing</span>
                                     )}
+                                    {!isActive && watchPct > 0 && watchPct < 95 && !completed && (
+                                      <span className="text-xs font-medium text-amber-600">Resume at {formatWatchTime(savedTs!)}</span>
+                                    )}
                                     {lesson.duration && (
                                       <span className="text-xs text-gray-500">{lesson.duration}</span>
                                     )}
@@ -530,6 +743,14 @@ const CourseDetail = () => {
                                       </Button>
                                     )}
                                   </div>
+                                  {watchPct > 0 && !completed && (
+                                    <div className="mt-1 h-1 w-full rounded-full bg-gray-200 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-amber-500 transition-all"
+                                        style={{ width: `${watchPct}%` }}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );

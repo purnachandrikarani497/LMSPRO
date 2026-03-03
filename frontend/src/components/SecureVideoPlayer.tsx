@@ -58,6 +58,10 @@ export interface SecureVideoPlayerProps {
   isExpanded?: boolean;
   /** Toggle expanded view */
   onExpandToggle?: () => void;
+  /** Initial playback position in seconds (resume from where user left off) */
+  initialTime?: number;
+  /** Called periodically with current time and duration so parent can persist position */
+  onTimeReport?: (currentTime: number, duration: number) => void;
 }
 
 export function SecureVideoPlayer({
@@ -75,7 +79,9 @@ export function SecureVideoPlayer({
   autoplay = false,
   onAutoplayChange,
   isExpanded = false,
-  onExpandToggle
+  onExpandToggle,
+  initialTime,
+  onTimeReport
 }: SecureVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -89,22 +95,8 @@ export function SecureVideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [quality, setQuality] = useState<"auto" | "144" | "240" | "360" | "480" | "720" | "1080">("auto");
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-
-  const QUALITY_OPTIONS = [
-    { value: "auto" as const, label: "Auto" },
-    { value: "144" as const, label: "144p" },
-    { value: "240" as const, label: "240p" },
-    { value: "360" as const, label: "360p" },
-    { value: "480" as const, label: "480p" },
-    { value: "720" as const, label: "720p" },
-    { value: "1080" as const, label: "1080p" }
-  ];
-
-  const qualityHeight = quality === "auto" || quality === "1080" ? undefined : parseInt(quality, 10);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -154,11 +146,27 @@ export function SecureVideoPlayer({
     };
   }, []);
 
+  const safePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const p = v.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        setIsPlaying(false);
+        const onCanPlay = () => {
+          v.removeEventListener("canplay", onCanPlay);
+          v.play().catch(() => setIsPlaying(false));
+        };
+        v.addEventListener("canplay", onCanPlay, { once: true });
+      });
+    }
+  }, []);
+
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
-      v.play();
+      safePlay();
       setIsPlaying(true);
     } else {
       v.pause();
@@ -221,28 +229,93 @@ export function SecureVideoPlayer({
     }
   };
 
+  const hasResumedRef = useRef(false);
+  const lastReportRef = useRef(0);
+
+  useEffect(() => {
+    hasResumedRef.current = false;
+    if (initialTime != null && initialTime > 0) {
+      setCurrentTime(initialTime);
+    } else {
+      setProgress(0);
+      setCurrentTime(0);
+    }
+    setDuration(0);
+    setIsPlaying(false);
+  }, [src]);
+
   const handleTimeUpdate = () => {
     const v = videoRef.current;
     if (v) {
       setCurrentTime(v.currentTime);
       setProgress((v.currentTime / v.duration) * 100);
+
+      if (onTimeReport && isFinite(v.duration) && v.duration > 0) {
+        const now = Date.now();
+        if (now - lastReportRef.current >= 5000) {
+          lastReportRef.current = now;
+          onTimeReport(v.currentTime, v.duration);
+        }
+      }
     }
   };
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
-    if (v) setDuration(v.duration);
+    if (!v) return;
+    setDuration(v.duration);
+    if (!hasResumedRef.current && initialTime != null && initialTime > 0) {
+      const nearEnd = initialTime >= v.duration * 0.95;
+      if (nearEnd) {
+        setCurrentTime(0);
+        setProgress(0);
+      } else {
+        v.currentTime = initialTime;
+        setCurrentTime(initialTime);
+        setProgress((initialTime / v.duration) * 100);
+      }
+      hasResumedRef.current = true;
+    } else if (!hasResumedRef.current) {
+      setProgress(0);
+      setCurrentTime(0);
+    }
+  };
+
+  const handlePause = () => {
+    setIsPlaying(false);
+    const v = videoRef.current;
+    if (v && onTimeReport && isFinite(v.duration) && v.duration > 0) {
+      onTimeReport(v.currentTime, v.duration);
+    }
   };
 
   const handleEnded = () => {
     setIsPlaying(false);
+    const v = videoRef.current;
+    if (v && onTimeReport && isFinite(v.duration) && v.duration > 0) {
+      onTimeReport(v.currentTime, v.duration);
+    }
     if (autoplay && onNext) onNext();
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onTimeReportRef = useRef(onTimeReport);
+  onTimeReportRef.current = onTimeReport;
+
+  useEffect(() => {
+    return () => {
+      const v = videoRef.current;
+      const cb = onTimeReportRef.current;
+      if (v && cb && isFinite(v.duration) && v.duration > 0) {
+        cb(v.currentTime, v.duration);
+      }
+    };
+  }, [src]);
+
+  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
-    if (!v) return;
-    const pct = Number(e.target.value);
+    if (!v || !isFinite(v.duration) || v.duration === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
     v.currentTime = (pct / 100) * v.duration;
     setProgress(pct);
     setCurrentTime(v.currentTime);
@@ -261,7 +334,7 @@ export function SecureVideoPlayer({
       switch (e.key) {
         case " ":
           e.preventDefault();
-          if (v.paused) v.play();
+          if (v.paused) safePlay();
           else v.pause();
           break;
         case "ArrowLeft":
@@ -287,7 +360,6 @@ export function SecureVideoPlayer({
           setShowShortcutsModal(false);
           setShowSettingsMenu(false);
           setShowSpeedMenu(false);
-          setShowQualityMenu(false);
           break;
         default:
           break;
@@ -334,7 +406,6 @@ export function SecureVideoPlayer({
             setShowControls(false);
             setShowSpeedMenu(false);
             setShowSettingsMenu(false);
-            setShowQualityMenu(false);
           }, 500);
         }
       }}
@@ -346,16 +417,15 @@ export function SecureVideoPlayer({
         poster={poster}
         title={title}
         playsInline
-        preload="metadata"
+        preload="auto"
         controlsList="nodownload nofullscreen noremoteplayback"
         className="h-full w-full object-contain"
-        style={qualityHeight ? { maxHeight: `${qualityHeight}px` } : undefined}
         onClick={togglePlay}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPause={handlePause}
         onError={() => onError?.("Video could not be loaded.")}
       />
 
@@ -413,14 +483,19 @@ export function SecureVideoPlayer({
         {/* Bottom controls bar - Udemy style */}
         <div className="absolute bottom-0 left-0 right-0 p-3 space-y-2">
           {/* Progress bar */}
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={progress}
-            onChange={handleSeek}
-            className="w-full h-1.5 accent-amber-500 cursor-pointer"
-          />
+          <div
+            className="group/seek relative w-full h-1.5 bg-white/30 rounded-full cursor-pointer hover:h-2.5 transition-all"
+            onClick={handleSeekClick}
+          >
+            <div
+              className="absolute left-0 top-0 h-full rounded-full bg-amber-500 pointer-events-none"
+              style={{ width: `${progress}%` }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-amber-500 shadow-md opacity-0 group-hover/seek:opacity-100 transition-opacity pointer-events-none"
+              style={{ left: `calc(${progress}% - 7px)` }}
+            />
+          </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <button type="button" onClick={togglePlay} className="rounded p-1.5 text-white hover:bg-white/20" aria-label={isPlaying ? "Pause" : "Play"}>
@@ -435,7 +510,7 @@ export function SecureVideoPlayer({
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => { setShowSpeedMenu(!showSpeedMenu); setShowSettingsMenu(false); setShowQualityMenu(false); }}
+                  onClick={() => { setShowSpeedMenu(!showSpeedMenu); setShowSettingsMenu(false); }}
                   className="rounded px-2 py-1 text-sm text-white hover:bg-white/20 min-w-[3rem]"
                 >
                   {playbackRate}x
@@ -475,7 +550,7 @@ export function SecureVideoPlayer({
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => { setShowSettingsMenu(!showSettingsMenu); setShowSpeedMenu(false); setShowQualityMenu(false); }}
+                  onClick={() => { setShowSettingsMenu(!showSettingsMenu); setShowSpeedMenu(false); }}
                   className="rounded p-1.5 text-white hover:bg-white/20"
                   aria-label="Settings"
                 >
@@ -510,19 +585,6 @@ export function SecureVideoPlayer({
                     >
                       Keyboard shortcuts
                     </button>
-                    <div className="border-t border-white/10">
-                      <p className="px-3 py-2 text-xs text-white/50">Quality</p>
-                      {QUALITY_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => { setQuality(opt.value); setShowSettingsMenu(false); }}
-                          className={`w-full px-3 py-1.5 text-left text-sm text-white hover:bg-white/5 ${quality === opt.value ? "bg-amber-500/20 text-amber-400" : ""}`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>

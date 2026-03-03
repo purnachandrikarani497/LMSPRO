@@ -51,6 +51,59 @@ router.post("/:courseId/lessons/:lessonId/complete", requireAuth, async (req, re
   }
 });
 
+router.post("/:courseId/lessons/:lessonId/timestamp", requireAuth, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.courseId)) {
+      return res.status(404).json({ message: "Progress not found" });
+    }
+    const { timestamp, duration } = req.body;
+    if (typeof timestamp !== "number") {
+      return res.status(400).json({ message: "timestamp is required" });
+    }
+    const progress = await Progress.findOne({
+      student: req.user._id,
+      course: req.params.courseId
+    });
+    if (!progress) {
+      return res.status(404).json({ message: "Progress not found" });
+    }
+    progress.watchTimestamps.set(req.params.lessonId, timestamp);
+    if (typeof duration === "number" && duration > 0) {
+      progress.lessonDurations.set(req.params.lessonId, duration);
+    }
+    await progress.save();
+    res.json({ lessonId: req.params.lessonId, timestamp, duration });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to save timestamp" });
+  }
+});
+
+router.get("/:courseId/timestamps", requireAuth, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.courseId)) {
+      return res.status(404).json({ message: "Progress not found" });
+    }
+    const progress = await Progress.findOne({
+      student: req.user._id,
+      course: req.params.courseId
+    });
+    if (!progress) {
+      return res.status(404).json({ message: "Progress not found" });
+    }
+    const timestamps = {};
+    const durations = {};
+    if (progress.watchTimestamps) {
+      for (const [k, v] of progress.watchTimestamps) { timestamps[k] = v; }
+    }
+    if (progress.lessonDurations) {
+      for (const [k, v] of progress.lessonDurations) { durations[k] = v; }
+    }
+    res.json({ timestamps, durations });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch timestamps" });
+  }
+});
+
 router.post("/:courseId/quiz/submit", requireAuth, async (req, res) => {
   try {
     const { answers } = req.body;
