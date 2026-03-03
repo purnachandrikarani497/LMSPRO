@@ -233,6 +233,23 @@ export interface ApiAdminEnrollment extends ApiEnrollment {
   updatedAt: string;
 }
 
+export interface ApiAdminUser {
+  _id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  enrollmentsCount: number;
+  enrollments: { course?: string; price?: number; enrolledAt?: string }[];
+  progress: { course?: string; lessonsCompleted: number; status: string; lastActivity?: string }[];
+}
+
+export interface ApiSettings {
+  clientUrl?: string;
+  adminEmail?: string;
+  razorpayConfigured?: boolean;
+  smtpConfigured?: boolean;
+}
+
 export interface ApiProgress {
   _id: string;
   course: string;
@@ -246,6 +263,44 @@ export interface ApiCertificate {
   course: ApiCourse;
   issuedAt: string;
   url?: string;
+}
+
+function uploadWithProgress(url: string, file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
+  return new Promise((resolve, reject) => {
+    const token = getToken();
+    if (!token) return reject(new Error("Not authenticated"));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    if (onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error("Invalid response"));
+        }
+      } else {
+        reject(new Error(xhr.responseText || "Upload failed"));
+      }
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")));
+
+    const formData = new FormData();
+    formData.append("file", file);
+    xhr.send(formData);
+  });
 }
 
 export const api = {
@@ -344,6 +399,12 @@ export const api = {
   getAllEnrollments() {
     return request<ApiAdminEnrollment[]>("/enrollments/all", "GET");
   },
+  getAllUsers() {
+    return request<ApiAdminUser[]>("/users", "GET");
+  },
+  getSettings() {
+    return request<ApiSettings>("/settings", "GET");
+  },
   getProgress(courseId: string) {
     return request<ApiProgress>(`/progress/${courseId}`, "GET");
   },
@@ -361,36 +422,10 @@ export const api = {
   getCertificates() {
     return request<ApiCertificate[]>("/certificates", "GET");
   },
-  async uploadThumbnail(file: File): Promise<{ url: string; key: string }> {
-    const token = getToken();
-    if (!token) throw new Error("Not authenticated");
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch(`${API_BASE_URL}/upload/thumbnail`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Upload failed");
-    }
-    return response.json();
+  async uploadThumbnail(file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
+    return uploadWithProgress(`${API_BASE_URL}/upload/thumbnail`, file, onProgress);
   },
-  async uploadVideo(file: File): Promise<{ url: string; key: string }> {
-    const token = getToken();
-    if (!token) throw new Error("Not authenticated");
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch(`${API_BASE_URL}/upload/video`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Upload failed");
-    }
-    return response.json();
+  async uploadVideo(file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
+    return uploadWithProgress(`${API_BASE_URL}/upload/video`, file, onProgress);
   }
 };

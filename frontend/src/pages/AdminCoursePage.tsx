@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Video, Clock, Upload, Loader2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Video, Clock, Upload, Loader2, Pencil, X, FileVideo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,13 +40,14 @@ const AdminCoursePage = () => {
   const [newLesson, setNewLesson] = useState({ title: "", videoUrl: "", duration: "" });
   const [newLessonThumbnail, setNewLessonThumbnail] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadFileName, setUploadFileName] = useState("");
+  const [uploadPhase, setUploadPhase] = useState<"uploading" | "processing">("uploading");
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<LessonEdit>({ title: "", videoUrl: "" });
   const [editThumbnail, setEditThumbnail] = useState<string | null>(null);
   const [editDuration, setEditDuration] = useState<string>("");
   const [deleteTarget, setDeleteTarget] = useState<{ lessonId: string; title: string } | null>(null);
-  const [lessonThumbnails, setLessonThumbnails] = useState<Record<string, string | null>>({});
-
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["admin-course", id],
     queryFn: () => api.getCourseAdmin(id || ""),
@@ -76,20 +79,6 @@ const AdminCoursePage = () => {
     }
   }, [course]);
 
-  // Generate thumbnails for all lessons when course loads
-  useEffect(() => {
-    sections.forEach((section) => {
-      section.lessons.forEach((lesson) => {
-        if (lesson.videoUrl && lesson._id && !lessonThumbnails[lesson._id]) {
-          generateThumbnail(lesson.videoUrl).then((thumb) => {
-            if (thumb) {
-              setLessonThumbnails((prev) => ({ ...prev, [lesson._id!]: thumb }));
-            }
-          });
-        }
-      });
-    });
-  }, [sections]);
 
   const addSectionMutation = useMutation({
     mutationFn: async () => {
@@ -200,9 +189,6 @@ const AdminCoursePage = () => {
         videoUrl: lesson.videoUrl || ""
       });
       setEditDuration(lesson.duration || "");
-      if (lesson.videoUrl) {
-        generateThumbnail(lesson.videoUrl).then(setEditThumbnail);
-      }
     }
   };
 
@@ -307,25 +293,6 @@ const AdminCoursePage = () => {
     }
   };
 
-  const generateThumbnail = async (videoUrl: string): Promise<string | null> => {
-    try {
-      const video = document.createElement("video");
-      video.crossOrigin = "anonymous";
-      video.src = getSecureVideoSrc(videoUrl) || videoUrl;
-      video.currentTime = 1;
-      await new Promise((resolve) => {
-        video.addEventListener("seeked", resolve, { once: true });
-        setTimeout(resolve, 3000);
-      });
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d")?.drawImage(video, 0, 0);
-      return canvas.toDataURL("image/jpeg", 0.7);
-    } catch (e) {
-      return null;
-    }
-  };
 
   if (isLoading || !course) {
     return (
@@ -422,6 +389,10 @@ const AdminCoursePage = () => {
                 toast({ title: "Title required", variant: "destructive" });
                 return;
               }
+              if (!newLesson.videoUrl.trim()) {
+                toast({ title: "Video required", description: "Please upload or paste a video URL before adding a lesson", variant: "destructive" });
+                return;
+              }
               addLessonMutation.mutate();
             }}
           >
@@ -446,12 +417,17 @@ const AdminCoursePage = () => {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   setUploadingVideo(true);
+                  setUploadProgress(0);
+                  setUploadPhase("uploading");
+                  setUploadFileName(file.name);
                   e.target.value = "";
                   try {
-                    // Extract duration and thumbnail before upload
                     const duration = await extractDurationFromFile(file);
                     const thumbnail = await extractThumbnailFromFile(file);
-                    const { url } = await api.uploadVideo(file);
+                    const { url } = await api.uploadVideo(file, (pct) => {
+                      setUploadProgress(pct);
+                      if (pct >= 100) setUploadPhase("processing");
+                    });
                     setNewLesson((p) => ({ ...p, videoUrl: url, duration: duration || "" }));
                     if (thumbnail) setNewLessonThumbnail(thumbnail);
                     toast({ title: "Video uploaded", description: "Duration and thumbnail auto-detected" });
@@ -463,6 +439,9 @@ const AdminCoursePage = () => {
                     });
                   } finally {
                     setUploadingVideo(false);
+                    setUploadProgress(0);
+                    setUploadPhase("uploading");
+                    setUploadFileName("");
                   }
                 }}
               />
@@ -482,10 +461,39 @@ const AdminCoursePage = () => {
               </Button>
             </div>
           </div>
+          {uploadingVideo && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-3 mb-2">
+                {uploadPhase === "processing" ? (
+                  <Loader2 className="h-5 w-5 text-amber-600 shrink-0 animate-spin" />
+                ) : (
+                  <FileVideo className="h-5 w-5 text-amber-600 shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 truncate">{uploadFileName || "Uploading video..."}</p>
+                  <p className="text-xs text-gray-500">
+                    {uploadPhase === "processing"
+                      ? "Saving to server, please wait..."
+                      : `Uploading... ${uploadProgress}%`}
+                  </p>
+                </div>
+                {uploadPhase === "uploading" && (
+                  <span className="text-sm font-semibold text-amber-700">{uploadProgress}%</span>
+                )}
+              </div>
+              {uploadPhase === "processing" ? (
+                <div className="h-2 w-full overflow-hidden rounded-full bg-amber-100">
+                  <div className="h-full w-1/3 animate-[indeterminate_1.5s_ease-in-out_infinite] rounded-full bg-amber-500" />
+                </div>
+              ) : (
+                <Progress value={uploadProgress} className="h-2 bg-amber-100 [&>div]:bg-amber-500" />
+              )}
+            </div>
+          )}
           <Button
             type="submit"
             className="mt-4 gap-2"
-            disabled={addLessonMutation.isPending || !newLesson.title.trim()}
+            disabled={addLessonMutation.isPending || !newLesson.title.trim() || !newLesson.videoUrl.trim() || uploadingVideo}
           >
             <Plus className="h-4 w-4" /> Add Lesson
           </Button>
@@ -544,12 +552,17 @@ const AdminCoursePage = () => {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               setUploadingVideo(true);
+                              setUploadProgress(0);
+                              setUploadPhase("uploading");
+                              setUploadFileName(file.name);
                               e.target.value = "";
                               try {
-                                // Extract duration and thumbnail before upload
                                 const duration = await extractDurationFromFile(file);
                                 const thumbnail = await extractThumbnailFromFile(file);
-                                const { url } = await api.uploadVideo(file);
+                                const { url } = await api.uploadVideo(file, (pct) => {
+                                  setUploadProgress(pct);
+                                  if (pct >= 100) setUploadPhase("processing");
+                                });
                                 setEditForm((p) => ({ ...p, videoUrl: url }));
                                 setEditDuration(duration || "");
                                 if (thumbnail) setEditThumbnail(thumbnail);
@@ -562,6 +575,9 @@ const AdminCoursePage = () => {
                                 });
                               } finally {
                                 setUploadingVideo(false);
+                                setUploadProgress(0);
+                                setUploadPhase("uploading");
+                                setUploadFileName("");
                               }
                             }}
                           />
@@ -577,6 +593,30 @@ const AdminCoursePage = () => {
                           </Button>
                         </div>
                       </div>
+                      {uploadingVideo && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <div className="flex items-center gap-3 mb-2">
+                            {uploadPhase === "processing" ? (
+                              <Loader2 className="h-4 w-4 text-amber-600 shrink-0 animate-spin" />
+                            ) : (
+                              <FileVideo className="h-4 w-4 text-amber-600 shrink-0" />
+                            )}
+                            <p className="text-sm text-gray-900 truncate flex-1">
+                              {uploadPhase === "processing" ? "Saving to server..." : (uploadFileName || "Uploading...")}
+                            </p>
+                            {uploadPhase === "uploading" && (
+                              <span className="text-xs font-semibold text-amber-700">{uploadProgress}%</span>
+                            )}
+                          </div>
+                          {uploadPhase === "processing" ? (
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
+                              <div className="h-full w-1/3 animate-[indeterminate_1.5s_ease-in-out_infinite] rounded-full bg-amber-500" />
+                            </div>
+                          ) : (
+                            <Progress value={uploadProgress} className="h-1.5 bg-amber-100 [&>div]:bg-amber-500" />
+                          )}
+                        </div>
+                      )}
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={cancelEdit}>
                           <X className="h-4 w-4 mr-1" />
@@ -585,7 +625,7 @@ const AdminCoursePage = () => {
                         <Button
                           type="submit"
                           size="sm"
-                          disabled={updateLessonMutation.isPending || !editForm.title.trim()}
+                          disabled={updateLessonMutation.isPending || !editForm.title.trim() || uploadingVideo}
                         >
                           {updateLessonMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                         </Button>
@@ -595,13 +635,29 @@ const AdminCoursePage = () => {
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-500 w-6 text-right">{i + 1}.</span>
-                        {lesson._id && lessonThumbnails[lesson._id] && (
-                          <img
-                            src={lessonThumbnails[lesson._id]}
-                            alt="thumbnail"
-                            className="w-14 h-10 object-cover rounded border border-gray-200 flex-shrink-0"
-                          />
-                        )}
+                        <div className="w-24 h-16 rounded-lg border border-gray-200 flex-shrink-0 overflow-hidden bg-gray-900 relative">
+                          {lesson.videoUrl ? (
+                            <video
+                              src={getSecureVideoSrc(lesson.videoUrl)}
+                              preload="metadata"
+                              muted
+                              className="w-full h-full object-cover"
+                              onLoadedData={(e) => {
+                                const vid = e.currentTarget;
+                                vid.currentTime = 0.5;
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Video className="h-5 w-5 text-gray-500" />
+                            </div>
+                          )}
+                          {lesson.duration && (
+                            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/75 px-1 py-0.5 text-[10px] font-medium text-white">
+                              {lesson.duration}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900">{lesson.title}</p>

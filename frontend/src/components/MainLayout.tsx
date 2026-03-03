@@ -8,7 +8,9 @@ import {
   Menu,
   X,
   Home,
-  GraduationCap
+  GraduationCap,
+  Users,
+  Settings
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -56,7 +58,9 @@ const MainLayout = () => {
 
   const adminLinks = [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/admin/payments", label: "Completed Payments", icon: CreditCard }
+    { to: "/admin/users", label: "Users & Activity", icon: Users },
+    { to: "/admin/payments", label: "Completed Payments", icon: CreditCard },
+    { to: "/admin/settings", label: "Settings", icon: Settings }
   ];
 
   const showSidebar = user?.role === "admin";
@@ -64,9 +68,11 @@ const MainLayout = () => {
 
   const isActive = (link: { to: string }) => {
     if (link.to === "/admin") {
-      return location.pathname === "/admin" || (location.pathname.startsWith("/admin/") && !location.pathname.startsWith("/admin/payments"));
+      return location.pathname === "/admin" || (location.pathname.startsWith("/admin/") && !location.pathname.match(/^\/admin\/(users|payments|settings|course)/));
     }
+    if (link.to === "/admin/users") return location.pathname === "/admin/users";
     if (link.to === "/admin/payments") return location.pathname === "/admin/payments";
+    if (link.to === "/admin/settings") return location.pathname === "/admin/settings";
     if (link.to === "/") return location.pathname === "/";
     return location.pathname === link.to || location.pathname.startsWith(link.to + "/");
   };

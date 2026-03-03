@@ -20,7 +20,9 @@ import {
   PictureInPicture,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  Columns2,
+  Square
 } from "lucide-react";
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -48,6 +50,10 @@ export interface SecureVideoPlayerProps {
   autoplay?: boolean;
   /** Autoplay change callback */
   onAutoplayChange?: (enabled: boolean) => void;
+  /** Expanded view (sidebar collapsed) */
+  isExpanded?: boolean;
+  /** Toggle expanded view */
+  onExpandToggle?: () => void;
 }
 
 export function SecureVideoPlayer({
@@ -61,7 +67,9 @@ export function SecureVideoPlayer({
   onPrev,
   onNext,
   autoplay = false,
-  onAutoplayChange
+  onAutoplayChange,
+  isExpanded = false,
+  onExpandToggle
 }: SecureVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -502,6 +510,16 @@ export function SecureVideoPlayer({
                 <button type="button" onClick={togglePiP} className="rounded p-1.5 text-white hover:bg-white/20" aria-label="Picture-in-picture">
                   <PictureInPicture className="h-5 w-5" />
                 </button>
+              )}
+              {onExpandToggle && (
+                <div className="relative group/expand">
+                  <button type="button" onClick={onExpandToggle} className="rounded p-1.5 text-white hover:bg-white/20" aria-label={isExpanded ? "Course content" : "Expanded view"}>
+                    {isExpanded ? <Columns2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                  </button>
+                  <div className="pointer-events-none absolute bottom-full right-0 mb-2 hidden rounded bg-black/90 px-2 py-1 text-xs text-white whitespace-nowrap group-hover/expand:block">
+                    {isExpanded ? "Course content" : "Expanded view"}
+                  </div>
+                </div>
               )}
               <button type="button" onClick={toggleFullscreen} className="rounded p-1.5 text-white hover:bg-white/20" aria-label="Fullscreen">
                 <Maximize className="h-5 w-5" />

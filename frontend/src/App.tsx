@@ -11,6 +11,8 @@ import StudentDashboard from "@/pages/StudentDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminCoursePage from "@/pages/AdminCoursePage";
 import AdminCompletedPayments from "@/pages/AdminCompletedPayments";
+import AdminUsers from "@/pages/AdminUsers";
+import AdminSettings from "@/pages/AdminSettings";
 import MainLayout from "@/components/MainLayout";
 import Auth from "@/pages/Auth";
 import ResetPassword from "@/pages/ResetPassword";
@@ -95,15 +97,6 @@ const App = () => (
               <Route path="help-center" element={<HelpCenter />} />
               <Route path="contact" element={<Contact />} />
               <Route path="privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="course/:id" element={<CourseDetail />} />
-              <Route
-                path="course/:courseId/lesson/:lessonId"
-                element={
-                  <ProtectedRoute role="student">
-                    <CourseDetail />
-                  </ProtectedRoute>
-                }
-              />
               <Route
                 path="course/:courseId/payment"
                 element={
@@ -139,7 +132,9 @@ const App = () => (
               <Route path="admin" element={<ProtectedRoute role="admin"><Outlet /></ProtectedRoute>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="course/:id" element={<AdminCoursePage />} />
+                <Route path="users" element={<AdminUsers />} />
                 <Route path="payments" element={<AdminCompletedPayments />} />
+                <Route path="settings" element={<AdminSettings />} />
               </Route>
               <Route
                 path="certificates"
@@ -150,6 +145,15 @@ const App = () => (
                 }
               />
             </Route>
+            <Route path="course/:id" element={<CourseDetail />} />
+            <Route
+              path="course/:courseId/lesson/:lessonId"
+              element={
+                <ProtectedRoute role="student">
+                  <CourseDetail />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />

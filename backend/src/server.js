@@ -33,9 +33,11 @@ import { config } from "./config.js";
 import authRoutes from "./routes/auth.js";
 import courseRoutes from "./routes/courses.js";
 import enrollmentRoutes from "./routes/enrollments.js";
+import userRoutes from "./routes/users.js";
 import progressRoutes from "./routes/progress.js";
 import certificateRoutes from "./routes/certificates.js";
 import uploadRoutes from "./routes/upload.js";
+import settingsRoutes from "./routes/settings.js";
 
 const app = express();
 
@@ -68,7 +70,7 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100
+    max: 1000
   })
 );
 
@@ -110,9 +112,11 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/certificates", certificateRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/settings", settingsRoutes);
 
 const connectWithRetry = async (retries = 5) => {
   for (let attempt = 1; attempt <= retries; attempt++) {

@@ -207,6 +207,22 @@ router.post("/:id/lessons", requireAuth, requireRole(["admin"]), async (req, res
   }
 });
 
+function findLessonInCourse(course, lessonId) {
+  const lid = String(lessonId);
+  if (course.lessons && course.lessons.length > 0) {
+    const flat = course.lessons.find(l => String(l._id) === lid);
+    if (flat) return { lesson: flat, location: "flat" };
+  }
+  if (course.sections) {
+    for (const section of course.sections) {
+      if (!section.lessons || section.lessons.length === 0) continue;
+      const found = section.lessons.find(l => String(l._id) === lid);
+      if (found) return { lesson: found, location: "section", section };
+    }
+  }
+  return null;
+}
+
 router.put("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
     const { id, lessonId } = req.params;
@@ -215,10 +231,11 @@ router.put("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), async 
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
-    const lesson = course.lessons.id(lessonId);
-    if (!lesson) {
+    const result = findLessonInCourse(course, lessonId);
+    if (!result) {
       return res.status(404).json({ message: "Lesson not found" });
     }
+    const lesson = result.lesson;
     if (typeof title === "string") lesson.title = title.trim();
     if (videoUrl !== undefined) lesson.videoUrl = videoUrl?.trim() || undefined;
     if (content !== undefined) lesson.content = content?.trim() || undefined;
@@ -238,11 +255,15 @@ router.delete("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), asy
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
-    const lesson = course.lessons.id(lessonId);
-    if (!lesson) {
+    const result = findLessonInCourse(course, lessonId);
+    if (!result) {
       return res.status(404).json({ message: "Lesson not found" });
     }
-    course.lessons.pull(lessonId);
+    if (result.location === "flat") {
+      course.lessons = course.lessons.filter(l => String(l._id) !== String(lessonId));
+    } else {
+      result.section.lessons = result.section.lessons.filter(l => String(l._id) !== String(lessonId));
+    }
     await course.save();
     res.json({ message: "Lesson deleted" });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
+import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiCourse, ApiEnrollment, ApiProgress, getThumbnailSrc, getSecureVideoSrc, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
@@ -24,6 +24,7 @@ const CourseDetail = () => {
     setVideoError(null);
   }, [lessonId]);
   const [activeTab, setActiveTab] = useState("Overview");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const hasToken = typeof window !== "undefined" && !!window.localStorage.getItem("lms_token");
 
@@ -80,12 +81,22 @@ const CourseDetail = () => {
     ? [{ title: "Course Content", lessons }]
     : [];
 
-  // Expand first section by default
+  // Expand first section by default + section containing the active lesson
   useEffect(() => {
-    if (sections.length > 0 && expandedSections.size === 0) {
-      setExpandedSections(new Set([sections[0].title]));
+    if (sections.length > 0) {
+      setExpandedSections(prev => {
+        const next = new Set(prev);
+        if (next.size === 0) next.add(sections[0].title);
+        if (selectedLesson) {
+          const activeSection = sections.find(s =>
+            s.lessons?.some(l => l._id === selectedLesson._id)
+          );
+          if (activeSection) next.add(activeSection.title);
+        }
+        return next;
+      });
     }
-  }, [sections]);
+  }, [sections, selectedLesson?._id]);
 
   const totalDuration = course?.lessonItems?.reduce((acc, l) => {
     const d = l.duration?.match(/(\d+)/);
@@ -194,154 +205,126 @@ const CourseDetail = () => {
         )}
       </Helmet>
 
-      <div className="container mx-auto px-4 py-8">
-        <Link
-          to="/courses"
-          className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Courses
-        </Link>
-
-        {/* Udemy-style course header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{course.title}</h1>
-            {isEnrolled && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("Reviews")}
-                  className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-600"
-                >
-                  <Star className="h-4 w-4" />
-                  Leave a rating
-                </button>
-                <div className="relative group">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-600"
-                  >
-                    <Trophy className="h-4 w-4" />
-                    Your progress
-                  </button>
-                  <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-10 rounded-lg border border-gray-200 bg-white p-3 shadow-lg min-w-[180px]">
-                    <p className="text-sm font-medium text-gray-900">Progress</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {completedLessonIds.size} of {lessons.length} lessons completed
-                    </p>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-amber-500"
-                        style={{ width: `${lessons.length ? (completedLessonIds.size / lessons.length) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(window.location.href);
-                    toast({ title: "Link copied", description: "Course link copied to clipboard" });
-                  }}
-                  className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-600"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </button>
-              </>
-            )}
+      {/* Course top navbar */}
+      <div className={`sticky top-0 z-30 flex items-center gap-4 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 py-2 transition-[padding] duration-300 ${sidebarCollapsed ? "" : "lg:pr-[350px]"}`}>
+        <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-gold">
+            <BookOpen className="h-4 w-4 text-primary" />
           </div>
-          <button type="button" className="rounded p-2 text-gray-500 hover:bg-gray-100" aria-label="More options">
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
-        </div>
+          <span className="font-heading text-base font-bold text-foreground hidden sm:inline">LearnHub</span>
+        </Link>
+        <span className="mx-1 text-border">|</span>
+        <h1 className="truncate text-sm font-semibold text-foreground">{course.title}</h1>
+        {isEnrolled && (
+          <div className="ml-auto hidden items-center gap-4 md:flex flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab("Reviews")}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Star className="h-4 w-4" />
+              Leave a rating
+            </button>
+            <div className="relative group">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <Trophy className="h-4 w-4" />
+                Your progress
+              </button>
+              <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10 rounded-lg border border-border bg-card p-3 shadow-lg min-w-[180px]">
+                <p className="text-sm font-medium text-foreground">Progress</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {completedLessonIds.size} of {lessons.length} lessons completed
+                </p>
+                <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-amber-500"
+                    style={{ width: `${lessons.length ? (completedLessonIds.size / lessons.length) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(window.location.href);
+                toast({ title: "Link copied", description: "Course link copied to clipboard" });
+              }}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Share2 className="h-4 w-4" />
+              Share
+            </button>
+            <button type="button" className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label="More options">
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+      </div>
 
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6 ml-24">
-            {/* Video player - plays in container when lesson selected */}
-            <div className="aspect-video w-full overflow-hidden rounded-lg bg-gray-900">
+      {/* Udemy-style: fixed right sidebar + scrollable left content */}
+      <div className="flex min-h-[calc(100vh-44px)]">
+        {/* Main content area */}
+        <div className={`flex-1 min-w-0 overflow-y-auto transition-[margin] duration-300 ${sidebarCollapsed ? "" : "lg:mr-[350px]"}`}>
+          {/* Video player — Udemy style: grows taller in expanded view */}
+          <div
+            className="relative w-full bg-black transition-[height] duration-300"
+            style={sidebarCollapsed
+              ? { height: '82vh', minHeight: '450px', maxHeight: '800px' }
+              : { height: '58vh', minHeight: '350px', maxHeight: '550px' }
+            }
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
               {isEnrolled && selectedLesson ? (
-                <>
-                  <div className="flex h-full w-full items-center justify-center overflow-hidden bg-muted">
-                    {videoError ? (
-                      <div className="flex flex-col items-center gap-3 p-6 text-center">
-                        <AlertCircle className="h-12 w-12 text-amber-500" />
-                        <p className="font-medium text-white">Video could not be loaded</p>
-                        <p className="text-sm text-gray-400">{videoError}</p>
-                      </div>
-                    ) : selectedLesson.videoUrl ? (
-                      (() => {
-                        const rawUrl = selectedLesson.videoUrl;
-                        const videoUrl = getSecureVideoSrc(rawUrl) || rawUrl;
-                        const isEmbed =
-                          /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawUrl) || rawUrl.includes("/embed/");
-                        let watermark: string | undefined;
-                        try {
-                          const u = window.localStorage.getItem("lms_user");
-                          if (u) {
-                            const parsed = JSON.parse(u);
-                            watermark = parsed.email || parsed.name;
-                          }
-                        } catch {
-                          /* ignore */
-                        }
-                        return (
-                          <SecureVideoPlayer
-                            src={videoUrl}
-                            title={selectedLesson.title}
-                            isEmbed={isEmbed}
-                            watermarkText={watermark}
-                            onError={(msg) => setVideoError(msg)}
-                            className="h-full w-full"
-                            onPrev={prevLesson ? () => navigate(`/course/${course.id}/lesson/${prevLesson._id}`) : undefined}
-                            onNext={nextLesson ? () => navigate(`/course/${course.id}/lesson/${nextLesson._id}`) : undefined}
-                            autoplay={autoplay}
-                            onAutoplayChange={setAutoplay}
-                          />
-                        );
-                      })()
-                    ) : (
-                      <div className="flex flex-col items-center gap-3 text-gray-400">
-                        <Play className="h-10 w-10" />
-                        <p>No video for this lesson</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="border-t border-gray-700 bg-gray-800/50 px-4 py-3">
-                    <Link
-                      to={`/course/${course.id}`}
-                      className="mb-2 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-white"
-                    >
-                      <ArrowLeft className="h-3 w-3" />
-                      Course overview
-                    </Link>
-                    <h3 className="font-semibold text-white">{selectedLesson.title}</h3>
-                    {selectedLesson.content && (
-                      <p className="mt-1 text-sm text-gray-400 line-clamp-2">{selectedLesson.content}</p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        className="gap-2 bg-amber-500 text-white hover:bg-amber-600"
-                        onClick={() => completeMutation.mutate()}
-                        disabled={completeMutation.isPending}
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Mark complete
-                      </Button>
-                      {nextLesson && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-gray-600 text-gray-300 hover:bg-gray-700"
-                          onClick={() => navigate(`/course/${course.id}/lesson/${nextLesson._id}`)}
-                        >
-                          Next lesson
-                        </Button>
-                      )}
+                <div className="h-full w-full overflow-hidden bg-black">
+                  {videoError ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
+                      <AlertCircle className="h-12 w-12 text-amber-500" />
+                      <p className="font-medium text-white">Video could not be loaded</p>
+                      <p className="text-sm text-gray-400">{videoError}</p>
                     </div>
-                  </div>
-                </>
+                  ) : selectedLesson.videoUrl ? (
+                    (() => {
+                      const rawUrl = selectedLesson.videoUrl;
+                      const videoUrl = getSecureVideoSrc(rawUrl) || rawUrl;
+                      const isEmbed =
+                        /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawUrl) || rawUrl.includes("/embed/");
+                      let watermark: string | undefined;
+                      try {
+                        const u = window.localStorage.getItem("lms_user");
+                        if (u) {
+                          const parsed = JSON.parse(u);
+                          watermark = parsed.email || parsed.name;
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                      return (
+                        <SecureVideoPlayer
+                          src={videoUrl}
+                          title={selectedLesson.title}
+                          isEmbed={isEmbed}
+                          watermarkText={watermark}
+                          onError={(msg) => setVideoError(msg)}
+                          className="h-full w-full"
+                          onPrev={prevLesson ? () => navigate(`/course/${course.id}/lesson/${prevLesson._id}`) : undefined}
+                          onNext={nextLesson ? () => navigate(`/course/${course.id}/lesson/${nextLesson._id}`) : undefined}
+                          autoplay={autoplay}
+                          onAutoplayChange={setAutoplay}
+                          isExpanded={sidebarCollapsed}
+                          onExpandToggle={() => setSidebarCollapsed(prev => !prev)}
+                        />
+                      );
+                    })()
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-gray-400">
+                      <Play className="h-10 w-10" />
+                      <p>No video for this lesson</p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-4 text-gray-500">
                   {isEnrolled && lessons.length > 0 ? (
@@ -367,7 +350,10 @@ const CourseDetail = () => {
                 </div>
               )}
             </div>
+          </div>
 
+          {/* Below-video content */}
+          <div className="px-6 lg:px-16 py-6 space-y-6">
             {/* Stats */}
             <div className="flex flex-wrap gap-4 text-sm">
               <span className="flex items-center gap-1">
@@ -388,6 +374,20 @@ const CourseDetail = () => {
 
             <p className="text-sm text-gray-600">Language: English</p>
 
+            {!isEnrolled && (
+              <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="text-2xl font-bold text-gray-900">${course.price}</div>
+                <Button
+                  size="lg"
+                  className="bg-amber-500 font-semibold text-white hover:bg-amber-600"
+                  onClick={() => navigate(`/course/${course.id}/payment`)}
+                >
+                  Enroll now
+                </Button>
+                <p className="text-xs text-gray-500">30-day money-back guarantee</p>
+              </div>
+            )}
+
             {/* Description */}
             <div>
               <h2 className="text-lg font-bold text-gray-900">About this course</h2>
@@ -396,11 +396,8 @@ const CourseDetail = () => {
               </p>
             </div>
 
-            {/* tabs navigation moved here to mimic Udemy layout.
-              Position as sticky so it stays visible when scrolling through the
-              long overview content, just like Udemy keeps the section selector
-              pinned below the header/video area. */}
-            <div className="mt-8 border-b border-gray-200 bg-white sticky top-24 z-10">
+            {/* Tabs */}
+            <div className="border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
               <nav className="flex gap-6 overflow-x-auto py-3">
                 {tabs.map((tab) => (
                   <button
@@ -432,140 +429,201 @@ const CourseDetail = () => {
               </div>
             )}
           </div>
+        </div>
 
-          {/* Right sidebar */}
-          <div className="lg:col-span-1 flex flex-col h-[calc(100vh-120px)]">
-            <div className="sticky top-24 space-y-4 flex-shrink-0">
-              {!isEnrolled && (
-                <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                  <img
-                    src={getThumbnailSrc(course.image) || course.image}
-                    alt={course.title}
-                    className="aspect-video w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                  <div className="p-4">
-                    <div className="mb-4 text-2xl font-bold text-gray-900">${course.price}</div>
-                    <Button
-                      size="lg"
-                      className="w-full bg-amber-500 font-semibold text-white hover:bg-amber-600"
-                      onClick={() => navigate(`/course/${course.id}/payment`)}
+        {/* Fixed right sidebar - Course content (Udemy style) */}
+        <aside className={`hidden lg:flex fixed top-[44px] h-[calc(100vh-44px)] w-[350px] flex-col border-l border-gray-200 bg-white transition-[right] duration-300 ${sidebarCollapsed ? "-right-[350px]" : "right-0"}`}>
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 flex-shrink-0">
+            <h3 className="font-bold text-gray-900">Course content</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
+            {sections && sections.length > 0 ? (
+              sections.map((section) => {
+                const isExpanded = expandedSections.has(section.title);
+                const sectionLessons = section.lessons || [];
+                const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
+
+                return (
+                  <div key={section.title} className="border-b border-gray-200">
+                    <button
+                      onClick={() => {
+                        setExpandedSections(prev => {
+                          const next = new Set(prev);
+                          if (next.has(section.title)) {
+                            next.delete(section.title);
+                          } else {
+                            next.add(section.title);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full flex items-center justify-between bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition"
                     >
-                      Enroll now
-                    </Button>
-                    <p className="mt-4 text-center text-xs text-gray-500">30-day money-back guarantee</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Course content - Takes remaining space with scroll */}
-            <div className="rounded-lg border border-gray-200 bg-white p-4 flex flex-col flex-grow min-h-0 mt-4">
-              <div className="flex items-center justify-between flex-shrink-0">
-                <h3 className="font-bold text-gray-900">Course content</h3>
-              </div>
-              <div className="mt-3 space-y-2 overflow-y-auto flex-grow">
-                  {sections && sections.length > 0 ? (
-                    sections.map((section) => {
-                      const isExpanded = expandedSections.has(section.title);
-                      const sectionLessons = section.lessons || [];
-                      const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
-                      
-                      return (
-                        <div key={section.title} className="border-b border-gray-200 last:border-b-0">
-                          {/* Section header */}
-                          <button
-                            onClick={() => {
-                              setExpandedSections(prev => {
-                                const next = new Set(prev);
-                                if (next.has(section.title)) {
-                                  next.delete(section.title);
-                                } else {
-                                  next.add(section.title);
-                                }
-                                return next;
-                              });
-                            }}
-                            className="w-full flex items-center gap-2 py-3 px-2 hover:bg-gray-50 transition rounded"
-                          >
-                            <ChevronRight
-                              className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                            />
-                            <div className="flex-1 text-left">
-                              <p className="font-medium text-gray-900 text-sm">{section.title}</p>
-                              <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
-                            </div>
-                          </button>
-
-                          {/* Section lessons */}
-                          {isExpanded && (
-                            <div className="space-y-1 pl-6 pb-2">
-                              {sectionLessons && sectionLessons.length > 0 ? (
-                                sectionLessons.map((lesson, i) => {
-                                  const lid = lesson._id;
-                                  const completed = lid ? completedLessonIds.has(lid) : false;
-                                  const canOpen = isEnrolled && !!lid;
-                                  return (
-                                    <div
-                                      key={lesson._id || i}
-                                      className={`flex items-start gap-2 rounded border px-3 py-2 text-sm ${
-                                        canOpen
-                                          ? "cursor-pointer border-gray-200 bg-white hover:border-amber-400 hover:bg-amber-50/50"
-                                          : "border-gray-100 bg-gray-50/50"
-                                      } ${selectedLesson?._id === lid ? "border-amber-400 bg-amber-50/50" : ""}`}
-                                      onClick={() => {
-                                        if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
-                                      }}
-                                      role={canOpen ? "button" : undefined}
-                                    >
-                                      {completed ? (
-                                        <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
-                                      ) : (
-                                        <span className="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
-                                          {canOpen ? (
-                                            <Play className="h-2.5 w-2.5" />
-                                          ) : (
-                                            <span className="text-gray-400">○</span>
-                                          )}
-                                        </span>
-                                      )}
-                                      <div className="min-w-0 flex-1">
-                                        <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
-                                        <div className="mt-1 flex items-center gap-2">
-                                          {lesson.duration && (
-                                            <span className="text-xs text-gray-500">{lesson.duration}</span>
-                                          )}
-                                          {lesson.resources && lesson.resources.length > 0 && (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-6 gap-1 px-2 text-xs text-purple-600"
-                                              onClick={(e) => e.stopPropagation()}
-                                            >
-                                              <FileText className="h-3 w-3" />
-                                              Resources
-                                              <ChevronDown className="h-3 w-3" />
-                                            </Button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <p className="py-2 text-center text-sm text-gray-500">No lessons in this section</p>
-                              )}
-                            </div>
-                          )}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ChevronRight
+                          className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 text-sm truncate">{section.title}</p>
+                          <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
                         </div>
-                      );
-                    })
-                  ) : (
-                    <p className="py-4 text-center text-sm text-gray-500">No lessons added yet</p>
-                  )}
-              </div>
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="py-1">
+                        {sectionLessons.length > 0 ? (
+                          sectionLessons.map((lesson, i) => {
+                            const lid = lesson._id;
+                            const completed = lid ? completedLessonIds.has(lid) : false;
+                            const canOpen = isEnrolled && !!lid;
+                            const isActive = selectedLesson?._id === lid;
+                            return (
+                              <div
+                                key={lesson._id || i}
+                                className={`flex items-start gap-3 text-sm transition-colors ${
+                                  isActive
+                                    ? "mx-2 my-1 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2.5"
+                                    : `px-4 py-2.5 ${canOpen ? "cursor-pointer hover:bg-gray-50" : ""}`
+                                }`}
+                                onClick={() => {
+                                  if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                }}
+                                role={canOpen ? "button" : undefined}
+                              >
+                                {completed && !isActive ? (
+                                  <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                ) : isActive ? (
+                                  <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white">
+                                    <Pause className="h-2.5 w-2.5 fill-current" />
+                                  </span>
+                                ) : (
+                                  <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                    {canOpen ? (
+                                      <Play className="h-2.5 w-2.5" />
+                                    ) : (
+                                      <span className="text-gray-400">○</span>
+                                    )}
+                                  </span>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
+                                  <div className="mt-0.5 flex items-center gap-2">
+                                    {isActive && (
+                                      <span className="text-xs font-medium text-amber-600">Now playing</span>
+                                    )}
+                                    {lesson.duration && (
+                                      <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                    )}
+                                    {lesson.resources && lesson.resources.length > 0 && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 gap-1 px-2 text-xs text-purple-600"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <FileText className="h-3 w-3" />
+                                        Resources
+                                        <ChevronDown className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="py-3 text-center text-sm text-gray-500">No lessons in this section</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="py-8 text-center text-sm text-gray-500">No lessons added yet</p>
+            )}
+          </div>
+        </aside>
+
+        {/* Mobile: course content below main content */}
+        <div className="lg:hidden px-4 pb-8">
+          <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h3 className="font-bold text-gray-900">Course content</h3>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto">
+              {sections && sections.length > 0 ? (
+                sections.map((section) => {
+                  const isExpanded = expandedSections.has(section.title);
+                  const sectionLessons = section.lessons || [];
+                  const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
+
+                  return (
+                    <div key={section.title} className="border-b border-gray-200 last:border-b-0">
+                      <button
+                        onClick={() => {
+                          setExpandedSections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(section.title)) {
+                              next.delete(section.title);
+                            } else {
+                              next.add(section.title);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center gap-2 py-3 px-4 hover:bg-gray-50 transition"
+                      >
+                        <ChevronRight
+                          className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                        />
+                        <div className="flex-1 text-left">
+                          <p className="font-medium text-gray-900 text-sm">{section.title}</p>
+                          <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="divide-y divide-gray-100 pl-6">
+                          {sectionLessons.map((lesson, i) => {
+                            const lid = lesson._id;
+                            const completed = lid ? completedLessonIds.has(lid) : false;
+                            const canOpen = isEnrolled && !!lid;
+                            return (
+                              <div
+                                key={lesson._id || i}
+                                className={`flex items-start gap-2 px-3 py-2.5 text-sm ${
+                                  canOpen ? "cursor-pointer hover:bg-gray-50" : ""
+                                } ${selectedLesson?._id === lid ? "bg-amber-50" : ""}`}
+                                onClick={() => {
+                                  if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                }}
+                                role={canOpen ? "button" : undefined}
+                              >
+                                {completed ? (
+                                  <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                ) : (
+                                  <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                    {canOpen ? <Play className="h-2.5 w-2.5" /> : <span className="text-gray-400">○</span>}
+                                  </span>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
+                                  {lesson.duration && (
+                                    <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="py-6 text-center text-sm text-gray-500">No lessons added yet</p>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,9 @@
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config({ override: true });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 
 export const config = {
   port: process.env.PORT || 5000,
@@ -25,7 +28,12 @@ export const config = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
   },
   razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID,
-    keySecret: process.env.RAZORPAY_KEY_SECRET
+    keyId: sanitizeEnv(process.env.RAZORPAY_KEY_ID),
+    keySecret: sanitizeEnv(process.env.RAZORPAY_KEY_SECRET)
   }
 };
+
+function sanitizeEnv(val) {
+  if (val == null || val === "") return undefined;
+  return String(val).trim().replace(/^["']|["']$/g, "");
+}
