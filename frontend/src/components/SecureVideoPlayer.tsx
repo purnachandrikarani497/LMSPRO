@@ -44,8 +44,12 @@ export interface SecureVideoPlayerProps {
   className?: string;
   /** Previous lesson callback */
   onPrev?: () => void;
+  /** Previous lesson title */
+  prevTitle?: string;
   /** Next lesson callback */
   onNext?: () => void;
+  /** Next lesson title */
+  nextTitle?: string;
   /** Autoplay next lesson */
   autoplay?: boolean;
   /** Autoplay change callback */
@@ -65,7 +69,9 @@ export function SecureVideoPlayer({
   onError,
   className = "",
   onPrev,
+  prevTitle,
   onNext,
+  nextTitle,
   autoplay = false,
   onAutoplayChange,
   isExpanded = false,
@@ -353,26 +359,40 @@ export function SecureVideoPlayer({
         onError={() => onError?.("Video could not be loaded.")}
       />
 
-      {/* Prev/Next arrows */}
+      {/* Prev/Next arrows with lesson name tooltips */}
       {onPrev && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onPrev(); }}
-          className={`absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100 hover:bg-black/70 ${showControls ? "opacity-100" : ""}`}
-          aria-label="Previous lesson"
+        <div
+          className={`absolute left-2 top-1/2 -translate-y-1/2 opacity-0 transition group-hover:opacity-100 ${showControls ? "opacity-100" : ""}`}
+          style={{ zIndex: 10 }}
         >
-          <ChevronLeft className="h-8 w-8" />
-        </button>
+          <div className="peer rounded-full bg-black/50 p-2 text-white cursor-pointer hover:bg-black/70"
+            onClick={(e) => { e.stopPropagation(); onPrev(); }}
+          >
+            <ChevronLeft className="h-8 w-8" />
+          </div>
+          {prevTitle && (
+            <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 rounded bg-black/90 px-3 py-1.5 text-sm text-white max-w-[250px] truncate opacity-0 peer-hover:opacity-100 transition-opacity">
+              {prevTitle}
+            </div>
+          )}
+        </div>
       )}
       {onNext && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onNext(); }}
-          className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100 hover:bg-black/70 ${showControls ? "opacity-100" : ""}`}
-          aria-label="Next lesson"
+        <div
+          className={`absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition group-hover:opacity-100 ${showControls ? "opacity-100" : ""}`}
+          style={{ zIndex: 10 }}
         >
-          <ChevronRight className="h-8 w-8" />
-        </button>
+          <div className="peer rounded-full bg-black/50 p-2 text-white cursor-pointer hover:bg-black/70"
+            onClick={(e) => { e.stopPropagation(); onNext(); }}
+          >
+            <ChevronRight className="h-8 w-8" />
+          </div>
+          {nextTitle && (
+            <div className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 rounded bg-black/90 px-3 py-1.5 text-sm text-white max-w-[250px] truncate opacity-0 peer-hover:opacity-100 transition-opacity">
+              {nextTitle}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Controls overlay */}

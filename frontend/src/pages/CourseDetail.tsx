@@ -214,7 +214,7 @@ const CourseDetail = () => {
           <span className="font-heading text-base font-bold text-foreground hidden sm:inline">LearnHub</span>
         </Link>
         <span className="mx-1 text-border">|</span>
-        <h1 className="truncate text-sm font-semibold text-foreground">{course.title}</h1>
+        <h1 className="truncate text-sm font-semibold text-foreground flex-1 min-w-0">{course.title}</h1>
         {isEnrolled && (
           <div className="ml-auto hidden items-center gap-4 md:flex flex-shrink-0">
             <button
@@ -310,7 +310,9 @@ const CourseDetail = () => {
                           onError={(msg) => setVideoError(msg)}
                           className="h-full w-full"
                           onPrev={prevLesson ? () => navigate(`/course/${course.id}/lesson/${prevLesson._id}`) : undefined}
+                          prevTitle={prevLesson?.title}
                           onNext={nextLesson ? () => navigate(`/course/${course.id}/lesson/${nextLesson._id}`) : undefined}
+                          nextTitle={nextLesson?.title}
                           autoplay={autoplay}
                           onAutoplayChange={setAutoplay}
                           isExpanded={sidebarCollapsed}
@@ -464,7 +466,7 @@ const CourseDetail = () => {
                           className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
                         />
                         <div className="min-w-0">
-                          <p className="font-medium text-gray-900 text-sm truncate">{section.title}</p>
+                          <p className="font-bold text-gray-900 text-[15px] truncate">{section.title}</p>
                           <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
                         </div>
                       </div>
