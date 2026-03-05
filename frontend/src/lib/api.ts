@@ -184,6 +184,7 @@ export interface ApiUser {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: "admin" | "student";
 }
 
@@ -332,7 +333,7 @@ function uploadWithProgress(url: string, file: File, onProgress?: (pct: number) 
 }
 
 export const api = {
-  register(data: { name: string; email: string; password: string; role?: "admin" | "student" }) {
+  register(data: { name: string; email: string; phone: string; password: string; role?: "admin" | "student" }) {
     return request<ApiAuthResponse>("/auth/register", "POST", data);
   },
   login(data: { email: string; password: string }) {
@@ -340,6 +341,9 @@ export const api = {
   },
   me() {
     return request<{ user: ApiUser }>("/auth/me", "GET");
+  },
+  updateProfile(data: { name?: string; email?: string; phone?: string }) {
+    return request<{ user: ApiUser }>("/auth/me", "PATCH", data);
   },
   forgotPassword(email: string) {
     return request<{ message: string; devLink?: string; token?: string }>("/auth/forgot-password", "POST", { email });

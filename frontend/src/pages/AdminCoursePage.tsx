@@ -48,6 +48,7 @@ const AdminCoursePage = () => {
   const [editThumbnail, setEditThumbnail] = useState<string | null>(null);
   const [editDuration, setEditDuration] = useState<string>("");
   const [deleteTarget, setDeleteTarget] = useState<{ lessonId: string; title: string } | null>(null);
+  const [deleteSectionTarget, setDeleteSectionTarget] = useState<{ sectionId: string; title: string } | null>(null);
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["admin-course", id],
     queryFn: () => api.getCourseAdmin(id || ""),
@@ -75,6 +76,7 @@ const AdminCoursePage = () => {
         }
       } else {
         setSections([]);
+        if (!selectedSectionId) setSelectedSectionId("default");
       }
     }
   }, [course]);
@@ -101,20 +103,59 @@ const AdminCoursePage = () => {
     }
   });
 
+  const updateSectionMutation = useMutation({
+    mutationFn: async ({ sectionId, title }: { sectionId: string; title: string }) => {
+      return api.updateSection(id!, sectionId, { title: title.trim() });
+    },
+    onSuccess: () => {
+      toast({ title: "Section updated", description: "Changes have been saved" });
+      setEditingSectionId(null);
+      setEditingSectionTitle("");
+      queryClient.invalidateQueries({ queryKey: ["admin-course", id] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to update section",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteSectionMutation = useMutation({
+    mutationFn: (sectionId: string) => api.deleteSection(id!, sectionId),
+    onSuccess: (_data, sectionId) => {
+      toast({ title: "Section deleted", description: "The section has been removed" });
+      setDeleteSectionTarget(null);
+      if (selectedSectionId === sectionId) {
+        setSelectedSectionId(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-course", id] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to delete section",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
+    }
+  });
+
   const addLessonMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSectionId) {
+      const targetSection = selectedSectionId || (sections.length === 0 ? "default" : null);
+      if (!targetSection) {
         throw new Error("Please select a section first");
       }
-      // Add to section if it has an ID, otherwise add to course lessons
-      if (selectedSectionId === "default") {
+      // Add to section if it has an ID, otherwise add to course lessons (default)
+      if (targetSection === "default") {
         return api.addLesson(id!, {
           title: newLesson.title.trim(),
           duration: newLesson.duration.trim() || undefined,
           videoUrl: newLesson.videoUrl.trim() || undefined
         });
       } else {
-        return api.addLessonToSection(id!, selectedSectionId, {
+        return api.addLessonToSection(id!, targetSection, {
           title: newLesson.title.trim(),
           duration: newLesson.duration.trim() || undefined,
           videoUrl: newLesson.videoUrl.trim() || undefined
@@ -329,20 +370,90 @@ const AdminCoursePage = () => {
           <p className="mt-1 text-sm text-gray-600">Organize lessons into sections (like Udemy)</p>
           
           <div className="mt-4 space-y-3">
-            {sections.map((section) => (
-              <div
-                key={section._id || "default"}
-                className={`p-3 border rounded cursor-pointer transition ${
-                  selectedSectionId === (section._id || "default")
-                    ? "border-amber-500 bg-amber-50"
-                    : "border-gray-200 bg-gray-50 hover:border-amber-300"
-                }`}
-                onClick={() => setSelectedSectionId(section._id || "default")}
-              >
-                <p className="font-medium text-gray-900">{section.title}</p>
-                <p className="text-xs text-gray-500">{section.lessons.length} lessons</p>
-              </div>
-            ))}
+            {sections.map((section) => {
+              const sid = section._id || "default";
+              const isEditing = editingSectionId === sid;
+              const canEdit = !!section._id;
+              return (
+                <div
+                  key={sid}
+                  className={`p-3 border rounded transition ${
+                    selectedSectionId === sid
+                      ? "border-amber-500 bg-amber-50"
+                      : "border-gray-200 bg-gray-50 hover:border-amber-300"
+                  } ${!isEditing ? "cursor-pointer" : ""}`}
+                  onClick={() => !isEditing && setSelectedSectionId(sid)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      {isEditing ? (
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Input
+                            value={editingSectionTitle}
+                            onChange={(e) => setEditingSectionTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") updateSectionMutation.mutate({ sectionId: sid, title: editingSectionTitle });
+                              if (e.key === "Escape") {
+                                setEditingSectionId(null);
+                                setEditingSectionTitle("");
+                              }
+                            }}
+                            className="h-8"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => updateSectionMutation.mutate({ sectionId: sid, title: editingSectionTitle })}
+                            disabled={!editingSectionTitle.trim() || updateSectionMutation.isPending}
+                          >
+                            {updateSectionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingSectionId(null);
+                              setEditingSectionTitle("");
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-medium text-gray-900">{section.title}</p>
+                          <p className="text-xs text-gray-500">{section.lessons?.length ?? 0} lessons</p>
+                        </>
+                      )}
+                    </div>
+                    {canEdit && !isEditing && (
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-amber-600"
+                          onClick={() => {
+                            setEditingSectionId(sid);
+                            setEditingSectionTitle(section.title);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-red-600"
+                          onClick={() => setDeleteSectionTarget({ sectionId: sid, title: section.title })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Add new section */}
@@ -728,6 +839,29 @@ const AdminCoursePage = () => {
                 onClick={() => deleteTarget && deleteLessonMutation.mutate(deleteTarget.lessonId)}
               >
                 {deleteLessonMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!deleteSectionTarget} onOpenChange={(open) => !open && setDeleteSectionTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete section</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete &quot;{deleteSectionTarget?.title}&quot;?
+                {deleteSectionTarget && sections.find(s => (s._id || "default") === deleteSectionTarget.sectionId)?.lessons?.length
+                  ? " All lessons in this section will also be removed. This cannot be undone."
+                  : " This cannot be undone."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => deleteSectionTarget && deleteSectionMutation.mutate(deleteSectionTarget.sectionId)}
+              >
+                {deleteSectionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

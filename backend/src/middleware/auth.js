@@ -16,6 +16,7 @@ export const requireAuth = async (req, res, next) => {
         _id: "admin-static",
         name: "Administrator",
         email: config.adminEmail,
+        phone: config.adminPhone || "",
         role: "admin"
       };
       return next();

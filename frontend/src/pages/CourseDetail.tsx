@@ -493,7 +493,7 @@ const CourseDetail = () => {
                       const rawUrl = selectedLesson.videoUrl;
                       const isEmbed =
                         /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawUrl) || rawUrl.includes("/embed/");
-                      const isOurVideo = rawUrl?.includes("/upload/video") || rawUrl?.includes("/upload/stream");
+                      const isOurVideo = rawUrl?.startsWith("videos/") || rawUrl?.includes("/upload/video") || rawUrl?.includes("/upload/stream");
                       const videoUrl = isOurVideo
                         ? getSecureStreamUrl(course.id, selectedLesson._id!)
                         : (getSecureVideoSrc(rawUrl) || rawUrl);
@@ -502,7 +502,8 @@ const CourseDetail = () => {
                         const u = window.localStorage.getItem("lms_user");
                         if (u) {
                           const parsed = JSON.parse(u);
-                          watermark = parsed.email || parsed.name;
+                          const parts = [parsed.email, parsed.phone].filter(Boolean);
+                          watermark = parts.length ? parts.join(" • ") : parsed.name;
                         }
                       } catch {
                         /* ignore */
@@ -512,7 +513,7 @@ const CourseDetail = () => {
                           src={videoUrl}
                           title={selectedLesson.title}
                           isEmbed={isEmbed}
-                          watermarkText={watermark}
+                          watermarkText={isEmbed ? watermark : undefined}
                           onError={(msg) => setVideoError(msg)}
                           className="h-full w-full"
                           onPrev={prevLesson ? () => navigate(`/course/${course.id}/lesson/${prevLesson._id}`) : undefined}

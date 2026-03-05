@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
-import { BookOpen, Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { BookOpen, Mail, Lock, User, Eye, EyeOff, CheckCircle2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,7 @@ import { Helmet } from "react-helmet-async";
 
 const nameMaxLength = 50;
 const emailMaxLength = 50;
+const phoneMaxLength = 15;
 const passwordMinLength = 6;
 const passwordMaxLength = 12;
 
@@ -23,6 +24,7 @@ type SigninErrors = {
 type SignupErrors = {
   name?: string;
   email?: string;
+  phone?: string;
   password?: string;
 };
 
@@ -54,6 +56,20 @@ const validateEmail = (value: string) => {
   return null;
 };
 
+const validatePhone = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Enter your phone number";
+  }
+  if (!/^[\d\s+-]{10,}$/.test(trimmed)) {
+    return "Enter a valid 10-digit phone number";
+  }
+  if (trimmed.length > phoneMaxLength) {
+    return `Use at most ${phoneMaxLength} characters`;
+  }
+  return null;
+};
+
 const validatePassword = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -77,6 +93,7 @@ const Auth = () => {
   const [signinPassword, setSigninPassword] = useState("");
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  const [signupPhone, setSignupPhone] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [showSigninPassword, setShowSigninPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
@@ -112,6 +129,7 @@ const Auth = () => {
       api.register({
         name: signupName.trim(),
         email: signupEmail.trim(),
+        phone: signupPhone.trim(),
         password: signupPassword,
         role: "student"
       }),
@@ -119,8 +137,9 @@ const Auth = () => {
       toast({ title: "Account created", description: "You are now signed in" });
       handleAuthSuccess(data);
     },
-    onError: () => {
-      toast({ title: "Sign up failed", description: "Try again with different details", variant: "destructive" });
+    onError: (err: Error) => {
+      const msg = err?.message || "Try again with different details";
+      toast({ title: "Sign up failed", description: msg, variant: "destructive" });
     }
   });
 
@@ -181,21 +200,15 @@ const Auth = () => {
   const handleSignup = () => {
     const nameError = validateName(signupName);
     const emailError = validateEmail(signupEmail);
+    const phoneError = validatePhone(signupPhone);
     const passwordError = validatePassword(signupPassword);
     const nextErrors: SignupErrors = {};
-    if (nameError) {
-      nextErrors.name = nameError;
-    }
-    if (emailError) {
-      nextErrors.email = emailError;
-    }
-    if (passwordError) {
-      nextErrors.password = passwordError;
-    }
+    if (nameError) nextErrors.name = nameError;
+    if (emailError) nextErrors.email = emailError;
+    if (phoneError) nextErrors.phone = phoneError;
+    if (passwordError) nextErrors.password = passwordError;
     setSignupErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
+    if (Object.keys(nextErrors).length > 0) return;
     registerMutation.mutate();
   };
 
@@ -523,6 +536,35 @@ const Auth = () => {
                   </p>
                   {signupErrors.email && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.email}</p>
+                  )}
+                </div>
+                <div>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Phone number"
+                      type="tel"
+                      className="pl-10"
+                      value={signupPhone}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length > phoneMaxLength) return;
+                        setSignupPhone(value);
+                        setSignupErrors((prev) => {
+                          const error = validatePhone(value);
+                          const next = { ...prev };
+                          if (error) next.phone = error;
+                          else delete next.phone;
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {signupPhone.length}/{phoneMaxLength}
+                  </p>
+                  {signupErrors.phone && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.phone}</p>
                   )}
                 </div>
                 <div>

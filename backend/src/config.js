@@ -13,6 +13,7 @@ export const config = {
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   adminEmail: process.env.ADMIN_EMAIL || "admin@learnhub.com",
   adminPassword: process.env.ADMIN_PASSWORD || "admin123",
+  adminPhone: process.env.ADMIN_PHONE || "",
   email: {
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,

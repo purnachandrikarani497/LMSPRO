@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Play, CheckCircle2, ArrowLeft, BookOpen, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
+import { api, ApiCourse, getSecureVideoSrc, getSecureStreamUrl } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
@@ -70,7 +70,10 @@ const LessonViewer = () => {
   const [autoplay, setAutoplay] = useState(false);
 
   const rawVideoUrl = currentLesson.videoUrl || "";
-  const videoUrl = getSecureVideoSrc(rawVideoUrl) || rawVideoUrl;
+  const isOurVideo = rawVideoUrl?.startsWith("videos/") || rawVideoUrl?.includes("/upload/video") || rawVideoUrl?.includes("/upload/stream");
+  const videoUrl = isOurVideo
+    ? getSecureStreamUrl(courseId || "", currentLesson._id || "")
+    : (getSecureVideoSrc(rawVideoUrl) || rawVideoUrl);
   const isEmbedUrl =
     /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawVideoUrl) ||
     rawVideoUrl.includes("/embed/");
@@ -79,7 +82,8 @@ const LessonViewer = () => {
     const u = typeof window !== "undefined" && window.localStorage.getItem("lms_user");
     if (u) {
       const parsed = JSON.parse(u);
-      watermark = parsed.email || parsed.name;
+      const parts = [parsed.email, parsed.phone].filter(Boolean);
+      watermark = parts.length ? parts.join(" • ") : parsed.name;
     }
   } catch {
     /* ignore */
@@ -128,7 +132,7 @@ const LessonViewer = () => {
                     src={videoUrl}
                     title={currentLesson.title}
                     isEmbed={isEmbedUrl}
-                    watermarkText={watermark}
+                    watermarkText={isEmbedUrl ? watermark : undefined}
                     onError={(msg) => setVideoError(msg)}
                     className="h-full w-full"
                     onPrev={prevLesson ? () => navigate(`/course/${courseId}/lesson/${prevLesson._id}`) : undefined}

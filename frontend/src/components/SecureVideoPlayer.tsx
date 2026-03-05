@@ -27,6 +27,18 @@ import {
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
+const WATERMARK_POSITIONS = [
+  "top-4 left-4",
+  "top-4 right-4",
+  "top-4 left-1/2 -translate-x-1/2",
+  "top-1/2 left-4 -translate-y-1/2",
+  "top-1/2 right-4 -translate-y-1/2",
+  "bottom-12 left-4",
+  "bottom-12 right-4",
+  "bottom-12 left-1/2 -translate-x-1/2",
+  "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+];
+
 function formatTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "0:00";
   const m = Math.floor(seconds / 60);
@@ -97,6 +109,17 @@ export function SecureVideoPlayer({
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const [watermarkPosIndex, setWatermarkPosIndex] = useState(0);
+
+  useEffect(() => {
+    if (!watermarkText) return;
+    const interval = 3000 + Math.random() * 2000;
+    const id = setInterval(() => {
+      setWatermarkPosIndex((i) => (i + 1) % WATERMARK_POSITIONS.length);
+    }, interval);
+    return () => clearInterval(id);
+  }, [watermarkText]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -385,7 +408,10 @@ export function SecureVideoPlayer({
           allowFullScreen
         />
         {watermarkText && (
-          <div className="pointer-events-none absolute bottom-4 left-4 text-xs font-medium text-white/40" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
+          <div
+            className={`pointer-events-none absolute z-10 rounded px-2 py-1 text-xs font-medium text-white/90 bg-black/40 transition-all duration-500 ${WATERMARK_POSITIONS[watermarkPosIndex]}`}
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+          >
             {watermarkText}
           </div>
         )}
@@ -615,7 +641,10 @@ export function SecureVideoPlayer({
       </div>
 
       {watermarkText && (
-        <div className="pointer-events-none absolute bottom-4 left-4 text-xs font-medium text-white/30" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
+        <div
+          className={`pointer-events-none absolute z-10 rounded px-2 py-1 text-xs font-medium text-white/90 bg-black/40 transition-all duration-500 ${WATERMARK_POSITIONS[watermarkPosIndex]}`}
+          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+        >
           {watermarkText}
         </div>
       )}
