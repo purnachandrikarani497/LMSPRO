@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, ApiVideoStatus, getThumbnailSrc, getSecureVideoSrc, getHlsUrl, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
@@ -64,27 +64,6 @@ const CourseDetail = () => {
 
   const watchTimestamps = watchData?.timestamps ?? {};
   const watchDurations = watchData?.durations ?? {};
-
-  const selectedLesson_temp = lessonId ? (apiCourse?.sections?.flatMap(s => s.lessons ?? []).find(l => l._id === lessonId)) : null;
-  const currentVideoKey = (() => {
-    const url = selectedLesson_temp?.videoUrl;
-    if (!url) return null;
-    try {
-      const u = new URL(url, window.location.origin);
-      const k = u.searchParams.get("key");
-      if (k && k.startsWith("videos/")) return k;
-    } catch { /* fallback */ }
-    const m = url.match(/[?&]key=([^&]+)/);
-    return m ? decodeURIComponent(m[1]) : null;
-  })();
-
-  const { data: videoStatus } = useQuery<ApiVideoStatus>({
-    queryKey: ["videoStatus", currentVideoKey],
-    queryFn: () => api.getVideoStatus(currentVideoKey!),
-    enabled: !!currentVideoKey && hasToken,
-    staleTime: 30000,
-    retry: false
-  });
 
   const saveTimestampRef = useRef<ReturnType<typeof setTimeout>>();
   const handleTimeReport = useCallback((currentTime: number, videoDuration: number) => {
@@ -512,9 +491,12 @@ const CourseDetail = () => {
                   ) : selectedLesson.videoUrl ? (
                     (() => {
                       const rawUrl = selectedLesson.videoUrl;
-                      const videoUrl = getSecureVideoSrc(rawUrl) || rawUrl;
                       const isEmbed =
                         /youtube\.com|youtu\.be|vimeo\.com|player\.vimeo/i.test(rawUrl) || rawUrl.includes("/embed/");
+                      const isOurVideo = rawUrl?.includes("/upload/video") || rawUrl?.includes("/upload/stream");
+                      const videoUrl = isOurVideo
+                        ? getSecureStreamUrl(course.id, selectedLesson._id!)
+                        : (getSecureVideoSrc(rawUrl) || rawUrl);
                       let watermark: string | undefined;
                       try {
                         const u = window.localStorage.getItem("lms_user");
@@ -528,7 +510,6 @@ const CourseDetail = () => {
                       return (
                         <SecureVideoPlayer
                           src={videoUrl}
-                          hlsSrc={videoStatus?.status === "ready" && videoStatus.hlsKey ? getHlsUrl(videoStatus.hlsKey) : undefined}
                           title={selectedLesson.title}
                           isEmbed={isEmbed}
                           watermarkText={watermark}

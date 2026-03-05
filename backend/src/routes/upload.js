@@ -14,8 +14,20 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { randomUUID } from "node:crypto";
 import { enqueueTranscode, getVideoStatus } from "../services/transcoder.js";
 import { Video } from "../models/Video.js";
+import { Course } from "../models/Course.js";
+import { Enrollment } from "../models/Enrollment.js";
 
 const router = express.Router();
+
+function extractVideoKeyFromUrl(url) {
+  if (!url || typeof url !== "string") return null;
+  const m = url.match(/[?&]key=([^&]+)/);
+  if (m) {
+    const k = decodeURIComponent(m[1]);
+    if (k.startsWith("videos/")) return k;
+  }
+  return null;
+}
 
 const imageUpload = multer({
   storage: multer.memoryStorage(),
@@ -143,8 +155,6 @@ router.post(
       const baseUrl = `${req.protocol}://${req.get("host")}`;
       const playUrl = `${baseUrl}/api/upload/video?key=${encodeURIComponent(key)}`;
 
-      enqueueTranscode(key);
-
       res.json({ url: playUrl, key });
     } catch (error) {
       console.error("Video upload error:", error);
@@ -152,6 +162,69 @@ router.post(
     }
   }
 );
+
+router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
+  const referer = req.get("Referer") || req.get("Referrer");
+  const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
+  const fromApp = referer && allowedOrigins.some((o) => referer.startsWith(o));
+  if (!fromApp) return res.status(403).json({ message: "Video must be viewed from the course page" });
+
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  if (!token) return res.status(401).json({ message: "Authentication required" });
+  let decoded;
+  try {
+    decoded = jwt.verify(token, config.jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+
+  const { courseId, lessonId } = req.params;
+  if (!courseId || !lessonId) return res.status(400).json({ message: "Invalid course or lesson" });
+
+  const course = await Course.findById(courseId).lean();
+  if (!course) return res.status(404).json({ message: "Course not found" });
+
+  const allLessons = course.sections?.length
+    ? course.sections.flatMap((s) => s.lessons || [])
+    : (course.lessons || []);
+  const lesson = allLessons.find((l) => l && String(l._id) === lessonId);
+  if (!lesson || !lesson.videoUrl) return res.status(404).json({ message: "Lesson or video not found" });
+
+  const key = extractVideoKeyFromUrl(lesson.videoUrl);
+  if (!key) return res.status(404).json({ message: "Video not found" });
+
+  const isEnrolled = await Enrollment.findOne({ student: decoded.sub || decoded._id, course: courseId });
+  const isAdmin = decoded.role === "admin";
+  if (!isEnrolled && !isAdmin) return res.status(403).json({ message: "Enrollment required" });
+
+  if (!config.s3.accessKeyId || !config.s3.secretAccessKey) return res.status(503).json({ message: "S3 not configured" });
+
+  try {
+    const rangeHeader = req.headers.range;
+    const getParams = { Bucket: config.s3.bucket, Key: key };
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) getParams.Range = rangeHeader;
+    const obj = await s3.send(new GetObjectCommand(getParams));
+    const contentType = obj.ContentType || "video/mp4";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, no-cache");
+    if (obj.ContentRange) {
+      res.status(206);
+      res.setHeader("Content-Range", obj.ContentRange);
+      if (obj.ContentLength != null) res.setHeader("Content-Length", obj.ContentLength);
+    }
+    if (obj.Body && typeof obj.Body.pipe === "function") {
+      await pipeline(obj.Body, res);
+    } else {
+      const buf = await obj.Body.transformToByteArray();
+      res.setHeader("Content-Length", buf.length);
+      res.send(Buffer.from(buf));
+    }
+  } catch (err) {
+    console.error("Stream fetch error:", err?.message || err);
+    res.status(502).json({ message: "Could not load video" });
+  }
+});
 
 router.get("/video", async (req, res) => {
   const key = req.query.key;
@@ -273,24 +346,36 @@ router.get("/proxy", async (req, res) => {
 });
 
 router.get("/hls/{*hlsPath}", async (req, res) => {
-  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
-  if (!token) {
-    return res.status(401).json({ message: "Authentication required" });
-  }
   try {
-    jwt.verify(token, config.jwtSecret);
-  } catch {
-    return res.status(401).json({ message: "Invalid or expired token" });
-  }
+    const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+    if (!token) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    try {
+      jwt.verify(token, config.jwtSecret);
+    } catch {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
 
-  const hlsPath = req.params.hlsPath;
-  const key = hlsPath.startsWith("hls/") ? hlsPath : `hls/${hlsPath}`;
-  if (!key || key.includes("..")) {
-    return res.status(400).json({ message: "Invalid HLS key" });
-  }
+    let hlsPath = req.params.hlsPath;
+    if (Array.isArray(hlsPath)) hlsPath = hlsPath.join("/");
+    if (typeof hlsPath !== "string" || !hlsPath) {
+      return res.status(400).json({ message: "Invalid HLS path" });
+    }
+    const key = hlsPath.startsWith("hls/") ? hlsPath : `hls/${hlsPath}`;
+    if (key.includes("..")) {
+      return res.status(400).json({ message: "Invalid HLS key" });
+    }
 
-  try {
+    if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
+      return res.status(503).json({ message: "S3 not configured" });
+    }
+
     const obj = await s3.send(new GetObjectCommand({ Bucket: config.s3.bucket, Key: key }));
+    if (!obj || !obj.Body) {
+      return res.status(404).json({ message: "HLS resource not found" });
+    }
+
     const isPlaylist = key.endsWith(".m3u8");
     const contentType = isPlaylist ? "application/vnd.apple.mpegurl" : "video/mp2t";
 
@@ -307,11 +392,11 @@ router.get("/hls/{*hlsPath}", async (req, res) => {
 
       playlist = playlist.replace(/^(?!#)(.+)$/gm, (match) => {
         if (match.startsWith("http")) return match;
-        return `${baseUrl}${keyDir}${match}${match.endsWith(".m3u8") ? tokenParam : tokenParam}`;
+        return `${baseUrl}${keyDir}${match}${tokenParam}`;
       });
       res.send(playlist);
     } else {
-      if (obj.Body && typeof obj.Body.pipe === "function") {
+      if (typeof obj.Body.pipe === "function") {
         await pipeline(obj.Body, res);
       } else {
         const buf = await obj.Body.transformToByteArray();
@@ -320,8 +405,11 @@ router.get("/hls/{*hlsPath}", async (req, res) => {
       }
     }
   } catch (err) {
-    console.error("HLS fetch error:", err?.message || err);
-    res.status(502).json({ message: "Could not load HLS content" });
+    console.error("HLS fetch error:", err?.message || err, "key:", req.params?.hlsPath);
+    if (!res.headersSent) {
+      const status = (err?.name === "NoSuchKey" || err?.Code === "NoSuchKey") ? 404 : 502;
+      res.status(status).json({ message: "Could not load HLS content" });
+    }
   }
 });
 

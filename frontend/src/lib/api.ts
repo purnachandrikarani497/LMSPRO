@@ -114,6 +114,13 @@ export function getVideoSrc(videoUrl: string | undefined): string {
   return videoUrl;
 }
 
+/** Returns lesson-based stream URL (hides video key, requires enrollment) */
+export function getSecureStreamUrl(courseId: string, lessonId: string): string {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
+  const url = `${API_BASE_URL}/upload/stream/lesson/${courseId}/${lessonId}`;
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+}
+
 /** Returns HLS master playlist URL with auth token */
 export function getHlsUrl(hlsKey: string): string {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
