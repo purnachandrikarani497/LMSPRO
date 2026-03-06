@@ -54,7 +54,15 @@ const courseSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     isPublished: { type: Boolean, default: false }
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+courseSchema.virtual("ratingCount").get(function () {
+  return this.reviews ? this.reviews.length : 0;
+});
 
 export const Course = mongoose.model("Course", courseSchema);

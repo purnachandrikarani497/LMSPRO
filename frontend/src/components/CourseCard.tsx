@@ -79,7 +79,7 @@ const CourseCard = ({ course, showProgress, progress, compact }: CourseCardProps
         <div className={`mb-2 flex items-center gap-1.5 ${compact ? "text-[10px]" : "text-xs"}`}>
           <span className="font-semibold text-gray-900">{course.rating.toFixed(1)}</span>
           <div className="flex gap-0.5">{renderStars(course.rating, compact)}</div>
-          <span className="text-gray-500">({course.students.toLocaleString()})</span>
+          <span className="text-gray-500">({(course.ratingCount || 0).toLocaleString()})</span>
         </div>
 
         <div className={`flex items-center justify-between gap-2 ${compact ? "text-xs" : ""}`}>

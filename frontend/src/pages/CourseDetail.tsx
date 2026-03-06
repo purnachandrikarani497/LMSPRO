@@ -349,7 +349,7 @@ const CourseDetail = () => {
                         />
                       ))}
                     </div>
-                    <span className="text-gray-400">({course.ratingCount ? course.ratingCount.toLocaleString() : 0} ratings)</span>
+                    <span className="text-gray-400">({(course.ratingCount || 0).toLocaleString()} ratings)</span>
                   </span>
                   <span className="text-gray-400">{course.students.toLocaleString()} students</span>
                 </div>
@@ -724,9 +724,11 @@ const CourseDetail = () => {
                     />
                   ))}
                 </div>
-                <span className="text-gray-600">({course.students.toLocaleString()} ratings)</span>
+                <span className="text-gray-600">({(course.ratingCount || 0).toLocaleString()} ratings)</span>
               </span>
-              <span className="text-gray-600">{course.students.toLocaleString()} Students</span>
+              {course.students > 0 && (
+                <span className="text-gray-600">{course.students.toLocaleString()} Students</span>
+              )}
               <span className="text-gray-600">{totalHours} Total</span>
             </div>
 

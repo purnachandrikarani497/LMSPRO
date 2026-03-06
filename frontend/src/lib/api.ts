@@ -1,6 +1,6 @@
 import { type Course } from "./mockData";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const getUserRoleFromToken = (): "admin" | "student" | null => {
   if (typeof window === "undefined") return null;
@@ -49,9 +49,9 @@ export const mapApiCourseToCourse = (c: ApiCourse): Course => {
     instructor: c.instructor || "Instructor",
     category: c.category || "General",
     price: Number(c.price ?? 0),
-    rating: c.rating,
-    ratingCount: c.ratingCount,
-    students: c.students,
+    rating: c.rating || 0,
+    ratingCount: c.ratingCount || (c.reviews?.length || 0),
+    students: c.students || 0,
     duration: c.duration || "",
     lessons: allLessons.length,
     lessonItems: allLessons,
@@ -167,9 +167,10 @@ type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function request<T>(path: string, method: HttpMethod, body?: unknown, retryCount = 0): Promise<T> {
   const token = getToken();
-  const headers: HeadersInit = {
-    "Content-Type": "application/json"
-  };
+  const headers: HeadersInit = {};
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
