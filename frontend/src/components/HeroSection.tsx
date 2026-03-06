@@ -1,4 +1,4 @@
-import { ArrowRight, Play, Star, Users } from "lucide-react";
+import { ArrowRight, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
@@ -68,36 +68,6 @@ const HeroSection = () => {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="gap-2 border-primary-foreground/20 px-8 text-base text-primary-foreground hover:bg-primary-foreground/10">
-              <Play className="h-4 w-4" />
-              Watch Demo
-            </Button>
-          </div>
-
-          <div className="mt-16 grid grid-cols-2 gap-6 sm:grid-cols-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-            {[
-              {
-                label: "Students",
-                value: totalStudents > 0 ? `${totalStudents.toLocaleString()}+` : "0"
-              },
-              {
-                label: "Courses",
-                value: totalCourses > 0 ? `${totalCourses}+` : "0"
-              },
-              {
-                label: "Instructors",
-                value: totalInstructors > 0 ? `${totalInstructors}+` : "0"
-              },
-              {
-                label: "Avg Rating",
-                value: avgRating > 0 ? `${avgRating.toFixed(1)}★` : "N/A"
-              }
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-2xl font-bold text-primary-foreground sm:text-3xl">{stat.value}</div>
-                <div className="mt-1 text-sm text-primary-foreground/50">{stat.label}</div>
-              </div>
-            ))}
           </div>
         </div>
       </div>

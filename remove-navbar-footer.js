@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const pagesDir = path.join("frontend", "src", "pages");
-const files = ["Payment.tsx","QuizPage.tsx","Profile.tsx","Certificates.tsx","Pricing.tsx","About.tsx","Blog.tsx","Contact.tsx","Careers.tsx","HelpCenter.tsx","ForBusiness.tsx","PrivacyPolicy.tsx"];
+const files = ["Payment.tsx","QuizPage.tsx","Profile.tsx","Certificates.tsx","About.tsx","Blog.tsx","Contact.tsx","Careers.tsx","HelpCenter.tsx","ForBusiness.tsx","PrivacyPolicy.tsx"];
 files.forEach(f => {
   const fp = path.join(pagesDir, f);
   if (fs.existsSync(fp)) {

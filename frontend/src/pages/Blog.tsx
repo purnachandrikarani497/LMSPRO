@@ -4,17 +4,17 @@ import { Helmet } from "react-helmet-async";
 const posts = [
   {
     title: "Designing engaging online courses",
-    date: "2025",
+    date: "2026",
     summary: "Practical guidelines for structuring lessons, projects, and assessments that keep learners active."
   },
   {
     title: "Why certificates still matter",
-    date: "2025",
+    date: "2026",
     summary: "How verifiable certificates help learners showcase their skills to employers and clients."
   },
   {
     title: "Building a modern LMS with React",
-    date: "2025",
+    date: "2026",
     summary: "An overview of the architecture behind LearnHub and similar modern learning platforms."
   }
 ];

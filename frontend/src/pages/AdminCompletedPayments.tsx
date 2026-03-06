@@ -55,6 +55,14 @@ const AdminCompletedPayments = () => {
   };
 
   const downloadReceipt = (enrollment: ApiAdminEnrollment) => {
+    if (!enrollment.course) {
+      toast({
+        title: "Download failed",
+        description: "Cannot download receipt for a deleted course.",
+        variant: "destructive"
+      });
+      return;
+    }
     downloadCSV([enrollment], `receipt-${enrollment._id}`);
   };
 
@@ -94,7 +102,24 @@ const AdminCompletedPayments = () => {
             <Button
               variant="outline"
               className="gap-2"
-              onClick={() => downloadCSV(filteredEnrollments, `payments-${timeRange}`)}
+              onClick={() => {
+                const valid = filteredEnrollments.filter(e => e.course);
+                if (valid.length === 0) {
+                  toast({
+                    title: "Download failed",
+                    description: "No active courses to download.",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                if (valid.length < filteredEnrollments.length) {
+                  toast({
+                    title: "Notice",
+                    description: "Deleted courses have been excluded from the download."
+                  });
+                }
+                downloadCSV(valid, `payments-${timeRange}`);
+              }}
               disabled={filteredEnrollments.length === 0}
             >
               <Download className="h-4 w-4" /> Download CSV

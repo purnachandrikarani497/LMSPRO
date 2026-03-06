@@ -6,7 +6,7 @@ const footerColumns = [
     title: "Platform",
     links: [
       { label: "Browse Courses", to: "/courses" },
-      { label: "Pricing", to: "/pricing" },
+     
       { label: "For Business", to: "/for-business" }
     ]
   },
@@ -64,7 +64,7 @@ const Footer = () => (
         ))}
       </div>
       <div className="mt-10 border-t border-primary-foreground/10 pt-6 text-center text-xs text-primary-foreground/40">
-        © 2025 LearnHub. All rights reserved.
+        © 2026 LearnHub. All rights reserved.
       </div>
     </div>
   </footer>

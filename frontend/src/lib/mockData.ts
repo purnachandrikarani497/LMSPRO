@@ -34,7 +34,7 @@ export const categories = [
 export const courses: Course[] = [
   {
     id: "1",
-    title: "Complete Web Development Bootcamp 2025",
+    title: "Complete Web Development Bootcamp 2026",
     description: "Learn HTML, CSS, JavaScript, React, Node.js and more. Build real-world projects and launch your career as a full-stack developer.",
     instructor: "Sarah Johnson",
     category: "Development",

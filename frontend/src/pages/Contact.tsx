@@ -95,7 +95,7 @@ const Contact = () => {
         <title>Contact – LearnHub LMS</title>
         <meta
           name="description"
-          content="Contact the LearnHub team with questions about the platform, pricing, or partnerships."
+          content="Contact the LearnHub team with questions about the platform or partnerships."
         />
       </Helmet>
       <main className="container mx-auto px-4 py-10">

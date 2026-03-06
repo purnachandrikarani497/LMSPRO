@@ -9,7 +9,6 @@ const About = () => (
         content="Learn more about the mission behind LearnHub and how we empower modern learners."
       />
     </Helmet>
-    <Navbar />
     <main className="container mx-auto px-4 py-10">
       <div className="mx-auto max-w-3xl">
         <h1 className="font-heading text-3xl font-bold text-foreground sm:text-4xl">About LearnHub</h1>

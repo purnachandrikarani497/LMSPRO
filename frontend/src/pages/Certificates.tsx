@@ -3,7 +3,6 @@ import { api, ApiCertificate } from "@/lib/api";
 import { format } from "date-fns";
 import { Award } from "lucide-react";
 import { Helmet } from "react-helmet-async";
-import Navbar from "@/components/Navbar";
 
 type CertificateWithUrl = ApiCertificate & { url?: string };
 
@@ -22,7 +21,6 @@ const Certificates = () => {
           content="View certificates earned from completing courses on LearnHub LMS."
         />
       </Helmet>
-      <Navbar />
       <main className="container mx-auto px-4 py-10">
         <h1 className="font-heading text-3xl font-bold text-foreground">
           Certificates

@@ -21,7 +21,6 @@ import NotFound from "@/pages/NotFound";
 import QuizPage from "@/pages/QuizPage";
 import Payment from "@/pages/Payment";
 import Certificates from "@/pages/Certificates";
-import Pricing from "@/pages/Pricing";
 import ForBusiness from "@/pages/ForBusiness";
 import About from "@/pages/About";
 import Careers from "@/pages/Careers";
@@ -89,7 +88,7 @@ const App = () => (
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Index />} />
               <Route path="courses" element={<Courses />} />
-              <Route path="pricing" element={<Pricing />} />
+            
               <Route path="for-business" element={<ForBusiness />} />
               <Route path="about" element={<About />} />
               <Route path="careers" element={<Careers />} />
