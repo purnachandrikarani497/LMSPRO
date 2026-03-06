@@ -28,6 +28,8 @@ import Blog from "@/pages/Blog";
 import HelpCenter from "@/pages/HelpCenter";
 import Contact from "@/pages/Contact";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import Flashcards from "@/pages/Flashcards";
+import Quizzes from "@/pages/Quizzes";
 import ScrollToTop from "@/components/ScrollToTop";
 
 const queryClient = new QueryClient();
@@ -96,6 +98,8 @@ const App = () => (
               <Route path="help-center" element={<HelpCenter />} />
               <Route path="contact" element={<Contact />} />
               <Route path="privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="flashcards" element={<Flashcards />} />
+              <Route path="quizzes" element={<Quizzes />} />
               <Route
                 path="course/:courseId/payment"
                 element={

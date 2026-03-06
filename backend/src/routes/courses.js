@@ -5,6 +5,57 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
+router.post("/:id/reviews", requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { rating, comment } = req.body;
+  
+  try {
+    const isObjectId = mongoose.Types.ObjectId.isValid(id);
+    const course = isObjectId
+      ? await Course.findById(id).populate("reviews.user", "name")
+      : await Course.findOne({ legacyId: id }).populate("reviews.user", "name");
+
+    if (!course) {
+      console.error(`[Review] Course ${id} not found`);
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    if (!course.reviews) {
+      course.reviews = [];
+    }
+
+    const userId = req.user._id.toString();
+    const existingReview = course.reviews.find(
+      (review) => review.user && review.user.toString() === userId
+    );
+
+    if (existingReview) {
+      return res.status(400).json({ message: "You have already reviewed this course" });
+    }
+
+    const newReview = {
+      user: req.user._id,
+      rating: Number(rating),
+      comment: comment,
+    };
+
+    course.reviews.push(newReview);
+
+    const totalRating = course.reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+    course.rating = totalRating / course.reviews.length;
+
+    await course.save();
+    console.log(`[Review] Success for course ${id}, new rating: ${course.rating}`);
+
+    // After saving, populate the user info on the new review to return it
+    const finalCourse = await Course.findById(course._id).populate('reviews.user', 'name');
+    res.status(201).json(finalCourse);
+  } catch (error) {
+    console.error("[Review] Error:", error);
+    res.status(500).json({ message: "Failed to submit review" });
+  }
+});
+
 router.get("/", async (req, res) => {
   try {
     const courses = await Course.find({ isPublished: true }).select("-quiz");
@@ -20,12 +71,18 @@ router.get("/:id", async (req, res) => {
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
 
     const course = isObjectId
-      ? await Course.findById(id)
-      : await Course.findOne({ legacyId: id });
+      ? await Course.findById(id).populate("reviews.user", "name")
+      : await Course.findOne({ legacyId: id }).populate("reviews.user", "name");
 
     if (!course || !course.isPublished) {
       return res.status(404).json({ message: "Course not found" });
     }
+
+    // Calculate rating if it's not present but reviews exist
+    if (course.reviews && course.reviews.length > 0 && (!course.rating || course.rating === 0)) {
+      course.rating = course.reviews.reduce((acc, review) => acc + review.rating, 0) / course.reviews.length;
+    }
+
     res.json(course);
   } catch (error) {
     console.error("Error fetching course by id:", error);

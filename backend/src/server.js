@@ -49,7 +49,8 @@ app.use(
         config.clientUrl,
         "http://localhost:5173",
         "http://localhost:3000",
-        "http://localhost:8080"
+        "http://localhost:8080",
+        "http://localhost:8081"
       ];
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
@@ -64,7 +65,7 @@ app.use(
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: "unsafe-none"
   })
 );
 app.use(

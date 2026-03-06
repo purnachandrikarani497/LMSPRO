@@ -20,6 +20,21 @@ export const getUserRoleFromToken = (): "admin" | "student" | null => {
   }
 };
 
+export const getUserIdFromToken = (): string | null => {
+  if (typeof window === "undefined") return null;
+  const token = window.localStorage.getItem("lms_token");
+  if (!token) return null;
+  
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return decoded.sub || null; // JWT usually uses 'sub' for the user ID
+  } catch {
+    return null;
+  }
+};
+
 export const mapApiCourseToCourse = (c: ApiCourse): Course => {
   // Flatten lessons from sections if they exist, otherwise use flat lessons array
   let allLessons = c.lessons || [];
@@ -34,8 +49,9 @@ export const mapApiCourseToCourse = (c: ApiCourse): Course => {
     instructor: c.instructor || "Instructor",
     category: c.category || "General",
     price: Number(c.price ?? 0),
-    rating: Number(c.rating ?? 0),
-    students: Number(c.students ?? 0),
+    rating: c.rating,
+    ratingCount: c.ratingCount,
+    students: c.students,
     duration: c.duration || "",
     lessons: allLessons.length,
     lessonItems: allLessons,
@@ -203,7 +219,9 @@ export interface ApiCourse {
   category?: string;
   price?: number;
   rating?: number;
+  ratingCount?: number;
   students?: number;
+  reviews?: any[];
   duration?: string;
   level?: string;
   lessons?: {
@@ -351,8 +369,13 @@ export const api = {
   resetPassword(data: { email: string; token: string; newPassword: string }) {
     return request<{ message: string }>("/auth/reset-password", "POST", data);
   },
-  getCourses() {
-    return request<ApiCourse[]>("/courses", "GET");
+  async getCourses(): Promise<ApiCourse[]> {
+    try {
+      return await request<ApiCourse[]>("/courses", "GET");
+    } catch (error) {
+      console.error("Error in getCourses:", error);
+      throw error;
+    }
   },
   getCourse(id: string) {
     return request<ApiCourse>(`/courses/${id}`, "GET");
@@ -462,6 +485,9 @@ export const api = {
   },
   getCertificates() {
     return request<ApiCertificate[]>("/certificates", "GET");
+  },
+  submitReview(courseId: string, data: { rating: number; comment: string }) {
+    return request<ApiCourse>(`/courses/${courseId}/reviews`, "POST", data);
   },
   async uploadThumbnail(file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
     return uploadWithProgress(`${API_BASE_URL}/upload/thumbnail`, file, onProgress);

@@ -39,6 +39,13 @@ const courseSchema = new mongoose.Schema(
     price: { type: Number },
     rating: { type: Number, default: 0 },
     students: { type: Number, default: 0 },
+    reviews: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        rating: { type: Number, required: true },
+        comment: { type: String, required: true },
+      },
+    ],
     duration: { type: String },
     level: { type: String },
     sections: [sectionSchema],

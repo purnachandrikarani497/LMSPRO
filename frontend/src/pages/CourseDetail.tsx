@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
@@ -32,14 +32,76 @@ const CourseDetail = () => {
   }, [lessonId]);
   const [activeTab, setActiveTab] = useState("Overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const hasToken = typeof window !== "undefined" && !!window.localStorage.getItem("lms_token");
+  const [note, setNote] = useState("");
+  const [rating, setRating] = useState(0);
+  const [review, setReview] = useState("");
+  const [hoverRating, setHoverRating] = useState(0);
 
   const { data: apiCourse, isLoading, error } = useQuery<ApiCourse>({
     queryKey: ["course", courseParam],
     queryFn: () => api.getCourse(courseParam),
     enabled: !!courseParam
   });
+
+  console.log("apiCourse:", apiCourse);
+
+  const currentUserId = getUserIdFromToken();
+  const userReview = useMemo(() => {
+    if (!apiCourse?.reviews || !currentUserId) return null;
+    return apiCourse.reviews.find(r => (r.user?._id || r.user) === currentUserId);
+  }, [apiCourse?.reviews, currentUserId]);
+
+  const hasToken = typeof window !== "undefined" && !!window.localStorage.getItem("lms_token");
+
+  // Load note from local storage
+  useEffect(() => {
+     if (courseParam) {
+       const savedNote = localStorage.getItem(`note_${courseParam}`);
+       setNote(savedNote || "");
+     }
+   }, [courseParam]);
+
+  const handleSaveNote = () => {
+    if (courseParam) {
+      localStorage.setItem(`note_${courseParam}`, note);
+      toast({
+        title: "Note saved",
+        description: "Your note has been saved successfully.",
+      });
+    }
+  };
+
+  const reviewMutation = useMutation({
+    mutationFn: (data: { rating: number; comment: string }) => api.submitReview(courseParam, data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['course', courseParam], data);
+      toast({
+        title: "Review submitted",
+        description: "Thank you for your feedback!",
+      });
+      setRating(0);
+      setReview("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to submit review",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmitReview = () => {
+    if (rating > 0 && review.trim() !== "") {
+      reviewMutation.mutate({ rating, comment: review });
+    } else {
+      toast({
+        title: "Incomplete review",
+        description: "Please provide a rating and a review before submitting.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const { data: enrollments } = useQuery<ApiEnrollment[]>({
     queryKey: ["enrollments"],
@@ -103,7 +165,7 @@ const CourseDetail = () => {
   const completedLessonIds = new Set(progress?.lessonsCompleted ?? []);
 
   const course = apiCourse ? mapApiCourseToCourse(apiCourse) : null;
-  const lessons = course?.lessonItems ?? [];
+  const lessons = useMemo(() => course?.lessonItems ?? [], [course?.lessonItems]);
   const selectedLesson = lessonId ? lessons.find((l) => l._id === lessonId) ?? lessons[0] : null;
   const selectedIndex = selectedLesson ? lessons.findIndex((l) => l._id === selectedLesson._id) : -1;
   const prevLesson = selectedIndex > 0 ? lessons[selectedIndex - 1] : null;
@@ -111,11 +173,14 @@ const CourseDetail = () => {
   const [autoplay, setAutoplay] = useState(false);
 
   // Get sections if available, otherwise create default section from lessons
-  const sections = apiCourse?.sections && apiCourse.sections.length > 0
-    ? apiCourse.sections
-    : lessons.length > 0
-    ? [{ title: "Course Content", lessons }]
-    : [];
+  const sections = useMemo(() => 
+    apiCourse?.sections && apiCourse.sections.length > 0
+      ? apiCourse.sections
+      : lessons.length > 0
+      ? [{ title: "Course Content", lessons }]
+      : [],
+    [apiCourse?.sections, lessons]
+  );
 
   // Expand first section by default + section containing the active lesson
   useEffect(() => {
@@ -132,7 +197,7 @@ const CourseDetail = () => {
         return next;
       });
     }
-  }, [sections, selectedLesson?._id]);
+  }, [sections, selectedLesson]);
 
   const totalDuration = course?.lessonItems?.reduce((acc, l) => {
     const d = l.duration?.match(/(\d+)/);
@@ -254,8 +319,25 @@ const CourseDetail = () => {
                 >
                   <ArrowLeft className="h-4 w-4" /> Back to Courses
                 </Link>
-                <h1 className="text-3xl font-bold sm:text-4xl">{course.title}</h1>
-                <p className="text-lg text-gray-300 leading-relaxed">{course.description}</p>
+
+                {/* Breadcrumbs */}
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-500/90">
+                  <span className="hover:underline cursor-pointer">{course.category}</span>
+                  <ChevronRight className="h-3 w-3 text-gray-600" />
+                  <span className="hover:underline cursor-pointer">{course.level}</span>
+                  <ChevronRight className="h-3 w-3 text-gray-600" />
+                  <span className="text-gray-400">{course.title.split(" ").slice(0, 3).join(" ")}...</span>
+                </div>
+
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-bold sm:text-4xl leading-tight">{course.title}</h1>
+                  {course.rating >= 4.7 && (
+                    <span className="inline-block rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-500 ring-1 ring-inset ring-amber-500/20">
+                      Bestseller
+                    </span>
+                  )}
+                </div>
+                <p className="text-lg text-gray-300 leading-relaxed max-w-3xl">{course.description}</p>
                 <div className="flex flex-wrap items-center gap-4 text-sm">
                   <span className="flex items-center gap-1">
                     <span className="font-semibold text-amber-400">{course.rating.toFixed(1)}</span>
@@ -267,7 +349,7 @@ const CourseDetail = () => {
                         />
                       ))}
                     </div>
-                    <span className="text-gray-400">({course.students.toLocaleString()} ratings)</span>
+                    <span className="text-gray-400">({course.ratingCount ? course.ratingCount.toLocaleString() : 0} ratings)</span>
                   </span>
                   <span className="text-gray-400">{course.students.toLocaleString()} students</span>
                 </div>
@@ -275,7 +357,44 @@ const CourseDetail = () => {
                   {course.instructor && <span>Created by <span className="text-amber-400 underline">{course.instructor}</span></span>}
                   {course.category && <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {course.category}</span>}
                   {course.level && <span className="capitalize">{course.level}</span>}
-                  <span>Language: English</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+                  <span className="flex items-center gap-1.5"><AlertCircle className="h-4 w-4" /> Last updated {new Date().toLocaleDateString('en-US', { month: '2-digit', year: 'numeric' })}</span>
+                  <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /> English [Auto], Hindi [Auto]</span>
+                </div>
+
+                {/* New Summary Bar to fill space */}
+                <div className="mt-8 flex flex-wrap items-stretch gap-px overflow-hidden rounded-lg bg-gray-800/40 backdrop-blur-sm border border-gray-700/50">
+                  <div className="flex flex-1 items-center gap-4 p-4 min-w-[240px]">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500/20 text-amber-500 ring-1 ring-amber-500/20">
+                      <Trophy className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">Premium Selection</p>
+                      <p className="text-xs text-gray-400">One of our top-rated courses for career growth</p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block w-px bg-gray-700/50" />
+                  <div className="flex flex-col justify-center p-4 px-6 min-w-[140px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xl font-bold text-white">{course.rating.toFixed(1)}</span>
+                      <div className="flex">
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <Star
+                            key={i}
+                            className={`h-3.5 w-3.5 ${i < Math.floor(course.rating) ? "fill-amber-400 text-amber-400" : "text-gray-600"}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 whitespace-nowrap">{course.ratingCount ? course.ratingCount.toLocaleString() : 0} ratings</p>
+                  </div>
+                  <div className="hidden sm:block w-px bg-gray-700/50" />
+                  <div className="flex flex-col justify-center p-4 px-6 min-w-[140px]">
+                    <p className="text-xl font-bold text-white">{course.students.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400 whitespace-nowrap">learners enrolled</p>
+                  </div>
                 </div>
               </div>
 
@@ -385,6 +504,34 @@ const CourseDetail = () => {
                 <h2 className="text-xl font-bold text-gray-900 mb-3">About this course</h2>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{course.description}</p>
               </div>
+
+              {/* Requirements */}
+              <div className="rounded-lg border border-gray-200 bg-white p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Requirements</h2>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> A computer with internet access.</li>
+                  <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> Basic understanding of how to use a camera.</li>
+                  <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> No prior photography experience is needed. You will learn everything from scratch.</li>
+                </ul>
+              </div>
+
+              {/* Instructor */}
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Instructor</h2>
+                <div className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-6">
+                  <img src="https://i.pravatar.cc/150?u=sarahjohnson" alt="Sarah Johnson" className="h-24 w-24 rounded-full object-cover" />
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900">{course.instructor}</h3>
+                    <p className="text-sm text-amber-600">Lead Photographer & Educator</p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Sarah is an award-winning photographer with over 15 years of experience. She has a passion for teaching and has helped thousands of students master the art of photography.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reviews */}
+
             </div>
           </div>
         </div>
@@ -639,6 +786,163 @@ const CourseDetail = () => {
                 </ul>
               </div>
             )}
+
+            {activeTab === "Q&A" && (
+              <div className="text-center py-12">
+                <h3 className="text-lg font-semibold text-gray-800">Q&A is coming soon!</h3>
+                <p className="text-sm text-gray-500 mt-2">Check back later for community questions and answers.</p>
+              </div>
+            )}
+
+            {activeTab === "Notes" && (
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">My Notes</h2>
+                <div className="mt-4">
+                  <textarea
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    rows={4}
+                    placeholder="Add a note..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  ></textarea>
+                  <Button className="mt-2" onClick={handleSaveNote}>Save Note</Button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "Announcements" && (
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Announcements</h2>
+                <div className="mt-4 space-y-4">
+                  <div className="p-4 border border-gray-200 rounded-md">
+                    <p className="font-semibold">New Course Content!</p>
+                    <p className="text-sm text-gray-600">We've added a new module on advanced topics. Check it out!</p>
+                    <p className="text-xs text-gray-400 mt-2">Posted on: 2024-07-20</p>
+                  </div>
+                  <div className="p-4 border border-gray-200 rounded-md">
+                    <p className="font-semibold">Live Q&A Session</p>
+                    <p className="text-sm text-gray-600">Join us for a live Q&A session with the instructor next week.</p>
+                    <p className="text-xs text-gray-400 mt-2">Posted on: 2024-07-15</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "Reviews" && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Student Feedback</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-1">
+                    <div className="bg-gray-100 rounded-lg p-6 text-center sticky top-20">
+                      <p className="text-5xl font-bold text-amber-500">{course.rating.toFixed(1)}</p>
+                      <div className="flex justify-center my-2">
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <Star key={i} className={`h-5 w-5 ${i < Math.floor(course.rating) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+                        ))}
+                      </div>
+                      <p className="text-sm text-gray-600">Average Rating</p>
+                    </div>
+                  </div>
+                  <div className="lg:col-span-2">
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4">
+                        <h3 className="text-lg font-bold">Reviews</h3>
+                        <div className="w-full max-w-xs">
+                          <input type="text" placeholder="Search reviews..." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                        </div>
+                      </div>
+                      <div className="border-b border-gray-200 pb-4">
+                        {userReview ? (
+                          <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                            <h4 className="text-md font-semibold mb-2 text-amber-800">Your Review</h4>
+                            <div className="flex items-center gap-1 mb-2">
+                              {Array.from({ length: 5 }, (_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`h-5 w-5 ${
+                                    i < userReview.rating ? "text-amber-400 fill-amber-400" : "text-gray-300"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <p className="text-gray-700 italic">"{userReview.comment || userReview.text}"</p>
+                          </div>
+                        ) : (
+                          <>
+                            <h4 className="text-md font-semibold mb-2">Leave a Review</h4>
+                            <div className="flex items-center gap-2 mb-2">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`h-5 w-5 cursor-pointer ${
+                                    (hoverRating || rating) >= star
+                                      ? "text-amber-400 fill-amber-400"
+                                      : "text-gray-300"
+                                  }`}
+                                  onMouseEnter={() => setHoverRating(star)}
+                                  onMouseLeave={() => setHoverRating(0)}
+                                  onClick={() => setRating(star)}
+                                />
+                              ))}
+                            </div>
+                            <textarea
+                              placeholder="Write your review..."
+                              className="w-full p-2 border border-gray-300 rounded-md"
+                              rows={3}
+                              value={review}
+                              onChange={(e) => setReview(e.target.value)}
+                            ></textarea>
+                            <Button className="mt-2" onClick={handleSubmitReview} disabled={reviewMutation.isPending}>
+                              {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      <div className="space-y-6">
+                        {apiCourse?.reviews?.map((r, idx) => (
+                          <div key={r._id || r.id || idx} className="border-b border-gray-200 pb-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold">
+                                {(r.user?.name || r.author || "U")[0]}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-800">{r.user?.name || r.author || "User"}</p>
+                                <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                                  <div className="flex gap-0.5">
+                                    {Array.from({ length: 5 }, (_, i) => (<Star key={i} className={`h-3 w-3 ${i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />))}
+                                  </div>
+                                  <span>{r.date || (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "Just now")}</span>
+                                </div>
+                                <p className="text-sm text-gray-700">{r.comment || r.text}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <Button variant="outline">Load more reviews</Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "Learning tools" && (
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Learning Tools</h2>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 border border-gray-200 rounded-md">
+                    <h3 className="font-semibold">Flashcards</h3>
+                    <p className="text-sm text-gray-600">Create and review flashcards for key concepts.</p>
+                    <Button variant="outline" className="mt-2" onClick={() => navigate('/flashcards')}>Use Flashcards</Button>
+                  </div>
+                  <div className="p-4 border border-gray-200 rounded-md">
+                    <h3 className="font-semibold">Quizzes</h3>
+                    <p className="text-sm text-gray-600">Test your knowledge with practice quizzes.</p>
+                    <Button variant="outline" className="mt-2" onClick={() => navigate('/quizzes')}>Take a Quiz</Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -825,7 +1129,7 @@ const CourseDetail = () => {
                                 onClick={() => {
                                   if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
                                 }}
-                                role={canOpen ? "button" : undefined}
+                                role="button"
                               >
                                 {completed ? (
                                   <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />

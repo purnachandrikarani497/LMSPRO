@@ -6,6 +6,7 @@ export interface Course {
   category: string;
   price: number;
   rating: number;
+  ratingCount: number;
   students: number;
   duration: string;
   lessons: number;
@@ -40,6 +41,7 @@ export const courses: Course[] = [
     category: "Development",
     price: 89.99,
     rating: 4.9,
+    ratingCount: 0,
     students: 15420,
     duration: "62 hours",
     lessons: 385,
@@ -55,6 +57,7 @@ export const courses: Course[] = [
     category: "Design",
     price: 74.99,
     rating: 4.8,
+    ratingCount: 0,
     students: 8930,
     duration: "40 hours",
     lessons: 210,
@@ -70,6 +73,7 @@ export const courses: Course[] = [
     category: "Marketing",
     price: 59.99,
     rating: 4.7,
+    ratingCount: 0,
     students: 12100,
     duration: "35 hours",
     lessons: 180,
@@ -84,8 +88,9 @@ export const courses: Course[] = [
     instructor: "Dr. James Wilson",
     category: "Data Science",
     price: 94.99,
-    rating: 4.9,
-    students: 21000,
+    rating: 3.0,
+    ratingCount: 1,
+    students: 125,
     duration: "72 hours",
     lessons: 420,
     level: "Intermediate",
@@ -99,6 +104,7 @@ export const courses: Course[] = [
     category: "Business",
     price: 49.99,
     rating: 4.6,
+    ratingCount: 0,
     students: 6540,
     duration: "28 hours",
     lessons: 150,
@@ -113,6 +119,7 @@ export const courses: Course[] = [
     category: "Development",
     price: 79.99,
     rating: 4.8,
+    ratingCount: 0,
     students: 4320,
     duration: "45 hours",
     lessons: 240,
@@ -122,7 +129,7 @@ export const courses: Course[] = [
 ];
 
 export const enrolledCourses = [
-  { ...courses[0], progress: 65 },
+  { ...courses[0], progress: 85 },
   { ...courses[3], progress: 30 },
   { ...courses[5], progress: 10 },
 ];
