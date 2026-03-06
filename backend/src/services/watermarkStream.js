@@ -22,10 +22,11 @@ export async function createWatermarkedStreamFromS3(s3BodyStream, watermarkText,
   const inputPath = path.join(workDir, `in.${inputFormat === "webm" ? "webm" : "mp4"}`);
   const writeStream = fs.createWriteStream(inputPath);
 
-  const safeForDrawText = watermarkText.replace(/@/g, " at ").replace(/'/g, "").replace(/[:\\()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
-  if (!safeForDrawText) {
+  // Inline text: " at " avoids @ parsing issues. Static position for reliability on Windows.
+  const safeText = watermarkText.replace(/@/g, " at ").replace(/'/g, "").replace(/[:\\()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
+  if (!safeText) {
     fs.rmSync(workDir, { recursive: true, force: true });
-    throw new Error("Watermark text is empty after sanitization");
+    throw new Error("Watermark text is empty");
   }
 
   try {
@@ -54,7 +55,7 @@ export async function createWatermarkedStreamFromS3(s3BodyStream, watermarkText,
     const cmd = ffmpeg(inputPath)
       .outputOptions([
         "-vf",
-        `drawtext=text='${safeForDrawText}':fontsize=20:fontcolor=white:x=20:y=h-th-40:box=1:boxcolor=black@0.6:boxborderw=4`,
+        `drawtext=text='${safeText}':fontsize=20:fontcolor=white:x=20:y=h-th-40:box=1:boxcolor=black@0.6:boxborderw=4`,
         "-c:a",
         "copy",
         "-movflags",

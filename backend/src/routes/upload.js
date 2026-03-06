@@ -206,7 +206,7 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) return res.status(503).json({ message: "S3 not configured" });
 
   let watermarkText = "";
-  if (decoded.sub === "admin-static") {
+  if (decoded.sub === "admin-static" || isAdmin) {
     watermarkText = [config.adminEmail, config.adminPhone].filter(Boolean).join(" ");
   } else {
     const user = await User.findById(decoded.sub).select("email phone").lean();
@@ -249,7 +249,7 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
     }
   } catch (err) {
     console.error("Stream fetch error:", err?.message || err);
-    res.status(502).json({ message: "Could not load video" });
+    if (!res.headersSent) res.status(502).json({ message: "Could not load video" });
   }
 });
 
