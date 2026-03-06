@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { DollarSign, Download, Trash2 } from "lucide-react";
+import { DollarSign, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 const AdminCompletedPayments = () => {
   const { toast } = useToast();
   const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">("all");
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const { data: adminEnrollments, isLoading } = useQuery<ApiAdminEnrollment[]>({
     queryKey: ["admin-enrollments"],
@@ -21,14 +21,27 @@ const AdminCompletedPayments = () => {
 
   const filteredEnrollments = (() => {
     if (!adminEnrollments || adminEnrollments.length === 0) return [];
-    let list = adminEnrollments.filter((e) => !hiddenIds.has(e._id));
-    if (timeRange === "all") return list;
-    const now = new Date();
-    const start =
-      timeRange === "week" ? startOfWeek(now) :
-      timeRange === "month" ? startOfMonth(now) :
-      startOfYear(now);
-    return list.filter((e) => new Date(e.createdAt) >= start);
+    
+    // Auto-filter out deleted courses
+    let list = adminEnrollments.filter((e) => e.course);
+    
+    if (timeRange !== "all") {
+      const now = new Date();
+      const start =
+        timeRange === "week" ? startOfWeek(now) :
+        timeRange === "month" ? startOfMonth(now) :
+        startOfYear(now);
+      list = list.filter((e) => new Date(e.createdAt) >= start);
+    }
+    
+    // Sort the list
+    list.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+    });
+
+    return list;
   })();
 
   const downloadCSV = (rows: ApiAdminEnrollment[], filename: string) => {
@@ -66,11 +79,6 @@ const AdminCompletedPayments = () => {
     downloadCSV([enrollment], `receipt-${enrollment._id}`);
   };
 
-  const handleRemoveFromView = (id: string) => {
-    setHiddenIds((prev) => new Set(prev).add(id));
-    toast({ title: "Removed", description: "Payment record removed from view" });
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
@@ -97,6 +105,15 @@ const AdminCompletedPayments = () => {
                 <SelectItem value="month">This Month</SelectItem>
                 <SelectItem value="year">This Year</SelectItem>
                 <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as typeof sortOrder)}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Sort Order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desc">Newest First</SelectItem>
+                <SelectItem value="asc">Oldest First</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -174,15 +191,6 @@ const AdminCompletedPayments = () => {
                           onClick={() => downloadReceipt(enrollment)}
                         >
                           <Download className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleRemoveFromView(enrollment._id)}
-                          title="Remove from view"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>
