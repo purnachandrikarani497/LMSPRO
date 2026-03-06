@@ -225,6 +225,7 @@ export interface ApiCourse {
   reviews?: any[];
   duration?: string;
   level?: string;
+  isPublished?: boolean;
   lessons?: {
     _id?: string;
     title: string;

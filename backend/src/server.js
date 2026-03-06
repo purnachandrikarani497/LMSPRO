@@ -168,15 +168,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Internal server error" });
 });
 
-// start server after DB connects
+// start server and attempt DB connection in background
 (async () => {
+  app.listen(config.port, () => {
+    console.log(`Server running on port ${config.port}`);
+  });
+  
   try {
     await connectWithRetry();
-    app.listen(config.port, () => {
-      console.log(`Server running on port ${config.port}`);
-    });
   } catch (error) {
-    console.error("Failed to connect to MongoDB after retries", error);
-    process.exit(1);
+    console.error("Initial MongoDB connection failed after retries, will keep retrying on request", error.message);
   }
 })();

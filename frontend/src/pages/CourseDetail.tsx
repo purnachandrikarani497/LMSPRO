@@ -8,7 +8,7 @@ import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
-const tabs = ["Overview", "Q&A", "Notes", "Announcements", "Reviews", "Learning tools"];
+const tabs = ["Overview", "Notes", "Announcements", "Reviews"];
 
 function formatWatchTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "0:00";
@@ -279,7 +279,7 @@ const CourseDetail = () => {
                   sections.map((section) => (
                     <div key={section.title} className="rounded border border-gray-200 p-3">
                       <p className="font-medium text-gray-900">{section.title}</p>
-                      <p className="text-xs text-gray-500">{section.lessons?.length || 0} lessons</p>
+                      <p className="mt-1 text-xs text-gray-400">{section.lessons?.length || 0} lessons</p>
                     </div>
                   ))
                 ) : (
@@ -351,7 +351,6 @@ const CourseDetail = () => {
                     </div>
                     <span className="text-gray-400">({(course.ratingCount || 0).toLocaleString()} ratings)</span>
                   </span>
-                  <span className="text-gray-400">{course.students.toLocaleString()} students</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
                   {course.instructor && <span>Created by <span className="text-amber-400 underline">{course.instructor}</span></span>}
@@ -389,11 +388,6 @@ const CourseDetail = () => {
                       </div>
                     </div>
                     <p className="text-xs text-gray-400 whitespace-nowrap">{course.ratingCount ? course.ratingCount.toLocaleString() : 0} ratings</p>
-                  </div>
-                  <div className="hidden sm:block w-px bg-gray-700/50" />
-                  <div className="flex flex-col justify-center p-4 px-6 min-w-[140px]">
-                    <p className="text-xl font-bold text-white">{course.students.toLocaleString()}</p>
-                    <p className="text-xs text-gray-400 whitespace-nowrap">learners enrolled</p>
                   </div>
                 </div>
               </div>
@@ -436,21 +430,6 @@ const CourseDetail = () => {
         <div className="container mx-auto px-4 py-10">
           <div className="grid gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-8">
-              {/* What you'll learn */}
-              {lessons.length > 0 && (
-                <div className="rounded-lg border border-gray-200 bg-white p-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">What you'll learn</h2>
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {lessons.slice(0, 8).map((l, i) => (
-                      <li key={l._id || i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
-                        {l.title}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               {/* Course content sections */}
               {sections.length > 0 && (
                 <div>
@@ -479,7 +458,7 @@ const CourseDetail = () => {
                               <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                               <p className="font-bold text-gray-900 text-sm">{section.title}</p>
                             </div>
-                            <span className="text-xs text-gray-500">{sectionLessons.length} lessons</span>
+                            <span className="text-xs text-gray-500 whitespace-nowrap">{sectionLessons.length} lessons</span>
                           </button>
                           {isExpanded && (
                             <div className="divide-y divide-gray-100">
@@ -711,88 +690,62 @@ const CourseDetail = () => {
           </div>
 
           {/* Below-video content */}
-          <div className="px-6 lg:px-16 py-6 space-y-6">
-            {/* Stats */}
-            <div className="flex flex-wrap gap-4 text-sm">
-              <span className="flex items-center gap-1">
-                <span className="font-semibold text-amber-600">{course.rating.toFixed(1)}</span>
-                <div className="flex gap-0.5">
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <Star
-                      key={i}
-                      className={`h-4 w-4 ${i < Math.floor(course.rating) ? "fill-amber-400 text-amber-400" : "text-gray-200"}`}
-                    />
-                  ))}
-                </div>
-                <span className="text-gray-600">({(course.ratingCount || 0).toLocaleString()} ratings)</span>
-              </span>
-              {course.students > 0 && (
-                <span className="text-gray-600">{course.students.toLocaleString()} Students</span>
-              )}
-              <span className="text-gray-600">{totalHours} Total</span>
-            </div>
-
-            <p className="text-sm text-gray-600">Language: English</p>
-
-            {!isEnrolled && (
-              <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="text-2xl font-bold text-gray-900">${course.price}</div>
-                <Button
-                  size="lg"
-                  className="bg-amber-500 font-semibold text-white hover:bg-amber-600"
-                  onClick={() => navigate(`/course/${course.id}/payment`)}
-                >
-                  Enroll now
-                </Button>
-                <p className="text-xs text-gray-500">30-day money-back guarantee</p>
-              </div>
-            )}
-
-            {/* Description */}
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">About this course</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
-                {course.description}
-              </p>
-            </div>
-
+          <div className="px-6 lg:px-16 py-4 space-y-4">
             {/* Tabs */}
-            <div className="border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
-              <nav className="flex gap-6 overflow-x-auto py-3">
+            <div className="border-b border-gray-200 sticky top-0 z-10 bg-white">
+              <nav className="flex gap-8 overflow-x-auto">
                 {tabs.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`whitespace-nowrap border-b-2 pb-2 text-sm font-medium transition-colors ${
+                    className={`whitespace-nowrap pb-3 pt-2 text-sm font-bold transition-colors relative ${
                       activeTab === tab
-                        ? "border-gray-900 text-gray-900"
-                        : "border-transparent text-gray-600 hover:text-gray-900"
+                        ? "text-gray-900"
+                        : "text-gray-500 hover:text-gray-900"
                     }`}
                   >
                     {tab}
+                    {activeTab === tab && (
+                      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gray-900" />
+                    )}
                   </button>
                 ))}
               </nav>
             </div>
 
-            {activeTab === "Overview" && course.lessonItems && course.lessonItems.length > 0 && (
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">What you'll learn</h2>
-                <ul className="mt-3 space-y-2">
-                  {course.lessonItems.slice(0, 6).map((l, i) => (
-                    <li key={l._id || i} className="flex items-start gap-2 text-sm text-gray-700">
-                      <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
-                      {l.title}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {activeTab === "Overview" && (
+              <div className="space-y-8 py-4">
+                <div className="space-y-4">
+                  <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+                    {course.description.split('.')[0]}.
+                  </h1>
+                  
+                  <div className="flex flex-wrap items-center gap-6 text-sm">
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-amber-600">{course.rating.toFixed(1)}</span>
+                      <div className="flex">
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <Star key={i} className={`h-4 w-4 ${i < Math.floor(course.rating) ? "fill-amber-400 text-amber-400" : "text-gray-200"}`} />
+                        ))}
+                      </div>
+                      <span className="text-gray-500 underline">({(course.ratingCount || 0).toLocaleString()} ratings)</span>
+                    </div>
+                    <div className="font-medium text-gray-900">
+                      {totalHours} total
+                    </div>
+                  </div>
 
-            {activeTab === "Q&A" && (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-semibold text-gray-800">Q&A is coming soon!</h3>
-                <p className="text-sm text-gray-500 mt-2">Check back later for community questions and answers.</p>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      <span>Last updated {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      <span>English, English [Auto]</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -927,155 +880,136 @@ const CourseDetail = () => {
                 </div>
               </div>
             )}
-
-            {activeTab === "Learning tools" && (
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">Learning Tools</h2>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 border border-gray-200 rounded-md">
-                    <h3 className="font-semibold">Flashcards</h3>
-                    <p className="text-sm text-gray-600">Create and review flashcards for key concepts.</p>
-                    <Button variant="outline" className="mt-2" onClick={() => navigate('/flashcards')}>Use Flashcards</Button>
-                  </div>
-                  <div className="p-4 border border-gray-200 rounded-md">
-                    <h3 className="font-semibold">Quizzes</h3>
-                    <p className="text-sm text-gray-600">Test your knowledge with practice quizzes.</p>
-                    <Button variant="outline" className="mt-2" onClick={() => navigate('/quizzes')}>Take a Quiz</Button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Fixed right sidebar - Course content (Udemy style) */}
         <aside className={`hidden lg:flex fixed top-[44px] h-[calc(100vh-44px)] w-[350px] flex-col border-l border-gray-200 bg-white transition-[right] duration-300 ${sidebarCollapsed ? "-right-[350px]" : "right-0"}`}>
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 flex-shrink-0">
-            <h3 className="font-bold text-gray-900">Course content</h3>
+          <div className="flex items-center border-b border-gray-200 flex-shrink-0 px-4 py-3">
+            <h3 className="text-sm font-bold text-gray-900">Course content</h3>
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-thin">
             {sections && sections.length > 0 ? (
               sections.map((section) => {
-                const isExpanded = expandedSections.has(section.title);
-                const sectionLessons = section.lessons || [];
-                const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
+                  const isExpanded = expandedSections.has(section.title);
+                  const sectionLessons = section.lessons || [];
+                  const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
 
-                return (
-                  <div key={section.title} className="border-b border-gray-200">
-                    <button
-                      onClick={() => {
-                        setExpandedSections(prev => {
-                          const next = new Set(prev);
-                          if (next.has(section.title)) {
-                            next.delete(section.title);
-                          } else {
-                            next.add(section.title);
-                          }
-                          return next;
-                        });
-                      }}
-                      className="w-full flex items-center justify-between bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <ChevronRight
-                          className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                        />
-                        <div className="min-w-0">
-                          <p className="font-bold text-gray-900 text-[15px] truncate">{section.title}</p>
-                          <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
+                  return (
+                    <div key={section.title} className="border-b border-gray-200">
+                      <button
+                        onClick={() => {
+                          setExpandedSections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(section.title)) {
+                              next.delete(section.title);
+                            } else {
+                              next.add(section.title);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center justify-between bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ChevronRight
+                            className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                          />
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 text-[15px] truncate">{section.title}</p>
+                            <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
 
-                    {isExpanded && (
-                      <div className="py-1">
-                        {sectionLessons.length > 0 ? (
-                          sectionLessons.map((lesson, i) => {
-                            const lid = lesson._id;
-                            const completed = lid ? completedLessonIds.has(lid) : false;
-                            const canOpen = isEnrolled && !!lid;
-                            const isActive = selectedLesson?._id === lid;
-                            const savedTs = lid ? watchTimestamps[lid] : undefined;
-                            const savedDur = lid ? watchDurations[lid] : undefined;
-                            const watchPct = savedTs != null && savedDur && savedDur > 0
-                              ? Math.min(100, Math.round((savedTs / savedDur) * 100))
-                              : 0;
-                            return (
-                              <div
-                                key={lesson._id || i}
-                                className={`flex items-start gap-3 text-sm transition-colors ${
-                                  isActive
-                                    ? "mx-2 my-1 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2.5"
-                                    : `px-4 py-2.5 ${canOpen ? "cursor-pointer hover:bg-gray-50" : ""}`
-                                }`}
-                                onClick={() => {
-                                  if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
-                                }}
-                                role={canOpen ? "button" : undefined}
-                              >
-                                {completed && !isActive ? (
-                                  <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
-                                ) : isActive ? (
-                                  <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white">
-                                    <Pause className="h-2.5 w-2.5 fill-current" />
-                                  </span>
-                                ) : (
-                                  <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
-                                    {canOpen ? (
-                                      <Play className="h-2.5 w-2.5" />
-                                    ) : (
-                                      <span className="text-gray-400">○</span>
-                                    )}
-                                  </span>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
-                                  <div className="mt-0.5 flex items-center gap-2">
-                                    {isActive && (
-                                      <span className="text-xs font-medium text-amber-600">Now playing</span>
-                                    )}
-                                    {!isActive && watchPct > 0 && watchPct < 95 && !completed && (
-                                      <span className="text-xs font-medium text-amber-600">Resume at {formatWatchTime(savedTs!)}</span>
-                                    )}
-                                    {lesson.duration && (
-                                      <span className="text-xs text-gray-500">{lesson.duration}</span>
-                                    )}
-                                    {lesson.resources && lesson.resources.length > 0 && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 gap-1 px-2 text-xs text-purple-600"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <FileText className="h-3 w-3" />
-                                        Resources
-                                        <ChevronDown className="h-3 w-3" />
-                                      </Button>
+                      {isExpanded && (
+                        <div className="py-1">
+                          {sectionLessons.length > 0 ? (
+                            sectionLessons.map((lesson, i) => {
+                              const lid = lesson._id;
+                              const completed = lid ? completedLessonIds.has(lid) : false;
+                              const canOpen = isEnrolled && !!lid;
+                              const isActive = selectedLesson?._id === lid;
+                              const savedTs = lid ? watchTimestamps[lid] : undefined;
+                              const savedDur = lid ? watchDurations[lid] : undefined;
+                              const watchPct = savedTs != null && savedDur && savedDur > 0
+                                ? Math.min(100, Math.round((savedTs / savedDur) * 100))
+                                : 0;
+                              return (
+                                <div
+                                  key={lesson._id || i}
+                                  className={`flex items-start gap-3 text-sm transition-colors ${
+                                    isActive
+                                      ? "mx-2 my-1 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2.5"
+                                      : `px-4 py-2.5 ${canOpen ? "cursor-pointer hover:bg-gray-50" : ""}`
+                                  }`}
+                                  onClick={() => {
+                                    if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                  }}
+                                  role={canOpen ? "button" : undefined}
+                                >
+                                  {completed && !isActive ? (
+                                    <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                  ) : isActive ? (
+                                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white">
+                                      <Pause className="h-2.5 w-2.5 fill-current" />
+                                    </span>
+                                  ) : (
+                                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                      {canOpen ? (
+                                        <Play className="h-2.5 w-2.5" />
+                                      ) : (
+                                        <span className="text-gray-400">○</span>
+                                      )}
+                                    </span>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
+                                    <div className="mt-0.5 flex items-center gap-2">
+                                      {isActive && (
+                                        <span className="text-xs font-medium text-amber-600">Now playing</span>
+                                      )}
+                                      {!isActive && watchPct > 0 && watchPct < 95 && !completed && (
+                                        <span className="text-xs font-medium text-amber-600">Resume at {formatWatchTime(savedTs!)}</span>
+                                      )}
+                                      {lesson.duration && (
+                                        <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                      )}
+                                      {lesson.resources && lesson.resources.length > 0 && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 gap-1 px-2 text-xs text-purple-600"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <FileText className="h-3 w-3" />
+                                          Resources
+                                          <ChevronDown className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                    {watchPct > 0 && !completed && (
+                                      <div className="mt-1 h-1 w-full rounded-full bg-gray-200 overflow-hidden">
+                                        <div
+                                          className="h-full rounded-full bg-amber-500 transition-all"
+                                          style={{ width: `${watchPct}%` }}
+                                        />
+                                      </div>
                                     )}
                                   </div>
-                                  {watchPct > 0 && !completed && (
-                                    <div className="mt-1 h-1 w-full rounded-full bg-gray-200 overflow-hidden">
-                                      <div
-                                        className="h-full rounded-full bg-amber-500 transition-all"
-                                        style={{ width: `${watchPct}%` }}
-                                      />
-                                    </div>
-                                  )}
                                 </div>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <p className="py-3 text-center text-sm text-gray-500">No lessons in this section</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <p className="py-8 text-center text-sm text-gray-500">No lessons added yet</p>
-            )}
+                              );
+                            })
+                          ) : (
+                            <p className="py-3 text-center text-sm text-gray-500">No lessons in this section</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="py-8 text-center text-sm text-gray-500">No lessons added yet</p>
+              )}
           </div>
         </aside>
 

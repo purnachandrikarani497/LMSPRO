@@ -49,6 +49,12 @@ const AdminCoursePage = () => {
   const [editDuration, setEditDuration] = useState<string>("");
   const [deleteTarget, setDeleteTarget] = useState<{ lessonId: string; title: string } | null>(null);
   const [deleteSectionTarget, setDeleteSectionTarget] = useState<{ sectionId: string; title: string } | null>(null);
+  
+  // Course metadata state
+  const [courseDescription, setCourseDescription] = useState("");
+  const [courseInstructor, setCourseInstructor] = useState("");
+  const [metaErrors, setMetaErrors] = useState<{ description?: string; instructor?: string }>({});
+
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["admin-course", id],
     queryFn: () => api.getCourseAdmin(id || ""),
@@ -58,6 +64,9 @@ const AdminCoursePage = () => {
   // Initialize sections from course
   useEffect(() => {
     if (course) {
+      setCourseDescription(course.description || "");
+      setCourseInstructor(course.instructor || "");
+
       if (course.sections && course.sections.length > 0) {
         // Use sections from API if available
         setSections(course.sections);
@@ -82,12 +91,73 @@ const AdminCoursePage = () => {
   }, [course]);
 
 
+  const updateCourseMutation = useMutation({
+    mutationFn: async (data: { description: string; instructor: string }) => {
+      if (!course) throw new Error("Course not loaded");
+      return api.updateCourse(id!, {
+        title: course.title,
+        description: data.description,
+        instructor: data.instructor,
+        thumbnail: course.thumbnail,
+        category: course.category,
+        price: course.price,
+        level: course.level,
+        isPublished: course.isPublished
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Course details updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["admin-course", id] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Update failed",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleSaveMetadata = () => {
+    const errors: { description?: string; instructor?: string } = {};
+    const charAndSpacesRegex = /^[a-zA-Z\s]+$/;
+
+    // Validate Description
+    if (!courseDescription.trim()) {
+      errors.description = "Description is required";
+    } else if (courseDescription.length > 1000) {
+      errors.description = "Description must be under 1000 characters";
+    } else if (!charAndSpacesRegex.test(courseDescription)) {
+      errors.description = "Only characters and spaces are allowed";
+    }
+
+    // Validate Instructor Name
+    if (!courseInstructor.trim()) {
+      errors.instructor = "Instructor name is required";
+    } else if (courseInstructor.length > 30) {
+      errors.instructor = "Instructor name must be under 30 characters";
+    } else if (!charAndSpacesRegex.test(courseInstructor)) {
+      errors.instructor = "Only characters and spaces are allowed";
+    }
+
+    setMetaErrors(errors);
+
+    if (Object.keys(errors).length === 0) {
+      updateCourseMutation.mutate({
+        description: courseDescription.trim(),
+        instructor: courseInstructor.trim()
+      });
+    }
+  };
+
   const addSectionMutation = useMutation({
     mutationFn: async () => {
       if (!newSection.trim()) {
         throw new Error("Section title is required");
       }
-      return api.addSection(id!, { title: newSection.trim() });
+      return api.addSection(id!, { 
+        title: newSection.trim()
+      });
     },
     onSuccess: () => {
       toast({ title: "Section created", description: "New section added to course" });
@@ -105,7 +175,9 @@ const AdminCoursePage = () => {
 
   const updateSectionMutation = useMutation({
     mutationFn: async ({ sectionId, title }: { sectionId: string; title: string }) => {
-      return api.updateSection(id!, sectionId, { title: title.trim() });
+      return api.updateSection(id!, sectionId, { 
+        title: title.trim()
+      });
     },
     onSuccess: () => {
       toast({ title: "Section updated", description: "Changes have been saved" });
@@ -389,10 +461,14 @@ const AdminCoursePage = () => {
                       {isEditing ? (
                         <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <Input
+                            placeholder="Section title"
                             value={editingSectionTitle}
                             onChange={(e) => setEditingSectionTitle(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") updateSectionMutation.mutate({ sectionId: sid, title: editingSectionTitle });
+                              if (e.key === "Enter") updateSectionMutation.mutate({ 
+                                sectionId: sid, 
+                                title: editingSectionTitle
+                              });
                               if (e.key === "Escape") {
                                 setEditingSectionId(null);
                                 setEditingSectionTitle("");
@@ -401,29 +477,34 @@ const AdminCoursePage = () => {
                             className="h-8"
                             autoFocus
                           />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => updateSectionMutation.mutate({ sectionId: sid, title: editingSectionTitle })}
-                            disabled={!editingSectionTitle.trim() || updateSectionMutation.isPending}
-                          >
-                            {updateSectionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingSectionId(null);
-                              setEditingSectionTitle("");
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => updateSectionMutation.mutate({ 
+                                sectionId: sid, 
+                                title: editingSectionTitle
+                              })}
+                              disabled={!editingSectionTitle.trim() || updateSectionMutation.isPending}
+                            >
+                              {updateSectionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingSectionId(null);
+                                setEditingSectionTitle("");
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ) : (
                         <>
                           <p className="font-medium text-gray-900">{section.title}</p>
-                          <p className="text-xs text-gray-500">{section.lessons?.length ?? 0} lessons</p>
+                          <p className="mt-1 text-xs text-gray-400">{section.lessons?.length ?? 0} lessons</p>
                         </>
                       )}
                     </div>
@@ -464,7 +545,7 @@ const AdminCoursePage = () => {
                 value={newSection}
                 onChange={(e) => setNewSection(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === "Enter" && newSection.trim()) {
                     addSectionMutation.mutate();
                   }
                 }}
@@ -473,6 +554,7 @@ const AdminCoursePage = () => {
                 onClick={() => addSectionMutation.mutate()}
                 disabled={!newSection.trim() || addSectionMutation.isPending}
                 size="sm"
+                className="shrink-0"
               >
                 {addSectionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               </Button>
@@ -867,9 +949,55 @@ const AdminCoursePage = () => {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Button variant="outline" className="mt-6" onClick={() => navigate(`/course/${id}`)}>
-          View Course Page
-        </Button>
+        {/* Course Metadata Update Section */}
+        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Course Details</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={courseDescription}
+                onChange={(e) => setCourseDescription(e.target.value)}
+                className={`w-full min-h-[100px] p-2 rounded-md border ${metaErrors.description ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-amber-500`}
+                placeholder="Enter course description (letters and spaces only)"
+                maxLength={1000}
+              />
+              {metaErrors.description && <p className="mt-1 text-xs text-red-500">{metaErrors.description}</p>}
+              <p className="mt-1 text-[10px] text-gray-400">{courseDescription.length}/1000 characters</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Instructor Name</label>
+              <Input
+                value={courseInstructor}
+                onChange={(e) => setCourseInstructor(e.target.value)}
+                className={metaErrors.instructor ? 'border-red-500' : ''}
+                placeholder="Enter instructor name (letters and spaces only)"
+                maxLength={30}
+              />
+              {metaErrors.instructor && <p className="mt-1 text-xs text-red-500">{metaErrors.instructor}</p>}
+              <p className="mt-1 text-[10px] text-gray-400">{courseInstructor.length}/30 characters</p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button 
+                onClick={handleSaveMetadata} 
+                disabled={updateCourseMutation.isPending}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                {updateCourseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save Changes
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleSaveMetadata}
+                disabled={updateCourseMutation.isPending}
+              >
+                Update
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

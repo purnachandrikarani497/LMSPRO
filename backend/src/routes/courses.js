@@ -184,7 +184,10 @@ router.post("/:id/sections", requireAuth, requireRole(["admin"]), async (req, re
     if (!course.sections) {
       course.sections = [];
     }
-    const newSection = { title: title.trim(), lessons: [] };
+    const newSection = { 
+      title: title.trim(), 
+      lessons: [] 
+    };
     course.sections.push(newSection);
     await course.save();
     res.status(201).json(course.sections[course.sections.length - 1]);
