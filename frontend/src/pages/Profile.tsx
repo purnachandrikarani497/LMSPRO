@@ -12,7 +12,9 @@ interface StoredUser {
   role?: "admin" | "student";
 }
 
-const phoneMaxLength = 15;
+const NAME_MAX = 30;
+const EMAIL_MAX = 20;
+const PHONE_DIGITS = 10;
 
 const Profile = () => {
   const { toast } = useToast();
@@ -27,94 +29,64 @@ const Profile = () => {
     if (!rawUser) return;
     try {
       const parsed = JSON.parse(rawUser) as StoredUser;
-      if (parsed.name) setName(parsed.name);
-      if (parsed.email) setEmail(parsed.email);
-      if (parsed.phone) setPhone(parsed.phone);
+      if (parsed.name) setName(parsed.name.slice(0, NAME_MAX));
+      if (parsed.email) setEmail(parsed.email.slice(0, EMAIL_MAX));
+      if (parsed.phone) setPhone(parsed.phone.replace(/\D/g, "").slice(0, PHONE_DIGITS));
     } catch {
       // ignore parse errors
     }
   }, []);
 
   const handleNameChange = (value: string) => {
-    if (value.length > 50) {
-      toast({
-        title: "Max limit reached",
-        description: "Full Name cannot exceed 50 characters.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (value.length > NAME_MAX) return;
     if (value && !/^[a-zA-Z\s]+$/.test(value)) {
-      toast({
-        title: "Invalid character",
-        description: "Name can only contain characters",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid character", description: "Name can only contain letters and spaces.", variant: "destructive" });
       return;
     }
-    
     setName(value);
   };
 
   const handleEmailChange = (value: string) => {
-    if (value.length > 50) {
-      toast({
-        title: "Max limit reached",
-        description: "Email cannot exceed 50 characters.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (value.length > EMAIL_MAX) return;
     setEmail(value);
+  };
+
+  const handlePhoneChange = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, PHONE_DIGITS);
+    setPhone(digits);
   };
 
   const handleSave = async () => {
     if (typeof window === "undefined") return;
 
     if (!name.trim()) {
-      toast({
-        title: "Missing Name",
-        description: "Please enter your full name.",
-        variant: "destructive",
-      });
+      toast({ title: "Missing Name", description: "Please enter your full name.", variant: "destructive" });
+      return;
+    }
+    if (name.length > NAME_MAX) {
+      toast({ title: "Name too long", description: `Full name cannot exceed ${NAME_MAX} characters.`, variant: "destructive" });
       return;
     }
 
     if (!email.trim()) {
-      toast({
-        title: "Missing Email",
-        description: "Please enter your email address.",
-        variant: "destructive",
-      });
+      toast({ title: "Missing Email", description: "Please enter your email address.", variant: "destructive" });
       return;
     }
-
+    if (email.length > EMAIL_MAX) {
+      toast({ title: "Email too long", description: `Email cannot exceed ${EMAIL_MAX} characters.`, variant: "destructive" });
+      return;
+    }
     if (!email.includes("@")) {
-      toast({
-        title: "Invalid email",
-        description: "Email must contain @ character.",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid email", description: "Email must contain @ character.", variant: "destructive" });
       return;
     }
 
     if (!phone.trim()) {
-      toast({
-        title: "Phone required",
-        description: "Please enter your phone number.",
-        variant: "destructive",
-      });
+      toast({ title: "Phone required", description: "Please enter your phone number.", variant: "destructive" });
       return;
     }
-
-    if (!/^[\d\s+-]{10,}$/.test(phone.trim())) {
-      toast({
-        title: "Invalid phone",
-        description: "Enter a valid 10-digit phone number.",
-        variant: "destructive",
-      });
+    if (phone.replace(/\D/g, "").length !== PHONE_DIGITS) {
+      toast({ title: "Invalid phone", description: "Phone number must be exactly 10 digits.", variant: "destructive" });
       return;
     }
 
@@ -130,7 +102,7 @@ const Profile = () => {
         }
       }
 
-      const updated = { ...stored, name: name.trim(), email: email.trim(), phone: phone.trim() };
+      const updated = { ...stored, name: name.trim(), email: email.trim(), phone: phone.replace(/\D/g, "") };
 
       if (stored.id === "admin-static" || stored.role === "admin") {
         window.localStorage.setItem("lms_user", JSON.stringify(updated));
@@ -140,7 +112,7 @@ const Profile = () => {
         const res = await api.updateProfile({
           name: name.trim(),
           email: email.trim(),
-          phone: phone.trim()
+          phone: phone.replace(/\D/g, "")
         });
         const saved = { ...stored, ...res.user };
         window.localStorage.setItem("lms_user", JSON.stringify(saved));
@@ -193,8 +165,8 @@ const Profile = () => {
             <Input
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.slice(0, phoneMaxLength))}
-              placeholder="e.g. +91 9876543210"
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              placeholder="10 digits"
             />
           </div>
           <div className="flex justify-end">

@@ -217,6 +217,9 @@ export interface ApiCourse {
   description: string;
   thumbnail?: string;
   instructor?: string;
+  instructorPhoto?: string;
+  instructorTitle?: string;
+  instructorBio?: string;
   category?: string;
   price?: number;
   rating?: number;
@@ -250,6 +253,11 @@ export interface ApiCourse {
     question: string;
     options: string[];
     correctIndex: number;
+  }[];
+  announcements?: {
+    title: string;
+    content: string;
+    postedAt?: string;
   }[];
 }
 
@@ -285,6 +293,13 @@ export interface ApiSettings {
   smtpConfigured?: boolean;
 }
 
+export interface ApiCategory {
+  _id: string;
+  name: string;
+  icon?: string;
+  slug?: string;
+}
+
 export interface ApiProgress {
   _id: string;
   course: string;
@@ -295,9 +310,16 @@ export interface ApiProgress {
   score: number;
 }
 
+export interface ApiNoteEntry {
+  text: string;
+  createdAt: string;
+  videoTimestamp?: number;
+}
+
 export interface ApiWatchTimestamps {
   timestamps: Record<string, number>;
   durations: Record<string, number>;
+  notes?: Record<string, ApiNoteEntry[]>;
 }
 
 export interface ApiVideoStatus {
@@ -390,6 +412,9 @@ export const api = {
     description: string;
     thumbnail?: string;
     instructor?: string;
+  instructorPhoto?: string;
+  instructorTitle?: string;
+  instructorBio?: string;
     category?: string;
     price?: number;
     level?: string;
@@ -402,10 +427,14 @@ export const api = {
     description: string;
     thumbnail?: string;
     instructor?: string;
+    instructorPhoto?: string;
+    instructorTitle?: string;
+    instructorBio?: string;
     category?: string;
     price?: number;
     level?: string;
     isPublished?: boolean;
+    announcements?: { title: string; content: string; postedAt?: string }[];
   }) {
     return request<ApiCourse>(`/courses/${id}`, "PUT", data);
   },
@@ -462,6 +491,21 @@ export const api = {
   getSettings() {
     return request<ApiSettings>("/settings", "GET");
   },
+  getCategories() {
+    return request<ApiCategory[]>("/categories", "GET");
+  },
+  seedCategories() {
+    return request<{ message: string; created: ApiCategory[] }>("/settings/categories/seed", "POST");
+  },
+  createCategory(data: { name: string; icon?: string }) {
+    return request<ApiCategory>("/categories", "POST", data);
+  },
+  updateCategory(id: string, data: { name: string; icon?: string }) {
+    return request<ApiCategory>(`/categories/${id}`, "PUT", data);
+  },
+  deleteCategory(id: string) {
+    return request<{ message: string }>(`/categories/${id}`, "DELETE");
+  },
   getProgress(courseId: string) {
     return request<ApiProgress>(`/progress/${courseId}`, "GET");
   },
@@ -481,6 +525,15 @@ export const api = {
   },
   getWatchTimestamps(courseId: string) {
     return request<ApiWatchTimestamps>(`/progress/${courseId}/timestamps`, "GET");
+  },
+  saveNote(courseId: string, lessonId: string, note: string, videoTimestamp?: number) {
+    return request<{ lessonId: string; note: ApiNoteEntry[] }>(`/progress/${courseId}/lessons/${lessonId}/note`, "POST", { note, videoTimestamp });
+  },
+  updateNote(courseId: string, lessonId: string, noteIndex: number, note: string) {
+    return request<{ lessonId: string; note: ApiNoteEntry[] }>(`/progress/${courseId}/lessons/${lessonId}/notes/${noteIndex}`, "PUT", { note });
+  },
+  deleteNote(courseId: string, lessonId: string, noteIndex: number) {
+    return request<{ lessonId: string; note: ApiNoteEntry[] }>(`/progress/${courseId}/lessons/${lessonId}/notes/${noteIndex}`, "DELETE");
   },
   generateCertificate(courseId: string) {
     return request<ApiCertificate>(`/certificates/${courseId}`, "POST");

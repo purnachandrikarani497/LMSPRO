@@ -39,8 +39,8 @@ const HeroSection = () => {
     <section className="relative overflow-hidden bg-gradient-hero">
       {/* Background image with overlay */}
       <div className="absolute inset-0">
-        <img src={heroBg} alt="" className="h-full w-full object-cover opacity-20" />
-        <div className="absolute inset-0 bg-gradient-to-r from-navy-dark/95 via-navy/80 to-navy-dark/60" />
+        <img src={heroBg} alt="" className="h-full w-full object-cover opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-navy-dark/70 via-navy/55 to-navy-dark/45" />
       </div>
 
       <div className="container relative mx-auto px-4 py-20 lg:py-28">

@@ -74,6 +74,8 @@ export interface SecureVideoPlayerProps {
   initialTime?: number;
   /** Called periodically with current time and duration so parent can persist position */
   onTimeReport?: (currentTime: number, duration: number) => void;
+  /** Ref to which the player assigns seekTo(seconds) for external control (e.g. notes timestamp click) */
+  seekToRef?: React.MutableRefObject<((seconds: number) => void) | null>;
 }
 
 export function SecureVideoPlayer({
@@ -93,7 +95,8 @@ export function SecureVideoPlayer({
   isExpanded = false,
   onExpandToggle,
   initialTime,
-  onTimeReport
+  onTimeReport,
+  seekToRef
 }: SecureVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -168,6 +171,20 @@ export function SecureVideoPlayer({
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!seekToRef) return;
+    seekToRef.current = (seconds: number) => {
+      const v = videoRef.current;
+      if (v && isFinite(seconds) && seconds >= 0) {
+        v.currentTime = Math.min(seconds, v.duration || seconds);
+        setCurrentTime(v.currentTime);
+        setProgress(v.duration ? (v.currentTime / v.duration) * 100 : 0);
+        onTimeReport?.(v.currentTime, v.duration);
+      }
+    };
+    return () => { seekToRef.current = null; };
+  }, [seekToRef, onTimeReport]);
 
   const safePlay = useCallback(() => {
     const v = videoRef.current;

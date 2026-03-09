@@ -10,9 +10,18 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
+        onError(err, req, res) {
+          const msg = (err as NodeJS.ErrnoException)?.code === 'ECONNREFUSED'
+            ? 'Backend unreachable. Run: cd backend && npm run dev'
+            : (err as Error).message;
+          if (!(res as import('http').ServerResponse).headersSent) {
+            (res as import('http').ServerResponse).writeHead(502, { 'Content-Type': 'text/plain' });
+            (res as import('http').ServerResponse).end(msg);
+          }
+        },
       },
     },
   },

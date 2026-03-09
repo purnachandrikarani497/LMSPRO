@@ -35,6 +35,9 @@ const courseSchema = new mongoose.Schema(
     description: { type: String, required: true },
     thumbnail: { type: String },
     instructor: { type: String },
+    instructorPhoto: { type: String },
+    instructorTitle: { type: String },
+    instructorBio: { type: String },
     category: { type: String },
     price: { type: Number },
     rating: { type: Number, default: 0 },
@@ -51,6 +54,13 @@ const courseSchema = new mongoose.Schema(
     sections: [sectionSchema],
     lessons: [lessonSchema],
     quiz: [questionSchema],
+    announcements: [
+      {
+        title: { type: String, required: true },
+        content: { type: String, required: true },
+        postedAt: { type: Date, default: Date.now }
+      }
+    ],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     isPublished: { type: Boolean, default: false }
   },

@@ -12,7 +12,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "$19/mo",
+    price: "₹19/mo",
     description: "Unlock the full library for individual learners.",
     features: ["Unlimited course access", "Certificates of completion", "Priority support"]
   },

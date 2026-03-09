@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { CreditCard } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -239,7 +240,7 @@ const Payment = () => {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Price</span>
-                  <span className="font-semibold text-foreground">${course.price ?? 0}</span>
+                  <span className="font-semibold text-foreground">{formatPrice(course.price ?? 0)}</span>
                 </div>
                 <Button
                   className="mt-2 w-full bg-gradient-gold text-primary shadow-gold hover:opacity-90"

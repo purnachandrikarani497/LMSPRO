@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, ApiAdminUser } from "@/lib/api";
 import { format } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 import { Helmet } from "react-helmet-async";
 import { Fragment, useState } from "react";
 
@@ -132,7 +133,7 @@ const AdminUsers = () => {
                                           <div key={i} className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2">
                                             <span className="font-medium truncate mr-2">{e.course || "—"}</span>
                                             <span className="text-muted-foreground text-xs whitespace-nowrap">
-                                              ${e.price ?? 0} &middot; {e.enrolledAt ? format(new Date(e.enrolledAt), "dd MMM yyyy") : "—"}
+                                              {formatPrice(e.price ?? 0)} · {e.enrolledAt ? format(new Date(e.enrolledAt), "dd MMM yyyy") : "—"}
                                             </span>
                                           </div>
                                         ))}

@@ -53,6 +53,10 @@ const AdminCoursePage = () => {
   // Course metadata state
   const [courseDescription, setCourseDescription] = useState("");
   const [courseInstructor, setCourseInstructor] = useState("");
+  const [instructorPhoto, setInstructorPhoto] = useState("");
+  const [instructorTitle, setInstructorTitle] = useState("");
+  const [instructorBio, setInstructorBio] = useState("");
+  const [announcements, setAnnouncements] = useState<{ title: string; content: string; postedAt?: string }[]>([]);
   const [metaErrors, setMetaErrors] = useState<{ description?: string; instructor?: string }>({});
 
   const { data: course, isLoading } = useQuery<ApiCourse>({
@@ -66,6 +70,10 @@ const AdminCoursePage = () => {
     if (course) {
       setCourseDescription(course.description || "");
       setCourseInstructor(course.instructor || "");
+      setInstructorPhoto(course.instructorPhoto || "");
+      setInstructorTitle(course.instructorTitle || "");
+      setInstructorBio(course.instructorBio || "");
+      setAnnouncements(course.announcements || []);
 
       if (course.sections && course.sections.length > 0) {
         // Use sections from API if available
@@ -92,12 +100,16 @@ const AdminCoursePage = () => {
 
 
   const updateCourseMutation = useMutation({
-    mutationFn: async (data: { description: string; instructor: string }) => {
+    mutationFn: async (data: { description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string; announcements?: { title: string; content: string; postedAt?: string }[] }) => {
       if (!course) throw new Error("Course not loaded");
       return api.updateCourse(id!, {
         title: course.title,
         description: data.description,
         instructor: data.instructor,
+        instructorPhoto: data.instructorPhoto,
+        instructorTitle: data.instructorTitle,
+        instructorBio: data.instructorBio,
+        announcements: data.announcements,
         thumbnail: course.thumbnail,
         category: course.category,
         price: course.price,
@@ -120,24 +132,22 @@ const AdminCoursePage = () => {
 
   const handleSaveMetadata = () => {
     const errors: { description?: string; instructor?: string } = {};
-    const charAndSpacesRegex = /^[a-zA-Z\s]+$/;
 
-    // Validate Description
+    // Validate Description - allow full text (Udemy-style)
     if (!courseDescription.trim()) {
       errors.description = "Description is required";
-    } else if (courseDescription.length > 1000) {
-      errors.description = "Description must be under 1000 characters";
-    } else if (!charAndSpacesRegex.test(courseDescription)) {
-      errors.description = "Only characters and spaces are allowed";
+    } else if (courseDescription.length > 5000) {
+      errors.description = "Description must be under 5000 characters";
     }
 
     // Validate Instructor Name
+    const nameRegex = /^[a-zA-Z\s]+$/;
     if (!courseInstructor.trim()) {
       errors.instructor = "Instructor name is required";
-    } else if (courseInstructor.length > 30) {
-      errors.instructor = "Instructor name must be under 30 characters";
-    } else if (!charAndSpacesRegex.test(courseInstructor)) {
-      errors.instructor = "Only characters and spaces are allowed";
+    } else if (courseInstructor.length > 80) {
+      errors.instructor = "Instructor name must be under 80 characters";
+    } else if (!nameRegex.test(courseInstructor)) {
+      errors.instructor = "Instructor name can only contain letters and spaces";
     }
 
     setMetaErrors(errors);
@@ -145,7 +155,15 @@ const AdminCoursePage = () => {
     if (Object.keys(errors).length === 0) {
       updateCourseMutation.mutate({
         description: courseDescription.trim(),
-        instructor: courseInstructor.trim()
+        instructor: courseInstructor.trim(),
+        instructorPhoto: instructorPhoto.trim() || undefined,
+        instructorTitle: instructorTitle.trim() || undefined,
+        instructorBio: instructorBio.trim() || undefined,
+        announcements: announcements.map((a) => ({
+          title: a.title.trim(),
+          content: a.content.trim(),
+          postedAt: a.postedAt
+        }))
       });
     }
   };
@@ -958,25 +976,115 @@ const AdminCoursePage = () => {
               <textarea
                 value={courseDescription}
                 onChange={(e) => setCourseDescription(e.target.value)}
-                className={`w-full min-h-[100px] p-2 rounded-md border ${metaErrors.description ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-amber-500`}
-                placeholder="Enter course description (letters and spaces only)"
-                maxLength={1000}
+                className={`w-full min-h-[120px] p-2 rounded-md border ${metaErrors.description ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-amber-500`}
+                placeholder="Enter course description (About this course - full text allowed)"
+                maxLength={5000}
               />
               {metaErrors.description && <p className="mt-1 text-xs text-red-500">{metaErrors.description}</p>}
-              <p className="mt-1 text-[10px] text-gray-400">{courseDescription.length}/1000 characters</p>
+              <p className="mt-1 text-[10px] text-gray-400">{courseDescription.length}/5000 characters</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Instructor Name</label>
-              <Input
-                value={courseInstructor}
-                onChange={(e) => setCourseInstructor(e.target.value)}
-                className={metaErrors.instructor ? 'border-red-500' : ''}
-                placeholder="Enter instructor name (letters and spaces only)"
-                maxLength={30}
-              />
-              {metaErrors.instructor && <p className="mt-1 text-xs text-red-500">{metaErrors.instructor}</p>}
-              <p className="mt-1 text-[10px] text-gray-400">{courseInstructor.length}/30 characters</p>
+            <div className="border-t border-gray-200 pt-4 mt-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">Instructor</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Instructor Name</label>
+                  <Input
+                    value={courseInstructor}
+                    onChange={(e) => setCourseInstructor(e.target.value)}
+                    className={metaErrors.instructor ? 'border-red-500' : ''}
+                    placeholder="e.g. Mark Shrike"
+                    maxLength={80}
+                  />
+                  {metaErrors.instructor && <p className="mt-1 text-xs text-red-500">{metaErrors.instructor}</p>}
+                  <p className="mt-1 text-[10px] text-gray-400">{courseInstructor.length}/80 characters</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Photo URL</label>
+                  <Input
+                    value={instructorPhoto}
+                    onChange={(e) => setInstructorPhoto(e.target.value)}
+                    placeholder="https://... (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title / Tagline</label>
+                  <Input
+                    value={instructorTitle}
+                    onChange={(e) => setInstructorTitle(e.target.value)}
+                    placeholder="e.g. Software Test Engineer (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                  <textarea
+                    value={instructorBio}
+                    onChange={(e) => setInstructorBio(e.target.value)}
+                    className="w-full min-h-[80px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Instructor biography (optional)"
+                    maxLength={2000}
+                  />
+                  <p className="mt-1 text-[10px] text-gray-400">{instructorBio.length}/2000 characters</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-200 pt-4 mt-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">Announcements</h3>
+              <p className="text-sm text-gray-500 mb-3">Announcements appear in the Announcements tab on the course page.</p>
+              <div className="space-y-3">
+                {announcements.map((ann, idx) => (
+                  <div key={idx} className="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Input
+                          value={ann.title}
+                          onChange={(e) =>
+                            setAnnouncements((prev) =>
+                              prev.map((a, i) => (i === idx ? { ...a, title: e.target.value } : a))
+                            )
+                          }
+                          placeholder="Announcement title"
+                          className="font-medium"
+                        />
+                        <textarea
+                          value={ann.content}
+                          onChange={(e) =>
+                            setAnnouncements((prev) =>
+                              prev.map((a, i) => (i === idx ? { ...a, content: e.target.value } : a))
+                            )
+                          }
+                          placeholder="Announcement content"
+                          className="w-full min-h-[60px] p-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          maxLength={500}
+                        />
+                        {ann.postedAt && (
+                          <p className="text-xs text-gray-400">
+                            Posted: {new Date(ann.postedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAnnouncements((prev) => prev.filter((_, i) => i !== idx))}
+                        className="p-2 rounded text-gray-500 hover:bg-red-100 hover:text-red-600 shrink-0"
+                        title="Remove announcement"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAnnouncements((prev) => [...prev, { title: "", content: "", postedAt: new Date().toISOString() }])}
+                  className="w-full border-dashed"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add announcement
+                </Button>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -987,13 +1095,6 @@ const AdminCoursePage = () => {
               >
                 {updateCourseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Save Changes
-              </Button>
-              <Button 
-                variant="outline"
-                onClick={handleSaveMetadata}
-                disabled={updateCourseMutation.isPending}
-              >
-                Update
               </Button>
             </div>
           </div>

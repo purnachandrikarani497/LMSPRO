@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, Users, BookOpen, TrendingUp, ListChecks, HelpCircle, Upload, Loader2, Settings, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Edit, Trash2, Users, BookOpen, TrendingUp, Upload, Loader2, Settings, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,13 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { categories } from "@/lib/mockData";
+import { categories as staticCategories } from "@/lib/mockData";
 import type { Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiAdminEnrollment, ApiCourse, getThumbnailSrc, mapApiCourseToCourse } from "@/lib/api";
+import { api, ApiAdminEnrollment, ApiCategory, ApiCourse, getThumbnailSrc, mapApiCourseToCourse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { formatPrice } from "@/lib/utils";
 
 interface StatCardProps {
   icon: typeof BookOpen;
@@ -51,6 +52,11 @@ const AdminDashboard = () => {
     queryFn: () => api.getAllEnrollments()
   });
 
+  const { data: apiCategories = [] } = useQuery<ApiCategory[]>({
+    queryKey: ["categories"],
+    queryFn: () => api.getCategories()
+  });
+
   const [coursesList, setCoursesList] = useState<Course[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,6 +72,13 @@ const AdminDashboard = () => {
   const [uploading, setUploading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+
+  const baseCategories = apiCategories.length > 0 ? apiCategories : staticCategories.map((c) => ({ _id: c.name, name: c.name, icon: c.icon }));
+  const categoryOptions =
+    form.category === "__new__" || baseCategories.some((c) => c.name === form.category)
+      ? baseCategories
+      : [...baseCategories, { _id: form.category, name: form.category }];
 
   useEffect(() => {
     if (!apiCourses || apiCourses.length === 0) {
@@ -84,7 +97,9 @@ const AdminDashboard = () => {
       URL.revokeObjectURL(previewBlobUrl);
       setPreviewBlobUrl(null);
     }
-    setForm({ title: "", description: "", instructor: "", category: "Development", price: "", level: "Beginner", image: "" });
+    const firstCat = baseCategories[0]?.name ?? "Development";
+    setForm({ title: "", description: "", instructor: "", category: firstCat, price: "", level: "Beginner", image: "" });
+    setNewCategoryInput("");
     setEditingId(null);
     setPreviewError(false);
   };
@@ -115,6 +130,7 @@ const AdminDashboard = () => {
       toast({ title: "Course created", description: "The course has been saved" });
       setCoursesList((prev) => [...prev, mapApiCourseToCourse(createdCourse)]);
       queryClient.invalidateQueries({ queryKey: ["courses"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
       setDialogOpen(false);
       resetForm();
     },
@@ -150,6 +166,7 @@ const AdminDashboard = () => {
         )
       );
       queryClient.invalidateQueries({ queryKey: ["courses"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
       setDialogOpen(false);
       resetForm();
     },
@@ -265,6 +282,32 @@ const AdminDashboard = () => {
       return;
     }
 
+    const category = form.category === "__new__" ? newCategoryInput.trim() : form.category;
+    if (!category) {
+      toast({
+        title: "Category is required",
+        description: form.category === "__new__" ? "Please enter a new category name" : "Please select a category",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (category.length < 2) {
+      toast({
+        title: "Category too short",
+        description: "Category must be at least 2 characters",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (!/^[A-Za-z\s]+$/.test(category) || category.length > 30) {
+      toast({
+        title: "Invalid category",
+        description: "Category must contain only letters and spaces, maximum 30 characters",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const priceRaw = form.price.trim();
     const priceDigits = priceRaw.replace(/\D/g, "");
     if (!priceDigits) {
@@ -317,7 +360,7 @@ const AdminDashboard = () => {
       description,
       thumbnail: image,
       instructor,
-      category: form.category,
+      category,
       price: priceNumber,
       level: form.level,
       isPublished: true
@@ -481,12 +524,37 @@ const AdminDashboard = () => {
                   }}
                 />
                 <div className="grid grid-cols-2 gap-4">
-                  <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Select
+                      value={form.category}
+                      onValueChange={(v) => {
+                        setForm({ ...form, category: v });
+                        if (v !== "__new__") setNewCategoryInput("");
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                      <SelectContent>
+                        {categoryOptions.map((c) => (
+                          <SelectItem key={c.name} value={c.name}>
+                            {c.icon ? `${c.icon} ` : ""}{c.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__new__">+ Add new category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.category === "__new__" && (
+                      <Input
+                        placeholder="Enter new category name"
+                        value={newCategoryInput}
+                        maxLength={30}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (/^[A-Za-z\s]*$/.test(v)) setNewCategoryInput(v);
+                        }}
+                        className="mt-1"
+                      />
+                    )}
+                  </div>
                   <Select value={form.level} onValueChange={(v) => setForm({ ...form, level: v as Course["level"] })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -498,7 +566,7 @@ const AdminDashboard = () => {
                 </div>
                 <Input
                   type="number"
-                  placeholder="Price ($)"
+                  placeholder="Price (₹)"
                   className="input-no-spinner"
                   value={form.price}
                   onChange={(e) => {
@@ -721,7 +789,7 @@ const AdminDashboard = () => {
                   <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                     {course.students.toLocaleString()}
                   </TableCell>
-                  <TableCell className="font-semibold text-sm">${course.price}</TableCell>
+                  <TableCell className="font-semibold text-sm">{formatPrice(course.price)}</TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                     ⭐ {course.rating}
                   </TableCell>
@@ -780,20 +848,6 @@ const AdminDashboard = () => {
             </div>
           )}
 
-        <div className="mt-6 rounded-xl border border-dashed border-border bg-card/40 p-4 text-xs text-muted-foreground flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/15">
-            <ListChecks className="h-4 w-4 text-secondary" />
-          </div>
-          <div>
-            <p className="font-medium text-card-foreground flex items-center gap-1">
-              <HelpCircle className="h-3 w-3" />
-              Tip
-            </p>
-            <p className="mt-1">
-              Use this dashboard to manage courses. Lessons and quizzes can be attached to a course using backend tools or future admin screens.
-            </p>
-          </div>
-        </div>
         </div>
       </div>
     </div>

@@ -16,8 +16,6 @@ import { enqueueTranscode, getVideoStatus } from "../services/transcoder.js";
 import { Video } from "../models/Video.js";
 import { Course } from "../models/Course.js";
 import { Enrollment } from "../models/Enrollment.js";
-import { User } from "../models/User.js";
-import { createWatermarkedStreamFromS3 } from "../services/watermarkStream.js";
 
 const router = express.Router();
 
@@ -167,11 +165,17 @@ router.post(
 );
 
 router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
+  // Reject direct navigation (opening URL in new tab, address bar, or "Open in new tab" from DevTools)
+  const secFetchDest = req.get("Sec-Fetch-Dest");
+  if (secFetchDest === "document") {
+    return res.status(403).json({ message: "Video must be viewed from the course page" });
+  }
+
   const referer = req.get("Referer") || req.get("Referrer");
   const origin = req.get("Origin");
   const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
   const fromApp = (referer && allowedOrigins.some((o) => referer.startsWith(o))) || (origin && allowedOrigins.some((o) => origin.startsWith(o)));
-  if (!fromApp && process.env.NODE_ENV === "production") {
+  if (!fromApp) {
     return res.status(403).json({ message: "Video must be viewed from the course page" });
   }
 
@@ -205,47 +209,28 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
 
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) return res.status(503).json({ message: "S3 not configured" });
 
-  let watermarkText = "";
-  if (decoded.sub === "admin-static" || isAdmin) {
-    watermarkText = [config.adminEmail, config.adminPhone].filter(Boolean).join(" ");
-  } else {
-    const user = await User.findById(decoded.sub).select("email phone").lean();
-    if (user) {
-      watermarkText = [user.email, user.phone].filter(Boolean).join(" ");
-    }
-  }
-
-  const useWatermark = !!watermarkText.trim() && process.env.DISABLE_VIDEO_WATERMARK !== "1";
-  const inputFormat = key.toLowerCase().endsWith(".webm") ? "webm" : "mp4";
-
   try {
     const getParams = { Bucket: config.s3.bucket, Key: key };
     const obj = await s3.send(new GetObjectCommand(getParams));
-    const bodyStream = obj.Body;
+    const rangeHeader = req.headers.range;
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) getParams.Range = rangeHeader;
+    const objWithRange = rangeHeader ? await s3.send(new GetObjectCommand({ ...getParams, Range: rangeHeader })) : obj;
+    const stream = objWithRange.Body;
 
-    res.setHeader("Content-Type", useWatermark ? "video/mp4" : (obj.ContentType || "video/mp4"));
+    res.setHeader("Content-Type", obj.ContentType || "video/mp4");
     res.setHeader("Cache-Control", "private, no-cache");
-
-    if (useWatermark) {
-      await createWatermarkedStreamFromS3(bodyStream, watermarkText, inputFormat, res);
+    res.setHeader("Accept-Ranges", "bytes");
+    if (objWithRange.ContentRange) {
+      res.status(206);
+      res.setHeader("Content-Range", objWithRange.ContentRange);
+      if (objWithRange.ContentLength != null) res.setHeader("Content-Length", objWithRange.ContentLength);
+    }
+    if (stream && typeof stream.pipe === "function") {
+      await pipeline(stream, res);
     } else {
-      const rangeHeader = req.headers.range;
-      if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) getParams.Range = rangeHeader;
-      const objWithRange = rangeHeader ? await s3.send(new GetObjectCommand({ ...getParams, Range: rangeHeader })) : obj;
-      const stream = objWithRange.Body;
-      res.setHeader("Accept-Ranges", "bytes");
-      if (objWithRange.ContentRange) {
-        res.status(206);
-        res.setHeader("Content-Range", objWithRange.ContentRange);
-        if (objWithRange.ContentLength != null) res.setHeader("Content-Length", objWithRange.ContentLength);
-      }
-      if (stream && typeof stream.pipe === "function") {
-        await pipeline(stream, res);
-      } else {
-        const buf = await stream.transformToByteArray();
-        res.setHeader("Content-Length", buf.length);
-        res.send(Buffer.from(buf));
-      }
+      const buf = await stream.transformToByteArray();
+      res.setHeader("Content-Length", buf.length);
+      res.send(Buffer.from(buf));
     }
   } catch (err) {
     console.error("Stream fetch error:", err?.message || err);

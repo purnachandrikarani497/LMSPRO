@@ -38,6 +38,7 @@ import progressRoutes from "./routes/progress.js";
 import certificateRoutes from "./routes/certificates.js";
 import uploadRoutes from "./routes/upload.js";
 import settingsRoutes from "./routes/settings.js";
+import categoryRoutes from "./routes/categories.js";
 
 const app = express();
 
@@ -118,6 +119,7 @@ app.use("/api/progress", progressRoutes);
 app.use("/api/certificates", certificateRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/categories", categoryRoutes);
 
 const connectWithRetry = async (retries = 5) => {
   for (let attempt = 1; attempt <= retries; attempt++) {

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Star, Clock, Users, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getThumbnailSrc } from "@/lib/api";
+import { formatPrice } from "@/lib/utils";
 import type { Course } from "@/lib/mockData";
 
 interface CourseCardProps {
@@ -83,7 +84,7 @@ const CourseCard = ({ course, showProgress, progress, compact }: CourseCardProps
         </div>
 
         <div className={`flex items-center justify-between gap-2 ${compact ? "text-xs" : ""}`}>
-          <span className={compact ? "text-sm font-bold text-gray-900" : "text-lg font-bold text-gray-900"}>${course.price}</span>
+          <span className={compact ? "text-sm font-bold text-gray-900" : "text-lg font-bold text-gray-900"}>{formatPrice(course.price)}</span>
           {course.duration && (
             <span className={`flex items-center gap-1 text-gray-500 ${compact ? "text-[10px]" : "text-xs"}`}>
               <Clock className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />

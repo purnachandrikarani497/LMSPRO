@@ -1,9 +1,21 @@
 import express from "express";
 import mongoose from "mongoose";
 import { Course } from "../models/Course.js";
+import { Category } from "../models/Category.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+
+async function ensureCategoryExists(name) {
+  if (!name || !name.trim()) return name;
+  const trimmed = name.trim();
+  let cat = await Category.findOne({ name: { $regex: new RegExp(`^${trimmed}$`, "i") } });
+  if (!cat) {
+    const slug = trimmed.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    cat = await Category.create({ name: trimmed, icon: "", slug });
+  }
+  return cat.name;
+}
 
 router.post("/:id/reviews", requireAuth, async (req, res) => {
   const { id } = req.params;
@@ -145,12 +157,13 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
       });
     }
 
+    const categoryName = await ensureCategoryExists(category);
     const payload = {
       title,
       description,
       thumbnail,
       instructor,
-      category,
+      category: categoryName,
       price,
       level,
       isPublished: true
@@ -333,7 +346,11 @@ router.delete("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), asy
 
 router.put("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
-    const course = await Course.findByIdAndUpdate(req.params.id, req.body, {
+    const update = { ...req.body };
+    if (update.category && update.category.trim()) {
+      update.category = await ensureCategoryExists(update.category);
+    }
+    const course = await Course.findByIdAndUpdate(req.params.id, update, {
       new: true
     });
     if (!course) {

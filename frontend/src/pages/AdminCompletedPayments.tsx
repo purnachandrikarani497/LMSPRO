@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { DollarSign, Download } from "lucide-react";
+import { IndianRupee, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, ApiAdminEnrollment } from "@/lib/api";
 import { format, startOfWeek, startOfMonth, startOfYear } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -88,7 +89,7 @@ const AdminCompletedPayments = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-heading text-2xl font-bold text-foreground flex items-center gap-2">
-              <DollarSign className="h-6 w-6 text-secondary" />
+              <IndianRupee className="h-6 w-6 text-secondary" />
               Completed Payments
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -177,7 +178,7 @@ const AdminCompletedPayments = () => {
                       {enrollment.student?.email || "-"}
                     </TableCell>
                     <TableCell className="text-sm font-semibold">
-                      ${enrollment.course?.price?.toFixed(2) ?? "0.00"}
+                      {formatPrice(enrollment.course?.price)}
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                       {format(new Date(enrollment.createdAt), "dd MMM yyyy")}

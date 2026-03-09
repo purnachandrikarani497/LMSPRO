@@ -3,9 +3,9 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CourseCard from "@/components/CourseCard";
-import { categories, type Course } from "@/lib/mockData";
+import { type Course } from "@/lib/mockData";
 import { useQuery } from "@tanstack/react-query";
-import { api, ApiCourse, mapApiCourseToCourse } from "@/lib/api";
+import { api, ApiCourse, ApiCategory, mapApiCourseToCourse } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useSearchParams } from "react-router-dom";
 
@@ -25,7 +25,17 @@ const Courses = () => {
     queryFn: () => api.getCourses()
   });
 
+  const { data: apiCategories = [] } = useQuery<ApiCategory[]>({
+    queryKey: ["categories"],
+    queryFn: () => api.getCategories()
+  });
+
   const sourceCourses: Course[] = (apiCourses || []).map(mapApiCourseToCourse);
+  const filterCategories = apiCategories.length > 0
+    ? apiCategories
+    : [...new Set(sourceCourses.map((c) => (c.category || "General").trim()).filter(Boolean))]
+        .sort()
+        .map((name) => ({ _id: name, name }));
 
   const filtered = sourceCourses.filter((c) => {
     const title = c.title || "";
@@ -69,8 +79,10 @@ const Courses = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
+              {filterCategories.map((c) => (
+                <SelectItem key={c.name} value={c.name}>
+                  {c.icon ? `${c.icon} ` : ""}{c.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>

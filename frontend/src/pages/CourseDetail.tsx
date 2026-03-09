@@ -1,20 +1,49 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, MoreHorizontal } from "lucide-react";
+import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, Trash2, Copy, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, ApiNoteEntry, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
+import { formatPrice } from "@/lib/utils";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
 const tabs = ["Overview", "Notes", "Announcements", "Reviews"];
+
+type NoteWithLesson = ApiNoteEntry & { lessonId: string; lessonTitle: string; index: number };
 
 function formatWatchTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "0:00";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Parse "M:SS" or "H:MM:SS" to seconds */
+function parseDurationToSeconds(duration: string | undefined): number {
+  if (!duration?.trim()) return 0;
+  const parts = duration.trim().split(":").map((p) => parseInt(p.replace(/\D/g, ""), 10));
+  if (parts.length === 2) return parts[0] * 60 + (parts[1] || 0);
+  if (parts.length >= 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+  if (parts.length === 1) return parts[0] || 0;
+  return 0;
+}
+
+/** Format total seconds as "X hr Y min" or "X min" for display */
+function formatTotalDuration(seconds: number): string {
+  if (!seconds || !isFinite(seconds)) return "—";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0 && m > 0) return `${h} hr ${m} min`;
+  if (h > 0) return `${h} hr`;
+  return `${m} min`;
 }
 
 const CourseDetail = () => {
@@ -33,6 +62,11 @@ const CourseDetail = () => {
   const [activeTab, setActiveTab] = useState("Overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [note, setNote] = useState("");
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [notesFilter, setNotesFilter] = useState<"current" | "all">("current");
+  const [notesSort, setNotesSort] = useState<"recent" | "oldest">("recent");
+  const [editingNote, setEditingNote] = useState<{ lessonId: string; index: number } | null>(null);
+  const seekToRef = useRef<((seconds: number) => void) | null>(null);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
   const [hoverRating, setHoverRating] = useState(0);
@@ -43,8 +77,6 @@ const CourseDetail = () => {
     enabled: !!courseParam
   });
 
-  console.log("apiCourse:", apiCourse);
-
   const currentUserId = getUserIdFromToken();
   const userReview = useMemo(() => {
     if (!apiCourse?.reviews || !currentUserId) return null;
@@ -52,24 +84,6 @@ const CourseDetail = () => {
   }, [apiCourse?.reviews, currentUserId]);
 
   const hasToken = typeof window !== "undefined" && !!window.localStorage.getItem("lms_token");
-
-  // Load note from local storage
-  useEffect(() => {
-     if (courseParam) {
-       const savedNote = localStorage.getItem(`note_${courseParam}`);
-       setNote(savedNote || "");
-     }
-   }, [courseParam]);
-
-  const handleSaveNote = () => {
-    if (courseParam) {
-      localStorage.setItem(`note_${courseParam}`, note);
-      toast({
-        title: "Note saved",
-        description: "Your note has been saved successfully.",
-      });
-    }
-  };
 
   const reviewMutation = useMutation({
     mutationFn: (data: { rating: number; comment: string }) => api.submitReview(courseParam, data),
@@ -103,7 +117,7 @@ const CourseDetail = () => {
     }
   };
 
-  const { data: enrollments } = useQuery<ApiEnrollment[]>({
+  const { data: enrollments, isLoading: enrollmentsLoading } = useQuery<ApiEnrollment[]>({
     queryKey: ["enrollments"],
     queryFn: () => api.getEnrollments(),
     enabled: hasToken && !!courseParam,
@@ -117,7 +131,7 @@ const CourseDetail = () => {
     retry: false
   });
 
-  const { data: watchData } = useQuery<ApiWatchTimestamps>({
+  const { data: watchData, isFetched: watchDataFetched } = useQuery<ApiWatchTimestamps>({
     queryKey: ["watchTimestamps", courseParam],
     queryFn: () => api.getWatchTimestamps(courseParam),
     enabled: hasToken && !!courseParam && (enrollments?.some((e) => (e.course?._id || e.course?.id) === courseParam) ?? false),
@@ -126,13 +140,17 @@ const CourseDetail = () => {
 
   const watchTimestamps = watchData?.timestamps ?? {};
   const watchDurations = watchData?.durations ?? {};
+  const watchNotes = useMemo(() => watchData?.notes ?? {}, [watchData?.notes]);
 
   const saveTimestampRef = useRef<ReturnType<typeof setTimeout>>();
   const handleTimeReport = useCallback((currentTime: number, videoDuration: number) => {
+    setCurrentVideoTime(currentTime);
     if (!courseParam || !lessonId) return;
     queryClient.setQueryData<ApiWatchTimestamps>(["watchTimestamps", courseParam], (old) => ({
+      ...old,
       timestamps: { ...(old?.timestamps ?? {}), [lessonId]: currentTime },
-      durations: { ...(old?.durations ?? {}), [lessonId]: videoDuration }
+      durations: { ...(old?.durations ?? {}), [lessonId]: videoDuration },
+      notes: old?.notes ?? {}
     }));
     if (saveTimestampRef.current) clearTimeout(saveTimestampRef.current);
     saveTimestampRef.current = setTimeout(() => {
@@ -168,6 +186,146 @@ const CourseDetail = () => {
   const lessons = useMemo(() => course?.lessonItems ?? [], [course?.lessonItems]);
   const selectedLesson = lessonId ? lessons.find((l) => l._id === lessonId) ?? lessons[0] : null;
   const selectedIndex = selectedLesson ? lessons.findIndex((l) => l._id === selectedLesson._id) : -1;
+  const activeNoteLessonId = selectedLesson?._id ?? lessonId;
+
+  useEffect(() => {
+    setNote("");
+    setEditingNote(null);
+  }, [activeNoteLessonId]);
+
+  // When opening course without a lesson, auto-navigate to last watched lesson (or first)
+  useEffect(() => {
+    if (lessonId || !courseParam || !isEnrolled || !course || lessons.length === 0) return;
+    if (isEnrolled && !watchDataFetched) return;
+    const lastWatched = lessons.reduce<{ lesson: (typeof lessons)[0]; index: number } | null>((best, lesson, i) => {
+      const lid = lesson._id;
+      if (!lid) return best;
+      const ts = watchTimestamps[lid] ?? 0;
+      const dur = watchDurations[lid] ?? parseDurationToSeconds(lesson.duration);
+      const completed = completedLessonIds.has(lid);
+      const inProgress = ts > 0 && (dur <= 0 || ts < dur * 0.95);
+      if (!inProgress && completed) return best;
+      if (inProgress && (!best || i > best.index)) return { lesson, index: i };
+      if (!best && !completed) return { lesson, index: i };
+      return best;
+    }, null);
+    const target = lastWatched?.lesson ?? lessons[0];
+    if (target?._id) navigate(`/course/${courseParam}/lesson/${target._id}`, { replace: true });
+  }, [lessonId, courseParam, isEnrolled, course, lessons, watchTimestamps, watchDurations, completedLessonIds, navigate, watchDataFetched]);
+
+  const allNotesFlattened = useMemo((): NoteWithLesson[] => {
+    const out: NoteWithLesson[] = [];
+    Object.entries(watchNotes).forEach(([lid, arr]) => {
+      const raw = Array.isArray(arr) ? arr : (typeof arr === "string" && arr ? [{ text: arr, createdAt: "" }] : []);
+      const lesson = lessons.find((l) => l._id === lid);
+      raw.forEach((entry, i) => {
+        out.push({
+          ...entry,
+          lessonId: lid,
+          lessonTitle: lesson?.title ?? "Lesson",
+          index: i,
+          videoTimestamp: entry.videoTimestamp ?? 0
+        });
+      });
+    });
+    return out.sort((a, b) => {
+      const ta = new Date(a.createdAt).getTime();
+      const tb = new Date(b.createdAt).getTime();
+      return notesSort === "recent" ? tb - ta : ta - tb;
+    });
+  }, [watchNotes, lessons, notesSort]);
+
+  const displayedNotes = useMemo((): NoteWithLesson[] => {
+    if (notesFilter === "all") return allNotesFlattened;
+    return allNotesFlattened.filter((n) => n.lessonId === activeNoteLessonId);
+  }, [allNotesFlattened, notesFilter, activeNoteLessonId]);
+
+  const savedNotesForLesson = useMemo((): ApiNoteEntry[] => {
+    if (!activeNoteLessonId) return [];
+    const raw = watchNotes[activeNoteLessonId];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "string" && raw) return [{ text: raw, createdAt: "", videoTimestamp: 0 }];
+    return [];
+  }, [activeNoteLessonId, watchNotes]);
+
+  const saveNoteMutation = useMutation({
+    mutationFn: ({ courseId, lessonId, note, videoTimestamp }: { courseId: string; lessonId: string; note: string; videoTimestamp?: number }) =>
+      api.saveNote(courseId, lessonId, note, videoTimestamp),
+    onSuccess: (data, { courseId, lessonId }) => {
+      setNote("");
+      setEditingNote(null);
+      queryClient.setQueryData<ApiWatchTimestamps>(["watchTimestamps", courseId], (old) => ({
+        timestamps: old?.timestamps ?? {},
+        durations: old?.durations ?? {},
+        notes: { ...(old?.notes ?? {}), [lessonId]: data.note ?? old?.notes?.[lessonId] ?? [] }
+      }));
+      toast({ title: "Note saved", description: "Your note has been saved successfully." });
+    },
+    onError: () => {
+      toast({ title: "Failed to save note", description: "Please try again.", variant: "destructive" });
+    }
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ courseId, lessonId, noteIndex, note }: { courseId: string; lessonId: string; noteIndex: number; note: string }) =>
+      api.updateNote(courseId, lessonId, noteIndex, note),
+    onSuccess: (data, { courseId, lessonId }) => {
+      setNote("");
+      setEditingNote(null);
+      queryClient.setQueryData<ApiWatchTimestamps>(["watchTimestamps", courseId], (old) => ({
+        timestamps: old?.timestamps ?? {},
+        durations: old?.durations ?? {},
+        notes: { ...(old?.notes ?? {}), [lessonId]: data.note ?? old?.notes?.[lessonId] ?? [] }
+      }));
+      toast({ title: "Note updated", description: "Your note has been updated." });
+    },
+    onError: () => {
+      toast({ title: "Failed to update note", description: "Please try again.", variant: "destructive" });
+    }
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: ({ courseId, lessonId, noteIndex }: { courseId: string; lessonId: string; noteIndex: number }) =>
+      api.deleteNote(courseId, lessonId, noteIndex),
+    onSuccess: (data, { courseId, lessonId }) => {
+      queryClient.setQueryData<ApiWatchTimestamps>(["watchTimestamps", courseId], (old) => ({
+        timestamps: old?.timestamps ?? {},
+        durations: old?.durations ?? {},
+        notes: { ...(old?.notes ?? {}), [lessonId]: data.note ?? [] }
+      }));
+      toast({ title: "Note deleted", description: "Your note has been removed." });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete note", description: "Please try again.", variant: "destructive" });
+    }
+  });
+
+  const handleSaveNote = () => {
+    if (editingNote) {
+      if (courseParam) {
+        updateNoteMutation.mutate({
+          courseId: courseParam,
+          lessonId: editingNote.lessonId,
+          noteIndex: editingNote.index,
+          note
+        });
+      }
+    } else if (courseParam && activeNoteLessonId) {
+      saveNoteMutation.mutate({
+        courseId: courseParam,
+        lessonId: activeNoteLessonId,
+        note,
+        videoTimestamp: Math.round(currentVideoTime)
+      });
+    } else {
+      toast({ title: "Select a lesson", description: "Please select a lesson to add notes.", variant: "destructive" });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setNote("");
+    setEditingNote(null);
+  };
   const prevLesson = selectedIndex > 0 ? lessons[selectedIndex - 1] : null;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;
   const [autoplay, setAutoplay] = useState(false);
@@ -199,11 +357,27 @@ const CourseDetail = () => {
     }
   }, [sections, selectedLesson]);
 
-  const totalDuration = course?.lessonItems?.reduce((acc, l) => {
-    const d = l.duration?.match(/(\d+)/);
-    return acc + (d ? parseInt(d[1], 10) : 0);
-  }, 0) ?? 0;
-  const totalHours = totalDuration ? `${Math.round(totalDuration / 60)} hours` : course?.duration || "—";
+  // Sum actual lesson durations from all sections — never use course.duration (stored/manual field)
+  const totalDuration = (course?.lessonItems ?? []).reduce((acc, l) => acc + parseDurationToSeconds(l.duration), 0);
+  const totalHours = formatTotalDuration(totalDuration);
+
+  const { totalCourseSeconds, watchTimeSeconds, progressPercent } = useMemo(() => {
+    const lessons = course?.lessonItems ?? [];
+    let total = 0;
+    let watchTime = 0;
+    for (const l of lessons) {
+      const lid = l._id;
+      const durationFromApi = lid ? (watchDurations[lid] ?? 0) : 0;
+      const durationFromLesson = parseDurationToSeconds(l.duration);
+      const lessonDuration = durationFromApi > 0 ? durationFromApi : durationFromLesson;
+      if (lessonDuration <= 0) continue;
+      total += lessonDuration;
+      const ts = lid ? (watchTimestamps[lid] ?? 0) : 0;
+      watchTime += Math.min(ts, lessonDuration);
+    }
+    const pct = total > 0 ? Math.min(100, Math.round((watchTime / total) * 100)) : 0;
+    return { totalCourseSeconds: total, watchTimeSeconds: watchTime, progressPercent: pct };
+  }, [course?.lessonItems, watchTimestamps, watchDurations]);
 
   if (isLoading && !course) {
     return (
@@ -258,7 +432,7 @@ const CourseDetail = () => {
                     <strong>Level:</strong> {course.level}
                   </span>
                   <span className="text-gray-600">
-                    <strong>Price:</strong> ${course.price}
+                    <strong>Price:</strong> {formatPrice(course.price)}
                   </span>
                 </div>
               </div>
@@ -293,8 +467,9 @@ const CourseDetail = () => {
     );
   }
 
-  // Non-enrolled: show course detail landing page
-  if (!isEnrolled && !lessonId) {
+  // Non-enrolled: show course detail landing page (only after we've confirmed enrollment status)
+  const enrollmentKnown = !enrollmentsLoading || enrollments !== undefined;
+  if (enrollmentKnown && !isEnrolled && !lessonId) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Helmet>
@@ -404,7 +579,7 @@ const CourseDetail = () => {
                     />
                   )}
                   <div className="p-6 space-y-4">
-                    <div className="text-3xl font-bold text-gray-900">${course.price}</div>
+                    <div className="text-3xl font-bold text-gray-900">{formatPrice(course.price)}</div>
                     <Button
                       size="lg"
                       className="w-full bg-amber-500 font-semibold text-white hover:bg-amber-600 text-lg py-6"
@@ -562,33 +737,99 @@ const CourseDetail = () => {
                 <Trophy className="h-4 w-4" />
                 Your progress
               </button>
-              <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10 rounded-lg border border-border bg-card p-3 shadow-lg min-w-[180px]">
+              <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10 rounded-lg border border-border bg-card p-3 shadow-lg min-w-[120px]">
                 <p className="text-sm font-medium text-foreground">Progress</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {completedLessonIds.size} of {lessons.length} lessons completed
-                </p>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
+                <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-amber-500"
-                    style={{ width: `${lessons.length ? (completedLessonIds.size / lessons.length) * 100 : 0}%` }}
+                    className="h-full rounded-full bg-amber-500 transition-all"
+                    style={{ width: `${progressPercent}%` }}
                   />
                 </div>
+                <p className="text-xs font-medium text-amber-600 mt-1">{progressPercent}% complete</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard?.writeText(window.location.href);
-                toast({ title: "Link copied", description: "Course link copied to clipboard" });
-              }}
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <Share2 className="h-4 w-4" />
-              Share
-            </button>
-            <button type="button" className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label="More options">
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {typeof navigator !== "undefined" && navigator.share && (
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await navigator.share({
+                          title: course?.title ?? "Course",
+                          url: window.location.href,
+                          text: `Check out ${course?.title ?? "this course"} on LearnHub`,
+                        });
+                        toast({ title: "Shared", description: "Thanks for sharing!" });
+                      } catch (err) {
+                        if ((err as Error).name !== "AbortError") {
+                          navigator.clipboard?.writeText(window.location.href);
+                          toast({ title: "Link copied", description: "Course link copied to clipboard" });
+                        }
+                      }
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share...
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => {
+                    navigator.clipboard?.writeText(window.location.href);
+                    toast({ title: "Link copied", description: "Course link copied to clipboard" });
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy link
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const u = encodeURIComponent(window.location.href);
+                    const t = encodeURIComponent(`${course?.title ?? "Course"} - LearnHub`);
+                    window.open(`https://twitter.com/intent/tweet?url=${u}&text=${t}`, "_blank", "noopener,noreferrer,width=550,height=420");
+                  }}
+                >
+                  <span className="mr-2 text-[0.9rem] font-bold">𝕏</span>
+                  Share on X
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const u = encodeURIComponent(window.location.href);
+                    window.open(`https://www.facebook.com/sharer/sharer.php?u=${u}`, "_blank", "noopener,noreferrer,width=550,height=420");
+                  }}
+                >
+                  <span className="mr-2 text-sm font-semibold text-[#1877F2]">f</span>
+                  Share on Facebook
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const u = encodeURIComponent(window.location.href);
+                    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${u}`, "_blank", "noopener,noreferrer,width=550,height=420");
+                  }}
+                >
+                  <span className="mr-2 text-sm font-semibold text-[#0A66C2]">in</span>
+                  Share on LinkedIn
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const subj = encodeURIComponent(`${course?.title ?? "Course"} - LearnHub`);
+                    const body = encodeURIComponent(`Check out this course: ${window.location.href}`);
+                    window.location.href = `mailto:?subject=${subj}&body=${body}`;
+                  }}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Share via Email
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
@@ -596,10 +837,10 @@ const CourseDetail = () => {
       {/* Udemy-style: fixed right sidebar + scrollable left content */}
       <div className="flex min-h-[calc(100vh-44px)]">
         {/* Main content area */}
-        <div className={`flex-1 min-w-0 overflow-y-auto transition-[margin] duration-300 ${sidebarCollapsed ? "" : "lg:mr-[350px]"}`}>
-          {/* Video player — Udemy style: grows taller in expanded view */}
+        <div className={`flex flex-col flex-1 min-w-0 overflow-y-auto transition-[margin] duration-300 ${sidebarCollapsed ? "" : "lg:mr-[350px]"}`}>
+          {/* Video player — fixed dimensions, never resizes when tab content changes */}
           <div
-            className="relative w-full bg-black transition-[height] duration-300"
+            className="shrink-0 relative w-full bg-black transition-[height] duration-300"
             style={sidebarCollapsed
               ? { height: '82vh', minHeight: '450px', maxHeight: '800px' }
               : { height: '58vh', minHeight: '350px', maxHeight: '550px' }
@@ -637,6 +878,7 @@ const CourseDetail = () => {
                       return (
                         <SecureVideoPlayer
                           src={videoUrl}
+                          poster={(course.image && getThumbnailSrc(course.image)) || undefined}
                           title={selectedLesson.title}
                           isEmbed={isEmbed}
                           watermarkText={isEmbed ? watermark : undefined}
@@ -652,6 +894,7 @@ const CourseDetail = () => {
                           onExpandToggle={() => setSidebarCollapsed(prev => !prev)}
                           initialTime={selectedLesson._id ? watchTimestamps[selectedLesson._id] : undefined}
                           onTimeReport={handleTimeReport}
+                          seekToRef={seekToRef}
                         />
                       );
                     })()
@@ -689,8 +932,8 @@ const CourseDetail = () => {
             </div>
           </div>
 
-          {/* Below-video content */}
-          <div className="px-6 lg:px-16 py-4 space-y-4">
+          {/* Below-video content — contain overflow so text wraps, player stays fixed */}
+          <div className="min-w-0 overflow-x-hidden shrink-0 px-6 lg:px-16 py-4 space-y-4">
             {/* Tabs */}
             <div className="border-b border-gray-200 sticky top-0 z-10 bg-white">
               <nav className="flex gap-8 overflow-x-auto">
@@ -714,12 +957,11 @@ const CourseDetail = () => {
             </div>
 
             {activeTab === "Overview" && (
-              <div className="space-y-8 py-4">
+              <div className="space-y-8 py-4 min-w-0 break-words">
+                {selectedLesson && (
+                  <p className="text-lg font-semibold text-gray-900">{selectedLesson.title}</p>
+                )}
                 <div className="space-y-4">
-                  <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-                    {course.description.split('.')[0]}.
-                  </h1>
-                  
                   <div className="flex flex-wrap items-center gap-6 text-sm">
                     <div className="flex items-center gap-1">
                       <span className="font-bold text-amber-600">{course.rating.toFixed(1)}</span>
@@ -746,45 +988,198 @@ const CourseDetail = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Description - course description (not video titles) */}
+                <section>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
+                  <div className="text-gray-700 whitespace-pre-wrap leading-relaxed break-words">
+                    {course.description || "No description available."}
+                  </div>
+                </section>
+
+                {/* Instructor section - Udemy-style */}
+                <section>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Instructor</h2>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="relative w-14 h-14 flex-shrink-0">
+                      <div className="absolute inset-0 rounded-full bg-amber-100 flex items-center justify-center border-2 border-amber-200">
+                        <span className="text-lg font-bold text-amber-600">
+                          {(course.instructor || "?").charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      {apiCourse?.instructorPhoto && (
+                        <img
+                          src={apiCourse.instructorPhoto}
+                          alt={course.instructor || "Instructor"}
+                          className="relative z-10 w-14 h-14 rounded-full object-cover border-2 border-gray-200"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-bold text-gray-900">{course.instructor || "Instructor"}</h3>
+                      {apiCourse?.instructorTitle && (
+                        <p className="text-sm text-amber-600 font-medium mt-0.5">{apiCourse.instructorTitle}</p>
+                      )}
+                      {apiCourse?.instructorBio && (
+                        <p className="text-gray-600 text-sm mt-3 leading-relaxed whitespace-pre-wrap break-words">
+                          {apiCourse.instructorBio}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </section>
               </div>
             )}
 
             {activeTab === "Notes" && (
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">My Notes</h2>
-                <div className="mt-4">
-                  <textarea
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    rows={4}
-                    placeholder="Add a note..."
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  ></textarea>
-                  <Button className="mt-2" onClick={handleSaveNote}>Save Note</Button>
-                </div>
+              <div className="min-w-0 break-words">
+                <h2 className="text-lg font-bold text-gray-900">Notes</h2>
+                {activeNoteLessonId ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-800 text-white text-xs font-medium">
+                        {formatWatchTime(currentVideoTime)}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {editingNote ? "Edit your note" : `Add a note at ${formatWatchTime(currentVideoTime)}`}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="relative max-w-full">
+                        <textarea
+                          className="w-full max-w-full p-3 border border-gray-300 rounded-md resize-none text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 break-words"
+                          rows={4}
+                          placeholder="Add a note for this lesson..."
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          maxLength={1000}
+                        />
+                        <span className="absolute top-2 right-2 text-xs text-gray-400">{note.length}/1000</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button
+                          onClick={handleSaveNote}
+                          disabled={(saveNoteMutation.isPending || updateNoteMutation.isPending) || !note.trim()}
+                          className="bg-amber-500 hover:bg-amber-600"
+                        >
+                          {(saveNoteMutation.isPending || updateNoteMutation.isPending) ? "Saving..." : editingNote ? "Save note" : "Save note"}
+                        </Button>
+                        {editingNote && (
+                          <Button variant="outline" onClick={handleCancelEdit}>
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 flex-wrap pt-2 border-t border-gray-200">
+                      <select
+                        value={notesFilter}
+                        onChange={(e) => setNotesFilter(e.target.value as "current" | "all")}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                      >
+                        <option value="current">This lecture</option>
+                        <option value="all">All lectures</option>
+                      </select>
+                      <select
+                        value={notesSort}
+                        onChange={(e) => setNotesSort(e.target.value as "recent" | "oldest")}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                      >
+                        <option value="recent">Sort by most recent</option>
+                        <option value="oldest">Sort by oldest</option>
+                      </select>
+                    </div>
+                    {displayedNotes.length > 0 && (
+                      <ul className="space-y-4 pt-2">
+                        {displayedNotes.map((entry, idx) => (
+                          <li key={`${entry.lessonId}-${entry.index}`} className="border border-gray-200 rounded-lg p-4 bg-white hover:bg-gray-50/50 min-w-0 overflow-hidden">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => seekToRef.current?.(entry.videoTimestamp ?? 0)}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700"
+                                  >
+                                    {formatWatchTime(entry.videoTimestamp ?? 0)}
+                                  </button>
+                                  <span className="text-xs text-gray-500 truncate max-w-[200px]">{entry.lessonTitle}</span>
+                                </div>
+                                <p className="text-gray-800 whitespace-pre-wrap text-sm break-words">{entry.text}</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNote({ lessonId: entry.lessonId, index: entry.index });
+                                    setNote(entry.text);
+                                  }}
+                                  className="p-1.5 rounded text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (courseParam && window.confirm("Delete this note?")) {
+                                      deleteNoteMutation.mutate({
+                                        courseId: courseParam,
+                                        lessonId: entry.lessonId,
+                                        noteIndex: entry.index
+                                      });
+                                    }
+                                  }}
+                                  className="p-1.5 rounded text-gray-500 hover:bg-red-100 hover:text-red-600"
+                                  title="Delete"
+                                  disabled={deleteNoteMutation.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {displayedNotes.length === 0 && (
+                      <p className="text-sm text-gray-500 py-4">
+                        {notesFilter === "all" ? "No notes yet across all lectures." : "No notes yet for this lecture."}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-gray-500">Select a lesson from the sidebar to add notes.</p>
+                )}
               </div>
             )}
 
             {activeTab === "Announcements" && (
-              <div>
+              <div className="min-w-0 break-words">
                 <h2 className="text-lg font-bold text-gray-900">Announcements</h2>
                 <div className="mt-4 space-y-4">
-                  <div className="p-4 border border-gray-200 rounded-md">
-                    <p className="font-semibold">New Course Content!</p>
-                    <p className="text-sm text-gray-600">We've added a new module on advanced topics. Check it out!</p>
-                    <p className="text-xs text-gray-400 mt-2">Posted on: 2024-07-20</p>
-                  </div>
-                  <div className="p-4 border border-gray-200 rounded-md">
-                    <p className="font-semibold">Live Q&A Session</p>
-                    <p className="text-sm text-gray-600">Join us for a live Q&A session with the instructor next week.</p>
-                    <p className="text-xs text-gray-400 mt-2">Posted on: 2024-07-15</p>
-                  </div>
+                  {apiCourse?.announcements && apiCourse.announcements.length > 0 ? (
+                    apiCourse.announcements.map((ann, idx) => (
+                      <div key={idx} className="p-4 border border-gray-200 rounded-md bg-white">
+                        <p className="font-semibold">{ann.title}</p>
+                        <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{ann.content}</p>
+                        {ann.postedAt && (
+                          <p className="text-xs text-gray-400 mt-2">
+                            Posted on: {new Date(ann.postedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 py-4">No announcements yet.</p>
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === "Reviews" && (
-              <div>
+              <div className="min-w-0 break-words">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Student Feedback</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-1">

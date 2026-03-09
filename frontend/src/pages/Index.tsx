@@ -6,12 +6,17 @@ import CourseCard from "@/components/CourseCard";
 import { categories as staticCategories, type Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
-import { api, type ApiCourse, mapApiCourseToCourse } from "@/lib/api";
+import { api, type ApiCourse, type ApiCategory, mapApiCourseToCourse } from "@/lib/api";
 
 const Index = () => {
   const { data: apiCourses, isLoading } = useQuery<ApiCourse[]>({
     queryKey: ["courses"],
     queryFn: () => api.getCourses()
+  });
+
+  const { data: apiCategories = [] } = useQuery<ApiCategory[]>({
+    queryKey: ["categories"],
+    queryFn: () => api.getCategories()
   });
 
   const featured: Course[] =
@@ -25,27 +30,24 @@ const Index = () => {
     categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
   });
 
-  const dynamicCategoriesFromData =
-    categoryCounts.size > 0
-      ? Array.from(categoryCounts.entries())
-        .filter(([, count]) => count > 0)
-        .map(([name, count]) => {
-          const base = staticCategories.find((cat) => cat.name === name);
-          return {
-            name,
-            icon: base?.icon ?? "📚",
-            count
-          };
-        })
-      : [];
-
+  // Prefer API categories (from Settings) so all managed categories show; merge with course counts
   const dynamicCategories =
-    dynamicCategoriesFromData.length > 0 ? dynamicCategoriesFromData : staticCategories;
+    apiCategories.length > 0
+      ? apiCategories.map((c) => ({
+          name: c.name,
+          icon: c.icon || "📚",
+          count: categoryCounts.get(c.name) ?? 0
+        }))
+      : categoryCounts.size > 0
+        ? Array.from(categoryCounts.entries())
+            .filter(([, count]) => count > 0)
+            .map(([name, count]) => {
+              const staticCat = staticCategories.find((cat) => cat.name === name);
+              return { name, icon: staticCat?.icon || "📚", count };
+            })
+        : staticCategories;
 
-  const totalCourses =
-    dynamicCategories.length > 0
-      ? dynamicCategories.reduce((acc, cat) => acc + (cat.count ?? 0), 0)
-      : 0;
+  const totalCourses = (apiCourses || []).length;
 
   return (
     <div className="min-h-screen bg-background">

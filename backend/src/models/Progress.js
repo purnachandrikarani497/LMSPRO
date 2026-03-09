@@ -7,6 +7,7 @@ const progressSchema = new mongoose.Schema(
     lessonsCompleted: [{ type: mongoose.Schema.Types.ObjectId }],
     watchTimestamps: { type: Map, of: Number, default: {} },
     lessonDurations: { type: Map, of: Number, default: {} },
+    notes: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
     status: { type: String, enum: ["in_progress", "completed"], default: "in_progress" },
     score: { type: Number, default: 0 }
   },
