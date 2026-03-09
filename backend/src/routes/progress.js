@@ -71,8 +71,21 @@ router.post("/:courseId/lessons/:lessonId/timestamp", requireAuth, async (req, r
     if (typeof duration === "number" && duration > 0) {
       progress.lessonDurations.set(req.params.lessonId, duration);
     }
+    let autoCompleted = false;
+    if (typeof duration === "number" && duration > 0 && timestamp / duration >= 0.9) {
+      const lessonId = String(req.params.lessonId);
+      const alreadyCompleted = progress.lessonsCompleted.some((id) => String(id) === lessonId);
+      if (!alreadyCompleted) {
+        progress.lessonsCompleted.push(lessonId);
+        autoCompleted = true;
+      }
+    }
+    const course = await Course.findById(req.params.courseId);
+    if (course && progress.lessonsCompleted.length >= course.lessons.length) {
+      progress.status = "completed";
+    }
     await progress.save();
-    res.json({ lessonId: req.params.lessonId, timestamp, duration });
+    res.json({ lessonId: req.params.lessonId, timestamp, duration, autoCompleted });
   } catch (error) {
     res.status(500).json({ message: "Failed to save timestamp" });
   }

@@ -154,7 +154,13 @@ const CourseDetail = () => {
     }));
     if (saveTimestampRef.current) clearTimeout(saveTimestampRef.current);
     saveTimestampRef.current = setTimeout(() => {
-      api.saveWatchTimestamp(courseParam, lessonId, currentTime, videoDuration).catch(() => {});
+      api.saveWatchTimestamp(courseParam, lessonId, currentTime, videoDuration)
+        .then((res) => {
+          if (res?.autoCompleted) {
+            queryClient.invalidateQueries({ queryKey: ["progress", courseParam] });
+          }
+        })
+        .catch(() => {});
     }, 300);
   }, [courseParam, lessonId, queryClient]);
 
@@ -182,6 +188,18 @@ const CourseDetail = () => {
   const isEnrolled = enrollments?.some((e) => (e.course?._id || e.course?.id) === courseParam) ?? false;
   const completedLessonIds = new Set(progress?.lessonsCompleted ?? []);
 
+  const isLessonComplete = useCallback(
+    (lesson: { _id?: string }) => {
+      const lid = lesson._id;
+      if (!lid) return false;
+      if (completedLessonIds.has(lid)) return true;
+      const dur = watchDurations[lid];
+      const ts = watchTimestamps[lid];
+      return typeof dur === "number" && dur > 0 && typeof ts === "number" && ts / dur >= 0.9;
+    },
+    [completedLessonIds, watchDurations, watchTimestamps]
+  );
+
   const course = apiCourse ? mapApiCourseToCourse(apiCourse) : null;
   const lessons = useMemo(() => course?.lessonItems ?? [], [course?.lessonItems]);
   const selectedLesson = lessonId ? lessons.find((l) => l._id === lessonId) ?? lessons[0] : null;
@@ -203,7 +221,7 @@ const CourseDetail = () => {
       const ts = watchTimestamps[lid] ?? 0;
       const dur = watchDurations[lid] ?? parseDurationToSeconds(lesson.duration);
       const completed = completedLessonIds.has(lid);
-      const inProgress = ts > 0 && (dur <= 0 || ts < dur * 0.95);
+      const inProgress = ts > 0 && (dur <= 0 || ts < dur * 0.9);
       if (!inProgress && completed) return best;
       if (inProgress && (!best || i > best.index)) return { lesson, index: i };
       if (!best && !completed) return { lesson, index: i };
@@ -1287,7 +1305,7 @@ const CourseDetail = () => {
               sections.map((section) => {
                   const isExpanded = expandedSections.has(section.title);
                   const sectionLessons = section.lessons || [];
-                  const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
+                  const completedCount = sectionLessons.filter(isLessonComplete).length;
 
                   return (
                     <div key={section.title} className="border-b border-gray-200">
@@ -1321,7 +1339,7 @@ const CourseDetail = () => {
                           {sectionLessons.length > 0 ? (
                             sectionLessons.map((lesson, i) => {
                               const lid = lesson._id;
-                              const completed = lid ? completedLessonIds.has(lid) : false;
+                              const completed = isLessonComplete(lesson);
                               const canOpen = isEnrolled && !!lid;
                               const isActive = selectedLesson?._id === lid;
                               const savedTs = lid ? watchTimestamps[lid] : undefined;
@@ -1363,7 +1381,7 @@ const CourseDetail = () => {
                                       {isActive && (
                                         <span className="text-xs font-medium text-amber-600">Now playing</span>
                                       )}
-                                      {!isActive && watchPct > 0 && watchPct < 95 && !completed && (
+                                      {!isActive && watchPct > 0 && watchPct < 90 && !completed && (
                                         <span className="text-xs font-medium text-amber-600">Resume at {formatWatchTime(savedTs!)}</span>
                                       )}
                                       {lesson.duration && (
@@ -1419,7 +1437,7 @@ const CourseDetail = () => {
                 sections.map((section) => {
                   const isExpanded = expandedSections.has(section.title);
                   const sectionLessons = section.lessons || [];
-                  const completedCount = sectionLessons.filter(l => l._id && completedLessonIds.has(l._id)).length;
+                  const completedCount = sectionLessons.filter(isLessonComplete).length;
 
                   return (
                     <div key={section.title} className="border-b border-gray-200 last:border-b-0">
@@ -1449,7 +1467,7 @@ const CourseDetail = () => {
                         <div className="divide-y divide-gray-100 pl-6">
                           {sectionLessons.map((lesson, i) => {
                             const lid = lesson._id;
-                            const completed = lid ? completedLessonIds.has(lid) : false;
+                            const completed = isLessonComplete(lesson);
                             const canOpen = isEnrolled && !!lid;
                             return (
                               <div

@@ -518,7 +518,7 @@ export const api = {
     });
   },
   saveWatchTimestamp(courseId: string, lessonId: string, timestamp: number, duration?: number) {
-    return request<{ lessonId: string; timestamp: number }>(`/progress/${courseId}/lessons/${lessonId}/timestamp`, "POST", {
+    return request<{ lessonId: string; timestamp: number; autoCompleted?: boolean }>(`/progress/${courseId}/lessons/${lessonId}/timestamp`, "POST", {
       timestamp,
       ...(duration != null ? { duration } : {})
     });

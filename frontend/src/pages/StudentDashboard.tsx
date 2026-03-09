@@ -38,6 +38,11 @@ const StudentDashboard = () => {
     queryFn: () => api.getEnrollments()
   });
 
+  const { data: certificates } = useQuery({
+    queryKey: ["certificates"],
+    queryFn: () => api.getCertificates()
+  });
+
   const [progressMap, setProgressMap] = useState<Record<string, ApiProgress | undefined>>({});
 
   useEffect(() => {
@@ -64,15 +69,7 @@ const StudentDashboard = () => {
   }, [enrollments]);
 
   const courseCount = enrollments?.length ?? 0;
-  const certificatesCount =
-    enrollments && enrollments.length > 0
-      ? enrollments.reduce((count, enrollment) => {
-          if (!enrollment.course) return count;
-          const id = enrollment.course._id || enrollment.course.id || "";
-          const progress = progressMap[id];
-          return count + (progress?.status === "completed" ? 1 : 0);
-        }, 0)
-      : 0;
+  const certificatesCount = certificates?.length ?? 0;
   const avgProgress =
     enrollments && enrollments.length > 0
       ? Math.round(

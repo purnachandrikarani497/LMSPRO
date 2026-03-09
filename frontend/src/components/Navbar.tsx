@@ -95,7 +95,7 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
             <Link
               key={link.to}
               to={link.to}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
                 location.pathname === link.to
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -160,7 +160,7 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
                   key={link.to}
                   to={link.to}
                   onClick={() => setMobileOpen(false)}
-                  className="block rounded-lg px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="block rounded-lg px-4 py-3 text-sm font-bold text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   {link.label}
                 </Link>
