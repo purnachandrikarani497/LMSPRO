@@ -16,7 +16,7 @@ export const config = {
   adminPhone: process.env.ADMIN_PHONE || "",
   email: {
     host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
+    port: parseInt(process.env.SMTP_PORT) || 587,
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
     secure: process.env.SMTP_SECURE === "true",

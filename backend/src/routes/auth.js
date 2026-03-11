@@ -114,15 +114,15 @@ router.post("/forgot-password", async (req, res) => {
       await sendResetEmail(user.email, resetLink);
     } catch (emailError) {
       console.error("Failed to send email:", emailError);
-      // In development, we might still want to proceed
-      if (process.env.NODE_ENV !== "development") {
+      // In production, we must fail if email isn't sent
+      if (process.env.NODE_ENV === "production") {
         return res.status(500).json({ message: "Failed to send reset email" });
       }
     }
 
     res.json({
       message: "If an account exists, a reset link has been sent to your email",
-      devLink: process.env.NODE_ENV === "development" ? resetLink : undefined,
+      devLink: process.env.NODE_ENV !== "production" ? resetLink : undefined,
       token: resetToken // Return token for immediate reset in UI
     });
   } catch (error) {
