@@ -12,7 +12,7 @@ import { Helmet } from "react-helmet-async";
 
 const nameMaxLength = 50;
 const emailMaxLength = 50;
-const phoneMaxLength = 15;
+const phoneMaxLength = 10;
 const passwordMinLength = 6;
 const passwordMaxLength = 12;
 
@@ -61,11 +61,8 @@ const validatePhone = (value: string) => {
   if (!trimmed) {
     return "Enter your phone number";
   }
-  if (!/^[\d\s+-]{10,}$/.test(trimmed)) {
+  if (!/^\d{10}$/.test(trimmed)) {
     return "Enter a valid 10-digit phone number";
-  }
-  if (trimmed.length > phoneMaxLength) {
-    return `Use at most ${phoneMaxLength} characters`;
   }
   return null;
 };
@@ -547,7 +544,7 @@ const Auth = () => {
                       className="pl-10"
                       value={signupPhone}
                       onChange={(e) => {
-                        const value = e.target.value;
+                        const value = e.target.value.replace(/\D/g, "");
                         if (value.length > phoneMaxLength) return;
                         setSignupPhone(value);
                         setSignupErrors((prev) => {
