@@ -412,11 +412,12 @@ export const api = {
   createCourse(data: {
     title: string;
     description: string;
+    subtitle?: string;
     thumbnail?: string;
     instructor?: string;
-  instructorPhoto?: string;
-  instructorTitle?: string;
-  instructorBio?: string;
+    instructorPhoto?: string;
+    instructorTitle?: string;
+    instructorBio?: string;
     category?: string;
     price?: number;
     level?: string;
@@ -427,6 +428,7 @@ export const api = {
   updateCourse(id: string, data: {
     title: string;
     description: string;
+    subtitle?: string;
     thumbnail?: string;
     instructor?: string;
     instructorPhoto?: string;
