@@ -51,6 +51,7 @@ const AdminCoursePage = () => {
   const [deleteSectionTarget, setDeleteSectionTarget] = useState<{ sectionId: string; title: string } | null>(null);
   
   // Course metadata state
+  const [courseSubtitle, setCourseSubtitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
   const [courseInstructor, setCourseInstructor] = useState("");
   const [instructorPhoto, setInstructorPhoto] = useState("");
@@ -68,6 +69,7 @@ const AdminCoursePage = () => {
   // Initialize sections from course
   useEffect(() => {
     if (course) {
+      setCourseSubtitle(course.subtitle || "");
       setCourseDescription(course.description || "");
       setCourseInstructor(course.instructor || "");
       setInstructorPhoto(course.instructorPhoto || "");
@@ -100,10 +102,11 @@ const AdminCoursePage = () => {
 
 
   const updateCourseMutation = useMutation({
-    mutationFn: async (data: { description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string; announcements?: { title: string; content: string; postedAt?: string }[] }) => {
+    mutationFn: async (data: { subtitle?: string; description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string; announcements?: { title: string; content: string; postedAt?: string }[] }) => {
       if (!course) throw new Error("Course not loaded");
       return api.updateCourse(id!, {
         title: course.title,
+        subtitle: data.subtitle,
         description: data.description,
         instructor: data.instructor,
         instructorPhoto: data.instructorPhoto,
@@ -154,6 +157,7 @@ const AdminCoursePage = () => {
 
     if (Object.keys(errors).length === 0) {
       updateCourseMutation.mutate({
+        subtitle: courseSubtitle.trim(),
         description: courseDescription.trim(),
         instructor: courseInstructor.trim(),
         instructorPhoto: instructorPhoto.trim() || undefined,
@@ -971,6 +975,17 @@ const AdminCoursePage = () => {
         <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-4">Course Details</h2>
           <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle / Short Description</label>
+              <textarea
+                value={courseSubtitle}
+                onChange={(e) => setCourseSubtitle(e.target.value)}
+                className="w-full min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                placeholder="Enter a short subtitle (e.g. Python for Beginners)"
+                maxLength={200}
+              />
+              <p className="mt-1 text-[10px] text-gray-400">{courseSubtitle.length}/200 characters</p>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea

@@ -45,6 +45,7 @@ export const mapApiCourseToCourse = (c: ApiCourse): Course => {
   const course: Course = {
     id: String(c._id || c.id || Math.random().toString(36).substr(2, 9)),
     title: c.title || "Untitled Course",
+    subtitle: c.subtitle || "",
     description: c.description || "",
     instructor: c.instructor || "Instructor",
     category: c.category || "General",
@@ -214,6 +215,7 @@ export interface ApiCourse {
   _id?: string;
   id?: string;
   title: string;
+  subtitle?: string;
   description: string;
   thumbnail?: string;
   instructor?: string;

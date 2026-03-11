@@ -32,6 +32,7 @@ const courseSchema = new mongoose.Schema(
   {
     legacyId: { type: String },
     title: { type: String, required: true },
+    subtitle: { type: String },
     description: { type: String, required: true },
     thumbnail: { type: String },
     instructor: { type: String },

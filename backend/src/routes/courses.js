@@ -123,7 +123,7 @@ router.get("/:id/admin", requireAuth, requireRole(["admin"]), async (req, res) =
 
 router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
-    const { title, description, thumbnail, instructor, category, price, level } = req.body;
+    const { title, subtitle, description, thumbnail, instructor, category, price, level } = req.body;
 
     if (
       !title ||
@@ -160,6 +160,7 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
     const categoryName = await ensureCategoryExists(category);
     const payload = {
       title,
+      subtitle,
       description,
       thumbnail,
       instructor,

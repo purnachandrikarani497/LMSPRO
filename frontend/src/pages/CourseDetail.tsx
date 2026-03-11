@@ -438,6 +438,7 @@ const CourseDetail = () => {
             <div className="flex items-start justify-between gap-6">
               <div className="flex-1">
                 <h1 className="text-3xl font-bold text-gray-900">{course.title}</h1>
+                <p className="mt-2 text-sm font-medium text-gray-500">{course.subtitle}</p>
                 <p className="mt-2 text-gray-600">{course.description}</p>
                 <div className="mt-4 flex flex-wrap gap-4 text-sm">
                   <span className="text-gray-600">
@@ -530,7 +531,7 @@ const CourseDetail = () => {
                     </span>
                   )}
                 </div>
-                <p className="text-lg text-gray-300 leading-relaxed max-w-3xl">{course.description}</p>
+                <p className="text-lg text-gray-300 leading-relaxed max-w-3xl">{course.subtitle || course.description}</p>
                 <div className="flex flex-wrap items-center gap-4 text-sm">
                   <span className="flex items-center gap-1">
                     <span className="font-semibold text-amber-400">{course.rating.toFixed(1)}</span>
@@ -606,6 +607,11 @@ const CourseDetail = () => {
                       Enroll now
                     </Button>
                     <p className="text-center text-xs text-gray-500">30-day money-back guarantee</p>
+                    {course.description && (
+                      <div className="mt-2 text-sm text-gray-700 bg-gray-50/50 p-3 rounded-md border border-gray-100 italic">
+                        <p className="whitespace-pre-wrap">{course.description}</p>
+                      </div>
+                    )}
                     <div className="border-t pt-4 space-y-2 text-sm text-gray-600">
                       <p className="font-semibold text-gray-900">This course includes:</p>
                       <p className="flex items-center gap-2"><Play className="h-4 w-4 text-gray-400" /> {totalHours} of video content</p>
