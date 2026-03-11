@@ -502,11 +502,14 @@ const CourseDetail = () => {
           )}
         </Helmet>
 
-        {/* Hero section */}
-        <div className="bg-gray-900 text-white">
-          <div className="container mx-auto px-4 py-10 lg:py-16">
-            <div className="grid gap-8 lg:grid-cols-3">
-              <div className="lg:col-span-2 space-y-4">
+        <div className="relative">
+          {/* Hero background overlay */}
+          <div className="absolute inset-x-0 top-0 bg-gray-900 h-[580px] lg:h-[500px]" />
+
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="grid gap-8 lg:grid-cols-3 py-10 lg:py-16">
+              {/* Hero Section (Left) */}
+              <div className="lg:col-span-2 space-y-4 text-white">
                 <Link
                   to="/courses"
                   className="inline-flex items-center gap-1.5 text-sm text-gray-300 hover:text-white"
@@ -557,7 +560,7 @@ const CourseDetail = () => {
                   <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /> English [Auto], Hindi [Auto]</span>
                 </div>
 
-                {/* New Summary Bar to fill space */}
+                {/* Summary Bar */}
                 <div className="mt-8 flex flex-wrap items-stretch gap-px overflow-hidden rounded-lg bg-gray-800/40 backdrop-blur-sm border border-gray-700/50">
                   <div className="flex flex-1 items-center gap-4 p-4 min-w-[240px]">
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500/20 text-amber-500 ring-1 ring-amber-500/20">
@@ -586,130 +589,125 @@ const CourseDetail = () => {
                 </div>
               </div>
 
-              {/* Enroll card */}
-              <div className="lg:col-span-1">
-                <div className="overflow-hidden rounded-lg bg-white shadow-lg">
-                  {course.image && (
-                    <img
-                      src={getThumbnailSrc(course.image) || course.image}
-                      alt={course.title}
-                      className="aspect-video w-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  )}
-                  <div className="p-6 space-y-4">
-                    <div className="text-3xl font-bold text-gray-900">{formatPrice(course.price)}</div>
-                    <Button
-                      size="lg"
-                      className="w-full bg-amber-500 font-semibold text-white hover:bg-amber-600 text-lg py-6"
-                      onClick={() => navigate(`/course/${course.id}/payment`)}
-                    >
-                      Enroll now
-                    </Button>
-                    <p className="text-center text-xs text-gray-500">30-day money-back guarantee</p>
-                    {course.description && (
-                      <div className="mt-2 text-sm text-gray-700 bg-gray-50/50 p-3 rounded-md border border-gray-100 italic">
-                        <p className="whitespace-pre-wrap">{course.description}</p>
-                      </div>
+              {/* Sidebar Section (Right) */}
+              <div className="lg:col-span-1 lg:row-span-2">
+                <div className="lg:sticky lg:top-24 z-20">
+                  <div className="overflow-hidden rounded-lg bg-white shadow-lg border border-gray-200">
+                    {course.image && (
+                      <img
+                        src={getThumbnailSrc(course.image) || course.image}
+                        alt={course.title}
+                        className="aspect-video w-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     )}
-                    <div className="border-t pt-4 space-y-2 text-sm text-gray-600">
-                      <p className="font-semibold text-gray-900">This course includes:</p>
-                      <p className="flex items-center gap-2"><Play className="h-4 w-4 text-gray-400" /> {totalHours} of video content</p>
-                      <p className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-gray-400" /> {course.lessons} lessons</p>
-                      <p className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-gray-400" /> Certificate of completion</p>
+                    <div className="p-6 space-y-4">
+                      <div className="text-3xl font-bold text-gray-900">{formatPrice(course.price)}</div>
+                      <Button
+                        size="lg"
+                        className="w-full bg-amber-500 font-semibold text-white hover:bg-amber-600 text-lg py-6"
+                        onClick={() => navigate(`/course/${course.id}/payment`)}
+                      >
+                        Enroll now
+                      </Button>
+                      <p className="text-center text-xs text-gray-500">30-day money-back guarantee</p>
+                      {course.description && (
+                        <div className="mt-2 text-sm text-gray-700 bg-gray-50/50 p-3 rounded-md border border-gray-100 italic">
+                          <p className="whitespace-pre-wrap">{course.description}</p>
+                        </div>
+                      )}
+                      <div className="border-t pt-4 space-y-2 text-sm text-gray-600">
+                        <p className="font-semibold text-gray-900">This course includes:</p>
+                        <p className="flex items-center gap-2"><Play className="h-4 w-4 text-gray-400" /> {totalHours} of video content</p>
+                        <p className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-gray-400" /> {course.lessons} lessons</p>
+                        <p className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-gray-400" /> Certificate of completion</p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Course content */}
-        <div className="container mx-auto px-4 py-10">
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-8">
-              {/* Course content sections */}
-              {sections.length > 0 && (
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Course content</h2>
-                  <p className="text-sm text-gray-500 mb-3">
-                    {sections.length} sections &middot; {lessons.length} lessons &middot; {totalHours} total length
-                  </p>
-                  <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-                    {sections.map((section) => {
-                      const isExpanded = expandedSections.has(section.title);
-                      const sectionLessons = section.lessons || [];
-                      return (
-                        <div key={section.title} className="border-b border-gray-200 last:border-b-0">
-                          <button
-                            onClick={() => {
-                              setExpandedSections(prev => {
-                                const next = new Set(prev);
-                                if (next.has(section.title)) next.delete(section.title);
-                                else next.add(section.title);
-                                return next;
-                              });
-                            }}
-                            className="w-full flex items-center justify-between bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition"
-                          >
-                            <div className="flex items-center gap-2">
-                              <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                              <p className="font-bold text-gray-900 text-sm">{section.title}</p>
-                            </div>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">{sectionLessons.length} lessons</span>
-                          </button>
-                          {isExpanded && (
-                            <div className="divide-y divide-gray-100">
-                              {sectionLessons.map((lesson, i) => (
-                                <div key={lesson._id || i} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600">
-                                  <Play className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                                  <span className="flex-1">{lesson.title}</span>
-                                  {lesson.duration && <span className="text-xs text-gray-400">{lesson.duration}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* About */}
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-3">About this course</h2>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{course.description}</p>
-              </div>
-
-              {/* Requirements */}
-              <div className="rounded-lg border border-gray-200 bg-white p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Requirements</h2>
-                <ul className="space-y-2 text-sm text-gray-700">
-                  <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> A computer with internet access.</li>
-                  <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> Basic understanding of how to use a camera.</li>
-                  <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> No prior photography experience is needed. You will learn everything from scratch.</li>
-                </ul>
-              </div>
-
-              {/* Instructor */}
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Instructor</h2>
-                <div className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-6">
-                  <img src="https://i.pravatar.cc/150?u=sarahjohnson" alt="Sarah Johnson" className="h-24 w-24 rounded-full object-cover" />
+              {/* Main Content Section (Left) */}
+              <div className="lg:col-span-2 space-y-10 pt-4">
+                {/* Course content sections */}
+                {sections.length > 0 && (
                   <div>
-                    <h3 className="font-bold text-lg text-gray-900">{course.instructor}</h3>
-                    <p className="text-sm text-amber-600">Lead Photographer & Educator</p>
-                    <p className="mt-2 text-sm text-gray-600">
-                      Sarah is an award-winning photographer with over 15 years of experience. She has a passion for teaching and has helped thousands of students master the art of photography.
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Course content</h2>
+                    <p className="text-sm text-gray-500 mb-3">
+                      {sections.length} sections &middot; {lessons.length} lessons &middot; {totalHours} total length
                     </p>
+                    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                      {sections.map((section) => {
+                        const isExpanded = expandedSections.has(section.title);
+                        const sectionLessons = section.lessons || [];
+                        return (
+                          <div key={section.title} className="border-b border-gray-200 last:border-b-0">
+                            <button
+                              onClick={() => {
+                                setExpandedSections(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(section.title)) next.delete(section.title);
+                                  else next.add(section.title);
+                                  return next;
+                                });
+                              }}
+                              className="w-full flex items-center justify-between bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                <p className="font-bold text-gray-900 text-sm">{section.title}</p>
+                              </div>
+                              <span className="text-xs text-gray-500 whitespace-nowrap">{sectionLessons.length} lessons</span>
+                            </button>
+                            {isExpanded && (
+                              <div className="divide-y divide-gray-100">
+                                {sectionLessons.map((lesson, i) => (
+                                  <div key={lesson._id || i} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600">
+                                    <Play className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                                    <span className="flex-1">{lesson.title}</span>
+                                    {lesson.duration && <span className="text-xs text-gray-400">{lesson.duration}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* About */}
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-3">About this course</h2>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{course.description}</p>
+                </div>
+
+                {/* Requirements */}
+                <div className="rounded-lg border border-gray-200 bg-white p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Requirements</h2>
+                  <ul className="space-y-2 text-sm text-gray-700">
+                    <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> A computer with internet access.</li>
+                    <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> Basic understanding of how to use a camera.</li>
+                    <li className="flex items-start gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" /> No prior photography experience is needed. You will learn everything from scratch.</li>
+                  </ul>
+                </div>
+
+                {/* Instructor */}
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Instructor</h2>
+                  <div className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-6">
+                    <img src="https://i.pravatar.cc/150?u=sarahjohnson" alt="Sarah Johnson" className="h-24 w-24 rounded-full object-cover" />
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900">{course.instructor}</h3>
+                      <p className="text-sm text-amber-600">Lead Photographer & Educator</p>
+                      <p className="mt-2 text-sm text-gray-600">
+                        Sarah is an award-winning photographer with over 15 years of experience. She has a passion for teaching and has helped thousands of students master the art of photography.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Reviews */}
-
             </div>
           </div>
         </div>
