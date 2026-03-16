@@ -205,7 +205,7 @@ const AdminDashboard = () => {
     const instructor = form.instructor.trim();
     const image = form.image.trim();
     const alphaRegex = /^[A-Za-z\s]+$/;
-    const textRegex = /^[A-Za-z\s.,'-]+$/;
+    const textRegex = /^[A-Za-z0-9\s.,'\n-]+$/;
 
     if (!title) {
       toast({
@@ -248,10 +248,10 @@ const AdminDashboard = () => {
       });
       return;
     }
-    if (!textRegex.test(description) || description.length > 200) {
+    if (!textRegex.test(description) || description.length > 500) {
       toast({
         title: "Invalid description",
-        description: "Description can include letters, spaces and basic punctuation, maximum 200 characters",
+        description: "Description can include letters, numbers, spaces and basic punctuation, maximum 500 characters",
         variant: "destructive"
       });
       return;
@@ -273,10 +273,10 @@ const AdminDashboard = () => {
       });
       return;
     }
-    if (!alphaRegex.test(instructor) || instructor.length > 30) {
+    if (!alphaRegex.test(instructor) || instructor.length > 50) {
       toast({
         title: "Invalid instructor name",
-        description: "Instructor name must contain only letters and spaces, maximum 30 characters",
+        description: "Instructor name must contain only letters and spaces, maximum 50 characters",
         variant: "destructive"
       });
       return;
@@ -463,11 +463,7 @@ const AdminDashboard = () => {
                   maxLength={50}
                   onChange={(e) => {
                     const value = e.target.value;
-                    if (value.trim().length === 0 && value.length > 0) {
-                      setForm({ ...form, title: "" });
-                      return;
-                    }
-                    if (/^[A-Za-z\s]*$/.test(value)) {
+                    if (/^[a-zA-Z\s]*$/.test(value)) {
                       if (value.length === 50) {
                         toast({
                           title: "Title max length reached",
@@ -476,50 +472,60 @@ const AdminDashboard = () => {
                         });
                       }
                       setForm({ ...form, title: value });
+                    } else {
+                      toast({
+                        title: "Invalid character",
+                        description: "Course title can only contain letters and spaces",
+                        variant: "destructive"
+                      });
                     }
                   }}
                 />
                 <Textarea
                   placeholder="Description"
                   value={form.description}
-                  maxLength={200}
+                  maxLength={500}
                   onChange={(e) => {
                     const value = e.target.value;
-                    if (value.trim().length === 0 && value.length > 0) {
-                      setForm({ ...form, description: "" });
-                      return;
-                    }
-                    if (/^[A-Za-z\s.,'\n-]*$/.test(value)) {
-                      if (value.length === 200) {
+                    if (/^[a-zA-Z0-9\s.,'\n-]*$/.test(value)) {
+                      if (value.length === 500) {
                         toast({
                           title: "Description max length reached",
-                          description: "Description cannot exceed 200 characters",
+                          description: "Description cannot exceed 500 characters",
                           variant: "destructive"
                         });
                       }
                       setForm({ ...form, description: value });
+                    } else {
+                      toast({
+                        title: "Invalid character",
+                        description: "Description can only contain letters, numbers, spaces, and basic punctuation",
+                        variant: "destructive"
+                      });
                     }
                   }}
                 />
                 <Input
                   placeholder="Instructor Name"
                   value={form.instructor}
-                  maxLength={30}
+                  maxLength={50}
                   onChange={(e) => {
                     const value = e.target.value;
-                    if (value.trim().length === 0 && value.length > 0) {
-                      setForm({ ...form, instructor: "" });
-                      return;
-                    }
-                    if (/^[A-Za-z\s]*$/.test(value)) {
-                      if (value.length === 30) {
+                    if (/^[a-zA-Z\s]*$/.test(value)) {
+                      if (value.length === 50) {
                         toast({
                           title: "Instructor name max length reached",
-                          description: "Instructor name cannot exceed 30 characters",
+                          description: "Instructor name cannot exceed 50 characters",
                           variant: "destructive"
                         });
                       }
                       setForm({ ...form, instructor: value });
+                    } else {
+                      toast({
+                        title: "Invalid character",
+                        description: "Instructor name can only contain letters and spaces",
+                        variant: "destructive"
+                      });
                     }
                   }}
                 />
@@ -570,9 +576,26 @@ const AdminDashboard = () => {
                   className="input-no-spinner"
                   value={form.price}
                   onChange={(e) => {
-                    const digitsOnly = e.target.value.replace(/\D/g, "");
-                    if (digitsOnly.length <= 9) {
-                      setForm({ ...form, price: digitsOnly });
+                    const value = e.target.value.replace(/\D/g, "");
+                    if (value.length > 9) {
+                      toast({
+                        title: "Price max digits reached",
+                        description: "Price cannot exceed 9 digits",
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    if (value.length <= 9) {
+                      const numValue = Number(value);
+                      if (numValue > 0) {
+                        setForm({ ...form, price: value });
+                      } else {
+                        toast({
+                          title: "Invalid price",
+                          description: "Price must be greater than 0",
+                          variant: "destructive"
+                        });
+                      }
                     }
                   }}
                 />

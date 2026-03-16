@@ -52,12 +52,30 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ message: "Category name is required" });
     }
-    const slug = (name || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const existing = await Category.findOne({ name: { $regex: new RegExp(`^${name.trim()}$`, "i") } });
+    const alphaRegex = /^[A-Za-z\s]+$/;
+    const imageUrlRegex = /^(https?:\/\/|\/)[^\s]+\.(png|jpe?g|gif|webp|svg)$/i;
+    const dataImageRegex = /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i;
+    const isEmoji = (val) => {
+      try {
+        return /\p{Extended_Pictographic}/u.test(val);
+      } catch {
+        return typeof val === "string" && val.length <= 3 && !/\s/.test(val) && !/^https?:\/\//i.test(val);
+      }
+    };
+    const trimmedName = name.trim();
+    if (!alphaRegex.test(trimmedName) || trimmedName.length > 50) {
+      return res.status(400).json({ message: "Name must contain only letters and spaces, maximum 50 characters" });
+    }
+    const iconVal = (icon || "").trim();
+    if (iconVal && !(isEmoji(iconVal) || imageUrlRegex.test(iconVal) || dataImageRegex.test(iconVal))) {
+      return res.status(400).json({ message: "Icon must be a single emoji or an image URL (png, jpg, gif, webp, svg)" });
+    }
+    const slug = trimmedName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const existing = await Category.findOne({ name: { $regex: new RegExp(`^${trimmedName}$`, "i") } });
     if (existing) {
       return res.status(400).json({ message: "A category with this name already exists" });
     }
-    const category = await Category.create({ name: name.trim(), icon: (icon || "").trim(), slug });
+    const category = await Category.create({ name: trimmedName, icon: iconVal, slug });
     res.status(201).json(category);
   } catch (err) {
     if (err.code === 11000) {
@@ -75,21 +93,39 @@ router.put("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ message: "Category name is required" });
     }
+    const alphaRegex = /^[A-Za-z\s]+$/;
+    const imageUrlRegex = /^(https?:\/\/|\/)[^\s]+\.(png|jpe?g|gif|webp|svg)$/i;
+    const dataImageRegex = /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i;
+    const isEmoji = (val) => {
+      try {
+        return /\p{Extended_Pictographic}/u.test(val);
+      } catch {
+        return typeof val === "string" && val.length <= 3 && !/\s/.test(val) && !/^https?:\/\//i.test(val);
+      }
+    };
+    const trimmedName = name.trim();
+    if (!alphaRegex.test(trimmedName) || trimmedName.length > 50) {
+      return res.status(400).json({ message: "Name must contain only letters and spaces, maximum 50 characters" });
+    }
+    const iconVal = (icon || "").trim();
+    if (iconVal && !(isEmoji(iconVal) || imageUrlRegex.test(iconVal) || dataImageRegex.test(iconVal))) {
+      return res.status(400).json({ message: "Icon must be a single emoji or an image URL (png, jpg, gif, webp, svg)" });
+    }
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
     const existing = await Category.findOne({
       _id: { $ne: req.params.id },
-      name: { $regex: new RegExp(`^${name.trim()}$`, "i") }
+      name: { $regex: new RegExp(`^${trimmedName}$`, "i") }
     });
     if (existing) {
       return res.status(400).json({ message: "A category with this name already exists" });
     }
     const oldName = category.name;
-    category.name = name.trim();
-    category.icon = (icon || "").trim();
-    category.slug = (name.trim()).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    category.name = trimmedName;
+    category.icon = iconVal;
+    category.slug = trimmedName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     await category.save();
 
     if (oldName !== category.name) {

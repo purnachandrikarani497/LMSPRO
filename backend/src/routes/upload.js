@@ -9,6 +9,8 @@ import multer from "multer";
 import jwt from "jsonwebtoken";
 import { pipeline } from "node:stream/promises";
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import fs from "node:fs";
+import path from "node:path";
 import { config } from "../config.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { randomUUID } from "node:crypto";
@@ -89,12 +91,19 @@ router.post(
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
-      if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
-        return res.status(500).json({ message: "S3 upload is not configured" });
-      }
-
       const ext = req.file.originalname.split(".").pop() || "jpg";
       const key = `thumbnails/${randomUUID()}.${ext}`;
+
+      // Fallback to local filesystem if S3 not configured
+      if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
+        const uploadsDir = path.resolve(process.cwd(), "uploads", "thumbnails");
+        await fs.promises.mkdir(uploadsDir, { recursive: true });
+        const filePath = path.join(uploadsDir, path.basename(key.replace("thumbnails/", "")));
+        await fs.promises.writeFile(filePath, req.file.buffer);
+        const url = `${req.protocol}://${req.get("host")}/uploads/thumbnails/${path.basename(filePath)}`;
+        // Return only URL so frontend uses absolute link (no proxy)
+        return res.json({ url, key: "" });
+      }
 
       await s3.send(
         new PutObjectCommand({

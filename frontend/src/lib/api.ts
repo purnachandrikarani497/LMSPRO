@@ -86,6 +86,11 @@ export function getThumbnailSrc(thumbnail: string | undefined): string {
       const path = url.pathname;
       const host = url.hostname.toLowerCase();
       
+      // Allow local/uploads served by our backend without proxying
+      if (host.includes("localhost") || host === "127.0.0.1") {
+        return thumbnail;
+      }
+      
       // Extract key from S3 URL and proxy via backend
       const keyMatch = path.match(/(thumbnails\/[^?]+)/);
       if (keyMatch) {

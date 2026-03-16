@@ -47,9 +47,8 @@ const validateEmail = (value: string) => {
   if (!trimmed) {
     return "Enter your email";
   }
-  if (!trimmed.includes("@")) {
-    return "Email must contain @";
-  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  if (!emailRegex.test(trimmed)) return "Enter a valid email address";
   if (trimmed.length > emailMaxLength) {
     return `Use at most ${emailMaxLength} characters`;
   }
@@ -61,9 +60,7 @@ const validatePhone = (value: string) => {
   if (!trimmed) {
     return "Enter your phone number";
   }
-  if (!/^\d{10}$/.test(trimmed)) {
-    return "Enter a valid 10-digit phone number";
-  }
+  if (!/^[6-9]\d{9}$/.test(trimmed)) return "Enter a valid 10-digit phone starting with 6-9";
   return null;
 };
 
@@ -189,6 +186,11 @@ const Auth = () => {
     }
     setSigninErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
+      const msgs = [
+        emailError ? `Email: ${emailError}` : null,
+        passwordError ? `Password: ${passwordError}` : null
+      ].filter(Boolean).join(" • ");
+      toast({ title: "Fix the highlighted fields", description: msgs, variant: "destructive" });
       return;
     }
     loginMutation.mutate();
@@ -205,7 +207,16 @@ const Auth = () => {
     if (phoneError) nextErrors.phone = phoneError;
     if (passwordError) nextErrors.password = passwordError;
     setSignupErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      const msgs = [
+        nameError ? `Name: ${nameError}` : null,
+        emailError ? `Email: ${emailError}` : null,
+        phoneError ? `Phone: ${phoneError}` : null,
+        passwordError ? `Password: ${passwordError}` : null
+      ].filter(Boolean).join(" • ");
+      toast({ title: "Fix the highlighted fields", description: msgs, variant: "destructive" });
+      return;
+    }
     registerMutation.mutate();
   };
 
@@ -242,6 +253,7 @@ const Auth = () => {
                     <Input
                       placeholder="Email"
                       type="text"
+                      maxLength={emailMaxLength}
                       className="pl-10"
                       value={signinEmail}
                       onChange={(e) => {
@@ -352,7 +364,15 @@ const Auth = () => {
                         {!isLinkSent ? (
                           <form
                             className="space-y-2"
-                            onSubmit={(e) => { e.preventDefault(); forgotPasswordMutation.mutate(); }}
+                            onSubmit={(e) => { 
+                              e.preventDefault(); 
+                              const err = validateEmail(forgotEmail);
+                              if (err) {
+                                toast({ title: "Invalid email", description: err, variant: "destructive" });
+                                return;
+                              }
+                              forgotPasswordMutation.mutate(); 
+                            }}
                           >
                             <Input
                               placeholder="Email Address"
@@ -506,6 +526,7 @@ const Auth = () => {
                     <Input
                       placeholder="Email"
                       type="text"
+                      maxLength={emailMaxLength}
                       className="pl-10"
                       value={signupEmail}
                       onChange={(e) => {
@@ -544,8 +565,13 @@ const Auth = () => {
                       className="pl-10"
                       value={signupPhone}
                       onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, "");
-                        if (value.length > phoneMaxLength) return;
+                        let value = e.target.value.replace(/\D/g, "");
+                        if (value.length > phoneMaxLength) value = value.slice(0, phoneMaxLength);
+                        // Enforce first digit 6-9
+                        if (value.length >= 1 && !/^[6-9]$/.test(value[0])) {
+                          toast({ title: "Invalid phone", description: "First digit must be 6-9", variant: "destructive" });
+                          return;
+                        }
                         setSignupPhone(value);
                         setSignupErrors((prev) => {
                           const error = validatePhone(value);

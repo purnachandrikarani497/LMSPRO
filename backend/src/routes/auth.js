@@ -20,18 +20,28 @@ router.post("/register", async (req, res) => {
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Missing required fields" });
     }
+    const alphaRegex = /^[A-Za-z\s]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const nameStr = String(name).trim();
+    const emailStr = String(email).trim();
+    if (!alphaRegex.test(nameStr) || nameStr.length > 50) {
+      return res.status(400).json({ message: "Name must contain only letters and spaces, maximum 50 characters" });
+    }
+    if (!emailRegex.test(emailStr) || emailStr.length > 50) {
+      return res.status(400).json({ message: "Enter a valid email address up to 50 characters" });
+    }
     if (!phone || !String(phone).trim()) {
       return res.status(400).json({ message: "Phone number is required" });
     }
     const phoneStr = String(phone).replace(/\D/g, "");
-    if (phoneStr.length !== 10) {
-      return res.status(400).json({ message: "Phone number must be exactly 10 digits" });
+    if (!/^[6-9]\d{9}$/.test(phoneStr)) {
+      return res.status(400).json({ message: "Phone number must be 10 digits and start with 6-9" });
     }
-    const existing = await User.findOne({ email });
+    const existing = await User.findOne({ email: emailStr.toLowerCase() });
     if (existing) {
       return res.status(400).json({ message: "Email already in use" });
     }
-    const user = await User.create({ name, email, phone: phoneStr, password, role });
+    const user = await User.create({ name: nameStr, email: emailStr.toLowerCase(), phone: phoneStr, password, role });
     const token = createToken(user);
     res.status(201).json({
       user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role },
@@ -49,7 +59,12 @@ router.post("/login", async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ message: "Missing credentials" });
     }
-    if (email === config.adminEmail && password === config.adminPassword) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const emailStr = String(email).trim();
+    if (!emailRegex.test(emailStr)) {
+      return res.status(400).json({ message: "Enter a valid email address" });
+    }
+    if (emailStr.toLowerCase() === String(config.adminEmail).toLowerCase() && password === config.adminPassword) {
       const adminUser = {
         _id: "admin-static",
         name: "Administrator",
@@ -67,7 +82,7 @@ router.post("/login", async (req, res) => {
         token
       });
     }
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: emailStr.toLowerCase() });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
@@ -170,12 +185,26 @@ router.patch("/me", requireAuth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    if (typeof name === "string" && name.trim()) user.name = name.trim();
-    if (typeof email === "string" && email.trim()) user.email = email.trim().toLowerCase();
+    const alphaRegex = /^[A-Za-z\s]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (typeof name === "string" && name.trim()) {
+      const n = name.trim();
+      if (!alphaRegex.test(n) || n.length > 50) {
+        return res.status(400).json({ message: "Invalid name: letters/spaces only, max 50" });
+      }
+      user.name = n;
+    }
+    if (typeof email === "string" && email.trim()) {
+      const e = email.trim().toLowerCase();
+      if (!emailRegex.test(e) || e.length > 50) {
+        return res.status(400).json({ message: "Invalid email format or too long" });
+      }
+      user.email = e;
+    }
     if (typeof phone === "string") {
       const phoneStr = phone.replace(/\D/g, "");
-      if (phoneStr && phoneStr.length !== 10) {
-        return res.status(400).json({ message: "Phone number must be exactly 10 digits" });
+      if (phoneStr && !/^[6-9]\d{9}$/.test(phoneStr)) {
+        return res.status(400).json({ message: "Phone number must start with 6-9 and be 10 digits" });
       }
       user.phone = phoneStr || undefined;
     }

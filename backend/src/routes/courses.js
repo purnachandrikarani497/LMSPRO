@@ -150,6 +150,24 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
       });
     }
 
+    const alphaRegex = /^[A-Za-z\s]+$/;
+    const descRegex = /^[A-Za-z0-9\s.,'\n-]+$/;
+    if (!alphaRegex.test(title.trim()) || title.trim().length > 50) {
+      return res.status(400).json({
+        message: "Title must contain only letters and spaces, maximum 50 characters"
+      });
+    }
+    if (!descRegex.test(description.trim()) || description.trim().length > 500) {
+      return res.status(400).json({
+        message: "Description can include letters, numbers, spaces and basic punctuation, maximum 500 characters"
+      });
+    }
+    if (!alphaRegex.test(instructor.trim()) || instructor.trim().length > 50) {
+      return res.status(400).json({
+        message: "Instructor name must contain only letters and spaces, maximum 50 characters"
+      });
+    }
+
     const priceDigitsLength = price.toString().replace(/\D/g, "").length;
     if (priceDigitsLength > 9) {
       return res.status(400).json({
@@ -348,6 +366,37 @@ router.delete("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), asy
 router.put("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
     const update = { ...req.body };
+    const alphaRegex = /^[A-Za-z\s]+$/;
+    const descRegex = /^[A-Za-z0-9\s.,'\n-]+$/;
+    if (typeof update.title === "string") {
+      const t = update.title.trim();
+      if (!t || t.length < 2 || !alphaRegex.test(t) || t.length > 50) {
+        return res.status(400).json({ message: "Invalid title: letters and spaces only, 2–50 chars" });
+      }
+      update.title = t;
+    }
+    if (typeof update.description === "string") {
+      const d = update.description.trim();
+      if (!d || d.length < 2 || !descRegex.test(d) || d.length > 500) {
+        return res.status(400).json({ message: "Invalid description: alphanumeric with basic punctuation, 2–500 chars" });
+      }
+      update.description = d;
+    }
+    if (typeof update.instructor === "string") {
+      const i = update.instructor.trim();
+      if (!i || i.length < 2 || !alphaRegex.test(i) || i.length > 50) {
+        return res.status(400).json({ message: "Invalid instructor: letters and spaces only, 2–50 chars" });
+      }
+      update.instructor = i;
+    }
+    if (update.price !== undefined) {
+      const p = Number(update.price);
+      const digits = String(p).replace(/\D/g, "");
+      if (!Number.isFinite(p) || p <= 0 || digits.length > 9) {
+        return res.status(400).json({ message: "Invalid price: positive number, max 9 digits" });
+      }
+      update.price = p;
+    }
     if (update.category && update.category.trim()) {
       update.category = await ensureCategoryExists(update.category);
     }

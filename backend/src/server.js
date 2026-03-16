@@ -37,10 +37,15 @@ import userRoutes from "./routes/users.js";
 import progressRoutes from "./routes/progress.js";
 import certificateRoutes from "./routes/certificates.js";
 import uploadRoutes from "./routes/upload.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import settingsRoutes from "./routes/settings.js";
 import categoryRoutes from "./routes/categories.js";
 
 const app = express();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadsPath = path.resolve(__dirname, "../uploads");
 
 app.set("trust proxy", 1);
 app.use(
@@ -79,6 +84,7 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
+app.use("/uploads", express.static(uploadsPath));
 
 // Ensure DB is connected before handling API requests (avoids "restart to fix" when connection drops)
 app.use("/api", async (req, res, next) => {

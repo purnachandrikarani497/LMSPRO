@@ -138,16 +138,49 @@ const AdminSettings = () => {
     setCategoryDialogOpen(true);
   };
 
+  const alphaRegex = /^[A-Za-z\s]+$/;
+  const imageUrlRegex = /^(https?:\/\/|\/)[^\s]+\.(png|jpe?g|gif|webp|svg)$/i;
+  const dataImageRegex = /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i;
+  const isEmoji = (val: string) => {
+    try {
+      return /\p{Extended_Pictographic}/u.test(val);
+    } catch {
+      return val.length <= 3 && !/\s/.test(val) && !/^https?:\/\//i.test(val);
+    }
+  };
+  const isValidIcon = (val: string) => {
+    if (!val) return true;
+    const v = val.trim();
+    return isEmoji(v) || imageUrlRegex.test(v) || dataImageRegex.test(v);
+  };
+
   const handleSaveCategory = () => {
     const name = categoryName.trim();
     if (!name) {
       toast({ title: "Name required", description: "Please enter a category name.", variant: "destructive" });
       return;
     }
+    if (!alphaRegex.test(name) || name.length > 50) {
+      toast({
+        title: "Invalid name",
+        description: "Name must contain only letters and spaces, maximum 50 characters.",
+        variant: "destructive"
+      });
+      return;
+    }
+    const icon = categoryIcon.trim();
+    if (icon && !isValidIcon(icon)) {
+      toast({
+        title: "Invalid icon",
+        description: "Use a single emoji or a valid image URL (png, jpg, gif, webp, svg).",
+        variant: "destructive"
+      });
+      return;
+    }
     if (editingCategory) {
-      updateMutation.mutate({ id: editingCategory._id, data: { name, icon: categoryIcon.trim() || undefined } });
+      updateMutation.mutate({ id: editingCategory._id, data: { name, icon: icon || undefined } });
     } else {
-      createMutation.mutate({ name, icon: categoryIcon.trim() || undefined });
+      createMutation.mutate({ name, icon: icon || undefined });
     }
   };
 
@@ -315,16 +348,46 @@ const AdminSettings = () => {
                       <label className="text-sm font-medium">Name</label>
                       <Input
                         value={categoryName}
-                        onChange={(e) => setCategoryName(e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (!/^[a-zA-Z\s]*$/.test(value)) {
+                            toast({
+                              title: "Invalid character",
+                              description: "Name can only contain letters and spaces",
+                              variant: "destructive"
+                            });
+                            return;
+                          }
+                          if (value.length === 50) {
+                            toast({
+                              title: "Name max length reached",
+                              description: "Category name cannot exceed 50 characters",
+                              variant: "destructive"
+                            });
+                          }
+                          setCategoryName(value);
+                        }}
                         placeholder="e.g. Development"
+                        maxLength={50}
                       />
                     </div>
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Icon (optional)</label>
                       <Input
                         value={categoryIcon}
-                        onChange={(e) => setCategoryIcon(e.target.value)}
-                        placeholder="e.g. 💻"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || isValidIcon(v)) {
+                            setCategoryIcon(v);
+                          } else {
+                            toast({
+                              title: "Invalid icon",
+                              description: "Only emoji or image URL (png, jpg, gif, webp, svg) is allowed.",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
+                        placeholder="e.g. 💻 or image URL"
                       />
                     </div>
                   </div>
