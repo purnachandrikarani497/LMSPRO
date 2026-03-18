@@ -245,27 +245,56 @@ export function SecureVideoPlayer({
     setIsMuted(val === 0);
   };
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
     if (!document.fullscreenElement) {
       container.requestFullscreen?.();
+      if (!isExpanded && onExpandToggle) onExpandToggle();
     } else {
       document.exitFullscreen?.();
     }
-  };
+  }, [isExpanded, onExpandToggle]);
+
+  const [pipSupported, setPipSupported] = useState(false);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    let supported = false;
+    if (typeof document !== "undefined" && (document as any).pictureInPictureEnabled) supported = true;
+    // Safari/iOS WebKit presentation mode
+    if (v && (v as any).webkitSupportsPresentationMode) supported = true;
+    setPipSupported(supported);
+  }, []);
 
   const togglePiP = async () => {
-    const v = videoRef.current;
-    if (!v || !document.pictureInPictureEnabled) return;
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else {
-        await v.requestPictureInPicture();
+    const v = videoRef.current as any;
+    if (!v) return;
+
+    // Standard Picture-in-Picture API (Chromium, etc.)
+    if (typeof document !== "undefined" && (document as any).pictureInPictureEnabled && v.requestPictureInPicture) {
+      try {
+        if ((document as any).pictureInPictureElement) {
+          await (document as any).exitPictureInPicture();
+        } else {
+          await v.requestPictureInPicture();
+        }
+      } catch (err) {
+        // ignore or optionally report
+        // console.warn('PiP toggle failed', err);
       }
-    } catch {
-      /* ignore */
+      return;
+    }
+
+    // WebKit presentation mode fallback (Safari)
+    if (v.webkitSupportsPresentationMode && typeof v.webkitSetPresentationMode === "function") {
+      try {
+        const mode = v.webkitPresentationMode;
+        if (mode !== "picture-in-picture") v.webkitSetPresentationMode("picture-in-picture");
+        else v.webkitSetPresentationMode("inline");
+      } catch (err) {
+        // console.warn('WebKit PiP toggle failed', err);
+      }
     }
   };
 
@@ -393,8 +422,7 @@ export function SecureVideoPlayer({
         case "f":
         case "F":
           e.preventDefault();
-          if (!document.fullscreenElement) container.requestFullscreen?.();
-          else document.exitFullscreen?.();
+          toggleFullscreen();
           break;
         case "Escape":
           setShowShortcutsModal(false);
@@ -407,7 +435,7 @@ export function SecureVideoPlayer({
     };
     document.addEventListener("keydown", handlePlayerKey);
     return () => document.removeEventListener("keydown", handlePlayerKey);
-  }, []);
+  }, [toggleFullscreen]);
 
   if (isEmbed) {
     return (
@@ -439,7 +467,7 @@ export function SecureVideoPlayer({
   return (
     <div
       ref={containerRef}
-      className={`relative aspect-video overflow-hidden bg-black group ${className}`}
+      className={`relative aspect-video overflow-hidden bg-black group [&:fullscreen]:!w-screen [&:fullscreen]:!h-screen [&:fullscreen]:!aspect-auto [&:fullscreen]:!max-w-none [&:fullscreen]:!max-h-none [&:-webkit-full-screen]:!w-screen [&:-webkit-full-screen]:!h-screen [&:-webkit-full-screen]:!aspect-auto [&:-webkit-full-screen]:!max-w-none [&:-webkit-full-screen]:!max-h-none ${className}`}
       onContextMenu={handleContextMenu}
       onMouseMove={resetControlsTimeout}
       onMouseLeave={() => {
@@ -463,7 +491,6 @@ export function SecureVideoPlayer({
         playsInline
         preload="auto"
         controlsList="nodownload noremoteplayback"
-        disablePictureInPicture
         disableRemotePlayback
         className="h-full w-full object-contain"
         onClick={togglePlay}
@@ -634,14 +661,22 @@ export function SecureVideoPlayer({
                   </div>
                 )}
               </div>
-              {document.pictureInPictureEnabled && (
+              {pipSupported && (
                 <button type="button" onClick={togglePiP} className="rounded p-1.5 text-white hover:bg-white/20" aria-label="Picture-in-picture">
                   <PictureInPicture className="h-5 w-5" />
                 </button>
               )}
               {onExpandToggle && (
                 <div className="relative group/expand">
-                  <button type="button" onClick={onExpandToggle} className="rounded p-1.5 text-white hover:bg-white/20" aria-label={isExpanded ? "Course content" : "Expanded view"}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (document.fullscreenElement === containerRef.current) document.exitFullscreen?.();
+                      onExpandToggle();
+                    }}
+                    className="rounded p-1.5 text-white hover:bg-white/20"
+                    aria-label={isExpanded ? "Course content" : "Expanded view"}
+                  >
                     {isExpanded ? <Columns2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                   </button>
                   <div className="pointer-events-none absolute bottom-full right-0 mb-2 hidden rounded bg-black/90 px-2 py-1 text-xs text-white whitespace-nowrap group-hover/expand:block">

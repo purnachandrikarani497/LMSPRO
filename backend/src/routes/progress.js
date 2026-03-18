@@ -18,7 +18,24 @@ router.get("/:courseId", requireAuth, async (req, res) => {
     if (!progress) {
       return res.status(404).json({ message: "Progress not found" });
     }
-    res.json(progress);
+    // Serialize Maps to plain objects for JSON response
+    const timestamps = {};
+    const durations = {};
+    if (progress.watchTimestamps) {
+      for (const [k, v] of progress.watchTimestamps) { timestamps[k] = v; }
+    }
+    if (progress.lessonDurations) {
+      for (const [k, v] of progress.lessonDurations) { durations[k] = v; }
+    }
+    res.json({
+      _id: progress._id,
+      course: progress.course,
+      lessonsCompleted: progress.lessonsCompleted,
+      watchTimestamps: timestamps,
+      lessonDurations: durations,
+      status: progress.status,
+      score: progress.score
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch progress" });
   }
@@ -41,11 +58,36 @@ router.post("/:courseId/lessons/:lessonId/complete", requireAuth, async (req, re
       progress.lessonsCompleted.push(lessonId);
     }
     const course = await Course.findById(req.params.courseId);
-    if (course && progress.lessonsCompleted.length >= course.lessons.length) {
-      progress.status = "completed";
+    if (course) {
+      // Compute total lessons count from either `lessons` or `sections`.
+      let totalLessons = 0;
+      if (course.lessons && course.lessons.length > 0) totalLessons = course.lessons.length;
+      else if (course.sections && course.sections.length > 0) {
+        totalLessons = course.sections.reduce((acc, s) => acc + ((s.lessons && s.lessons.length) || 0), 0);
+      }
+      if (totalLessons > 0 && progress.lessonsCompleted.length >= totalLessons) {
+        progress.status = "completed";
+      }
     }
     await progress.save();
-    res.json(progress);
+    // Serialize Maps to plain objects for JSON response
+    const timestamps = {};
+    const durations = {};
+    if (progress.watchTimestamps) {
+      for (const [k, v] of progress.watchTimestamps) { timestamps[k] = v; }
+    }
+    if (progress.lessonDurations) {
+      for (const [k, v] of progress.lessonDurations) { durations[k] = v; }
+    }
+    res.json({
+      _id: progress._id,
+      course: progress.course,
+      lessonsCompleted: progress.lessonsCompleted,
+      watchTimestamps: timestamps,
+      lessonDurations: durations,
+      status: progress.status,
+      score: progress.score
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to update progress" });
   }
@@ -81,8 +123,15 @@ router.post("/:courseId/lessons/:lessonId/timestamp", requireAuth, async (req, r
       }
     }
     const course = await Course.findById(req.params.courseId);
-    if (course && progress.lessonsCompleted.length >= course.lessons.length) {
-      progress.status = "completed";
+    if (course) {
+      let totalLessons = 0;
+      if (course.lessons && course.lessons.length > 0) totalLessons = course.lessons.length;
+      else if (course.sections && course.sections.length > 0) {
+        totalLessons = course.sections.reduce((acc, s) => acc + ((s.lessons && s.lessons.length) || 0), 0);
+      }
+      if (totalLessons > 0 && progress.lessonsCompleted.length >= totalLessons) {
+        progress.status = "completed";
+      }
     }
     await progress.save();
     res.json({ lessonId: req.params.lessonId, timestamp, duration, autoCompleted });
@@ -244,7 +293,27 @@ router.post("/:courseId/quiz/submit", requireAuth, async (req, res) => {
       { score },
       { new: true }
     );
-    res.json({ score, progress });
+    // Serialize Maps to plain objects for JSON response
+    const timestamps = {};
+    const durations = {};
+    if (progress.watchTimestamps) {
+      for (const [k, v] of progress.watchTimestamps) { timestamps[k] = v; }
+    }
+    if (progress.lessonDurations) {
+      for (const [k, v] of progress.lessonDurations) { durations[k] = v; }
+    }
+    res.json({ 
+      score, 
+      progress: {
+        _id: progress._id,
+        course: progress.course,
+        lessonsCompleted: progress.lessonsCompleted,
+        watchTimestamps: timestamps,
+        lessonDurations: durations,
+        status: progress.status,
+        score: progress.score
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to submit quiz" });
   }

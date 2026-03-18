@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Play, CheckCircle2, ArrowLeft, BookOpen, AlertCircle } from "lucide-react";
+import { Play, CheckCircle2, ArrowLeft, BookOpen, AlertCircle, Trash2, Edit, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, getSecureVideoSrc, getSecureStreamUrl } from "@/lib/api";
+import { api, ApiCourse, ApiNoteEntry, ApiWatchTimestamps } from "@/lib/api";
+import { getSecureVideoSrc, getSecureStreamUrl } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
@@ -23,6 +25,18 @@ const LessonViewer = () => {
     queryKey: ["course", courseId],
     queryFn: () => api.getCourse(courseId || ""),
     enabled: !!courseId
+  });
+
+  const [note, setNote] = useState("");
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
+  const seekToRef = useRef<((seconds: number) => void) | null>(null);
+
+  const { data: watchData } = useQuery<ApiWatchTimestamps>({
+    queryKey: ["watchTimestamps", courseId],
+    queryFn: () => api.getWatchTimestamps(courseId || ""),
+    enabled: !!courseId,
+    retry: false
   });
 
   const completeMutation = useMutation({

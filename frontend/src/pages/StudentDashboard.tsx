@@ -25,11 +25,21 @@ const StatCard = ({ icon: Icon, label, value }: StatCardProps) => (
   </div>
 );
 
+/** Parse "M:SS" or "H:MM:SS" to seconds (same as CourseDetail) */
+const parseDurationToSeconds = (duration?: string | null): number => {
+  if (!duration || !duration.trim()) return 0;
+  const parts = duration.trim().split(":").map((p) => parseInt(p.replace(/\D/g, ""), 10));
+  if (parts.length === 2) return (parts[0] || 0) * 60 + (parts[1] || 0);
+  if (parts.length >= 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+  if (parts.length === 1) return parts[0] || 0;
+  return 0;
+};
+
+const secondsFromDurationString = parseDurationToSeconds;
+
 const parseDurationToHours = (duration?: string | null) => {
-  if (!duration) return 0;
-  const match = duration.match(/(\d+(\.\d+)?)/);
-  if (!match) return 0;
-  return Number(match[1]);
+  const secs = parseDurationToSeconds(duration);
+  return secs / 3600;
 };
 
 const StudentDashboard = () => {
@@ -68,6 +78,51 @@ const StudentDashboard = () => {
     loadProgress();
   }, [enrollments]);
 
+  const computeCoursePercent = (course: ApiEnrollment["course"], progress?: ApiProgress | undefined) => {
+    // If no progress at all, return 0
+    if (!progress) return 0;
+    if (progress.status === "completed") return 100;
+
+    // progress.watchTimestamps: Record<lessonId, secondsWatched>
+    // progress.lessonDurations: Record<lessonId, secondsDuration>
+    const lessons = course.sections && course.sections.length > 0
+      ? course.sections.flatMap(s => s.lessons || [])
+      : course.lessons || [];
+
+    // DEBUG: log the data
+    const courseId = course._id || course.id;
+    const hasTimestamps = progress.watchTimestamps && Object.keys(progress.watchTimestamps).length > 0;
+    const hasDurations = progress.lessonDurations && Object.keys(progress.lessonDurations).length > 0;
+
+    // If no lesson data available, fallback to course.duration
+    if (!lessons || lessons.length === 0) {
+      const totalSec = secondsFromDurationString(course.duration);
+      const watchedSec = Object.values(progress.watchTimestamps || {}).reduce((s, v) => s + (v || 0), 0);
+      if (totalSec === 0) return 0;
+      const percent = Math.round((watchedSec / totalSec) * 100);
+      return percent;
+    }
+
+    let totalSec = 0;
+    let watchedSec = 0;
+
+    lessons.forEach((lesson) => {
+      const lid = String(lesson._id || lesson.id || "");
+      const durFromProgress = progress.lessonDurations ? progress.lessonDurations[lid] : undefined;
+      const lessonSec = durFromProgress ?? secondsFromDurationString(lesson.duration ?? null);
+      totalSec += lessonSec;
+      const watched = progress.watchTimestamps ? (progress.watchTimestamps[lid] || 0) : 0;
+      watchedSec += Math.min(watched, lessonSec || watched);
+    });
+
+    if (totalSec === 0) return 0;
+    const percent = Math.round((watchedSec / totalSec) * 100);
+    if (percent > 0 || hasTimestamps) {
+      console.log(`[DEBUG] Course ${courseId}: ${percent}% (watched=${watchedSec}s, total=${totalSec}s, lessons=${lessons.length}, hasTimestamps=${hasTimestamps}, hasDurations=${hasDurations})`);
+    }
+    return percent;
+  };
+
   const courseCount = enrollments?.length ?? 0;
   const certificatesCount = certificates?.length ?? 0;
   const avgProgress =
@@ -77,7 +132,7 @@ const StudentDashboard = () => {
             if (!enrollment.course) return sum;
             const id = enrollment.course._id || enrollment.course.id || "";
             const progress = progressMap[id];
-            const value = progress ? (progress.status === "completed" ? 100 : 50) : 0;
+            const value = computeCoursePercent(enrollment.course, progress);
             return sum + value;
           }, 0) / enrollments.length
         )
@@ -89,7 +144,7 @@ const StudentDashboard = () => {
             if (!enrollment.course) return sum;
             const id = enrollment.course._id || enrollment.course.id || "";
             const progress = progressMap[id];
-            const percent = progress ? (progress.status === "completed" ? 100 : 50) : 0;
+            const percent = computeCoursePercent(enrollment.course, progress);
             const durationHours = parseDurationToHours(enrollment.course.duration);
             return sum + (durationHours * percent) / 100;
           }, 0)
@@ -117,8 +172,8 @@ const StudentDashboard = () => {
           {enrollments?.filter(e => e.course).map((enrollment) => {
             const course = enrollment.course;
             const id = course._id || course.id || "";
-            const progress = progressMap[id];
-            const percent = progress ? (progress.status === "completed" ? 100 : 50) : 0;
+              const progress = progressMap[id];
+              const percent = computeCoursePercent(course, progress);
             return (
               <CourseCard
                 key={id}
