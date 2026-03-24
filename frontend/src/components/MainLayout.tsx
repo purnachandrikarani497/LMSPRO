@@ -119,17 +119,24 @@ const MainLayout = () => {
             );
           })}
         </nav>
-        <div className="border-t border-border p-3 space-y-2">
-          <Link to="/profile" className="block">
-            <Button variant="outline" className="w-full justify-start gap-2">
-              <UserIcon className="h-4 w-4" />
-              Profile
+        <div className="border-t border-border p-3">
+          <div className="flex gap-2">
+            <Link to="/profile" className="flex-1">
+              <Button variant="outline" size="sm" className="w-full gap-2">
+                <UserIcon className="h-4 w-4" />
+                Profile
+              </Button>
+            </Link>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="w-full flex-1"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
             </Button>
-          </Link>
-          <Button variant="destructive" className="w-full justify-start gap-2" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
+          </div>
         </div>
       </aside>
       )}
@@ -138,11 +145,8 @@ const MainLayout = () => {
       {showSidebar && (
         <>
           <button
-            className="fixed left-4 top-20 z-40 rounded-lg border border-border bg-card p-2 lg:hidden"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+            className="hidden"
+          ></button>
           {sidebarOpen && (
             <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
           )}
@@ -178,24 +182,27 @@ const MainLayout = () => {
                 );
               })}
             </nav>
-            <div className="border-t border-border p-3 space-y-2">
-              <Link to="/profile" onClick={() => setSidebarOpen(false)} className="block">
-                <Button variant="outline" className="w-full justify-start gap-2">
-                  <UserIcon className="h-4 w-4" />
-                  Profile
+            <div className="border-t border-border p-3">
+              <div className="flex gap-2">
+                <Link to="/profile" onClick={() => setSidebarOpen(false)} className="flex-1">
+                  <Button variant="outline" size="sm" className="w-full gap-2">
+                    <UserIcon className="h-4 w-4" />
+                    Profile
+                  </Button>
+                </Link>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full flex-1"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    handleSignOut();
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
                 </Button>
-              </Link>
-              <Button
-                variant="destructive"
-                className="w-full justify-start gap-2"
-                onClick={() => {
-                  setSidebarOpen(false);
-                  handleSignOut();
-                }}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </Button>
+              </div>
             </div>
           </aside>
         </>
@@ -203,7 +210,7 @@ const MainLayout = () => {
 
       {/* Main content - offset for sidebar on desktop when admin */}
       <main className={`min-w-0 flex-1 flex flex-col ${showSidebar ? "lg:ml-64" : ""}`}>
-        <Navbar showFullNav={!showSidebar} />
+        <Navbar showFullNav={!showSidebar} adminMenuToggle={showSidebar ? { open: sidebarOpen, onToggle: () => setSidebarOpen(!sidebarOpen) } : undefined} />
         <div className="flex-1">
           <Outlet />
         </div>

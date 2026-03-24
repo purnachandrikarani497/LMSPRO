@@ -12,11 +12,11 @@ interface StoredUser {
 }
 
 interface NavbarProps {
-  /** When true, show logo and nav links (Home, Courses, etc.). When false, compact nav for admin sidebar layout. */
   showFullNav?: boolean;
+  adminMenuToggle?: { open: boolean; onToggle: () => void };
 }
 
-const Navbar = ({ showFullNav = true }: NavbarProps) => {
+const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,7 +79,7 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border/40 bg-card/90 backdrop-blur-xl shadow-sm">
-      <div className={`${showFullNav ? "container mx-auto" : "w-full"} flex h-16 items-center px-4 sm:px-6 justify-start`}>
+      <div className={`${showFullNav ? "container mx-auto" : "w-full"} flex h-16 items-center px-4 sm:px-6 ${showFullNav ? "justify-between" : adminMenuToggle ? "justify-between" : "justify-start"}`}>
         {showFullNav ? (
           <Link to="/" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
@@ -149,7 +149,15 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
             )}
           </div>
         )}
-        
+        {!showFullNav && adminMenuToggle && (
+          <button
+            className="md:hidden rounded-md border border-border bg-card/90 p-2 shadow-sm text-foreground"
+            aria-label="Toggle menu"
+            onClick={adminMenuToggle.onToggle}
+          >
+            {adminMenuToggle.open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        )}
 
         {showFullNav && (
           <button
