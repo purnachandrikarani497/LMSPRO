@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Menu, X, User, LogIn, LogOut } from "lucide-react";
+import { BookOpen, Menu, X, User, LogIn, LogOut, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type UserRole = "admin" | "student";
 
@@ -113,25 +114,35 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
         {showFullNav && (
           <div className="hidden items-center gap-3 md:flex">
             {user ? (
-              <>
-                <Link to="/profile" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/20">
-                    <User className="h-4 w-4 text-secondary" />
-                  </div>
-                  <span className="max-w-[140px] truncate">
-                    {user.name || user.email}
-                  </span>
-                </Link>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={handleSignOut}
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign Out
-                </Button>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 rounded-full px-2 py-1 text-sm text-muted-foreground hover:text-foreground">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/20">
+                      <User className="h-4 w-4 text-secondary" />
+                    </div>
+                    <span className="max-w-[140px] truncate">
+                      {user.name || user.email}
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[12rem]">
+                  {user.role === "admin" && (
+                    <DropdownMenuItem onSelect={() => navigate("/admin/settings")} className="gap-2">
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => navigate("/profile")} className="gap-2">
+                    <User className="h-4 w-4" />
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={handleSignOut} className="gap-2 text-destructive">
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <>
                 <Link to="/auth">
@@ -170,9 +181,9 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
       </div>
 
       {showFullNav && mobileOpen && (
-        <div className="border-t border-border bg-card px-4 py-4 md:hidden animate-fade-in">
+        <div className="border-t border-border bg-card px-4 py-4 md:hidden animate-fade-in flex flex-col h-[calc(100vh-64px)]">
           {links.length > 0 && (
-            <div className="space-y-1 pb-4">
+            <div className="space-y-1 pb-4 flex-1">
               {links.map((link) => (
                 <Link
                   key={link.to}
@@ -185,10 +196,18 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
               ))}
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="mt-auto flex flex-col gap-2 pt-6 border-t border-border">
             {user ? (
               <>
-                <Link to="/profile" className="flex-1" onClick={() => setMobileOpen(false)}>
+                {user.role === "admin" && (
+                  <Link to="/admin/settings" onClick={() => setMobileOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full gap-2">
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Button>
+                  </Link>
+                )}
+                <Link to="/profile" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full gap-2">
                     <User className="h-4 w-4" />
                     Profile
@@ -196,7 +215,7 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
                 </Link>
                 <Button
                   size="sm"
-                  className="w-full flex-1"
+                  className="w-full"
                   variant="destructive"
                   onClick={() => {
                     setMobileOpen(false);
@@ -209,10 +228,10 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
               </>
             ) : (
               <>
-                <Link to="/auth" className="flex-1" onClick={() => setMobileOpen(false)}>
+                <Link to="/auth" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full">Sign In</Button>
                 </Link>
-                <Link to="/auth?tab=signup" className="flex-1" onClick={() => setMobileOpen(false)}>
+                <Link to="/auth?tab=signup" onClick={() => setMobileOpen(false)}>
                   <Button size="sm" className="w-full bg-gradient-gold text-primary">Get Started</Button>
                 </Link>
               </>
