@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Menu, X, User, LogIn, LogOut, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type UserRole = "admin" | "student";
@@ -180,64 +181,71 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
         )}
       </div>
 
-      {showFullNav && mobileOpen && (
-        <div className="border-t border-border bg-card px-4 py-4 md:hidden animate-fade-in flex flex-col h-[calc(100vh-64px)]">
-          {links.length > 0 && (
-            <div className="space-y-1 pb-4 flex-1">
-              {links.map((link) => (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  onClick={() => setMobileOpen(false)}
-                  className="block rounded-lg px-4 py-3 text-sm font-bold text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </div>
-          )}
-          <div className="mt-auto flex flex-col gap-2 pt-6 border-t border-border">
-            {user ? (
-              <>
-                {user.role === "admin" && (
-                  <Link to="/admin/settings" onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full gap-2">
-                      <Settings className="h-4 w-4" />
-                      Settings
+      {showFullNav && (
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent
+            side="left"
+            className="md:hidden w-[50vw] max-w-[20rem] bg-card p-0 border-r border-border"
+          >
+            <div className="flex h-[100svh] flex-col">
+              {links.length > 0 && (
+                <div className="space-y-1 p-4 flex-1">
+                  {links.map((link) => (
+                    <Link
+                      key={link.to}
+                      to={link.to}
+                      onClick={() => setMobileOpen(false)}
+                      className="block rounded-lg px-4 py-3 text-sm font-bold text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <div className="mt-auto flex flex-col gap-2 p-4 border-t border-border">
+                {user ? (
+                  <>
+                    {user.role === "admin" && (
+                      <Link to="/admin/settings" onClick={() => setMobileOpen(false)}>
+                        <Button variant="outline" size="sm" className="w-full gap-2">
+                          <Settings className="h-4 w-4" />
+                          Settings
+                        </Button>
+                      </Link>
+                    )}
+                    <Link to="/profile" onClick={() => setMobileOpen(false)}>
+                      <Button variant="outline" size="sm" className="w-full gap-2">
+                        <User className="h-4 w-4" />
+                        Profile
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      variant="destructive"
+                      onClick={() => {
+                        setMobileOpen(false);
+                        handleSignOut();
+                      }}
+                    >
+                      <LogOut className="h-4 w-4 mr-1" />
+                      Sign Out
                     </Button>
-                  </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/auth" onClick={() => setMobileOpen(false)}>
+                      <Button variant="outline" size="sm" className="w-full">Sign In</Button>
+                    </Link>
+                    <Link to="/auth?tab=signup" onClick={() => setMobileOpen(false)}>
+                      <Button size="sm" className="w-full bg-gradient-gold text-primary">Get Started</Button>
+                    </Link>
+                  </>
                 )}
-                <Link to="/profile" onClick={() => setMobileOpen(false)}>
-                  <Button variant="outline" size="sm" className="w-full gap-2">
-                    <User className="h-4 w-4" />
-                    Profile
-                  </Button>
-                </Link>
-                <Button
-                  size="sm"
-                  className="w-full"
-                  variant="destructive"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    handleSignOut();
-                  }}
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  Sign Out
-                </Button>
-              </>
-            ) : (
-              <>
-                <Link to="/auth" onClick={() => setMobileOpen(false)}>
-                  <Button variant="outline" size="sm" className="w-full">Sign In</Button>
-                </Link>
-                <Link to="/auth?tab=signup" onClick={() => setMobileOpen(false)}>
-                  <Button size="sm" className="w-full bg-gradient-gold text-primary">Get Started</Button>
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
     </nav>
   );
