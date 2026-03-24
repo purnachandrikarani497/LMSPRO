@@ -529,7 +529,7 @@ const AdminDashboard = () => {
                     }
                   }}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Select
                       value={form.category}
@@ -719,8 +719,8 @@ const AdminDashboard = () => {
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-          <Table>
+          <div className="rounded-xl border border-border bg-card shadow-card">
+          <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
                 <TableHead>

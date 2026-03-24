@@ -10,10 +10,13 @@ import {
   Home,
   GraduationCap,
   Users,
-  Settings
+  Settings,
+  User as UserIcon,
+  LogOut
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/button";
 
 type UserRole = "admin" | "student";
 
@@ -66,6 +69,15 @@ const MainLayout = () => {
   const showSidebar = user?.role === "admin";
   const sidebarLinks = user?.role === "admin" ? adminLinks : user?.role === "student" ? studentLinks : baseLinks;
 
+  const handleSignOut = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("lms_token");
+      window.localStorage.removeItem("lms_user");
+      window.dispatchEvent(new Event("lms_user_updated"));
+      window.location.assign("/auth?tab=signin");
+    }
+  };
+
   const isActive = (link: { to: string }) => {
     if (link.to === "/admin") {
       return location.pathname === "/admin" || (location.pathname.startsWith("/admin/") && !location.pathname.match(/^\/admin\/(users|payments|settings|course)/));
@@ -107,6 +119,18 @@ const MainLayout = () => {
             );
           })}
         </nav>
+        <div className="border-t border-border p-3 space-y-2">
+          <Link to="/profile" className="block">
+            <Button variant="outline" className="w-full justify-start gap-2">
+              <UserIcon className="h-4 w-4" />
+              Profile
+            </Button>
+          </Link>
+          <Button variant="destructive" className="w-full justify-start gap-2" onClick={handleSignOut}>
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
+        </div>
       </aside>
       )}
 
@@ -154,6 +178,25 @@ const MainLayout = () => {
                 );
               })}
             </nav>
+            <div className="border-t border-border p-3 space-y-2">
+              <Link to="/profile" onClick={() => setSidebarOpen(false)} className="block">
+                <Button variant="outline" className="w-full justify-start gap-2">
+                  <UserIcon className="h-4 w-4" />
+                  Profile
+                </Button>
+              </Link>
+              <Button
+                variant="destructive"
+                className="w-full justify-start gap-2"
+                onClick={() => {
+                  setSidebarOpen(false);
+                  handleSignOut();
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </Button>
+            </div>
           </aside>
         </>
       )}

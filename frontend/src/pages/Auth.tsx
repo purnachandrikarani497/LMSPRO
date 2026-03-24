@@ -113,8 +113,17 @@ const Auth = () => {
   const loginMutation = useMutation({
     mutationFn: () => api.login({ email: signinEmail.trim(), password: signinPassword }),
     onSuccess: (data) => handleAuthSuccess(data),
-    onError: () => {
-      toast({ title: "Sign in failed", description: "Please check your credentials", variant: "destructive" });
+    onError: (err: Error) => {
+      let msg = "Please check your credentials";
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+          msg = parsed.message;
+        }
+      } catch {
+        msg = err?.message || msg;
+      }
+      toast({ title: "Sign in failed", description: msg, variant: "destructive" });
     }
   });
 
@@ -332,6 +341,20 @@ const Auth = () => {
                 >
                   Sign In
                 </Button>
+                <div className="mt-2 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                      setSigninEmail("admin@learnhub.com");
+                      setSigninPassword("admin123");
+                    }}
+                  >
+                    Use admin demo
+                  </Button>
+                </div>
                 <div className="text-center">
                   <Dialog open={isDialogOpen} onOpenChange={(open) => {
                     setIsDialogOpen(open);

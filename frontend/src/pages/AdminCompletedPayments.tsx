@@ -153,8 +153,8 @@ const AdminCompletedPayments = () => {
         )}
 
         {!isLoading && filteredEnrollments.length > 0 && (
-          <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-card">
-            <Table>
+          <div className="mt-6 rounded-xl border border-border bg-card shadow-card">
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Course</TableHead>

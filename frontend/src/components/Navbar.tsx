@@ -78,8 +78,8 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border/50 bg-card/80 backdrop-blur-xl">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <nav className="sticky top-0 z-50 border-b border-border/40 bg-card/90 backdrop-blur-xl shadow-sm">
+      <div className={`${showFullNav ? "container mx-auto" : "w-full"} flex h-16 items-center px-4 sm:px-6 justify-start`}>
         {showFullNav ? (
           <Link to="/" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
@@ -88,7 +88,12 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
             <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
           </Link>
         ) : (
-          <div />
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-gold">
+              <BookOpen className="h-4 w-4 text-primary" />
+            </div>
+            <span className="font-heading text-lg font-bold text-foreground">LearnHub</span>
+          </Link>
         )}
         <div className="hidden items-center gap-1 md:flex">
           {links.map((link) => (
@@ -105,53 +110,58 @@ const Navbar = ({ showFullNav = true }: NavbarProps) => {
             </Link>
           ))}
         </div>
-        <div className="hidden items-center gap-3 md:flex">
-          {user ? (
-            <>
-              <Link to="/profile" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/20">
-                  <User className="h-4 w-4 text-secondary" />
-                </div>
-                <span className="max-w-[140px] truncate">
-                  {user.name || user.email}
-                </span>
-              </Link>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </Button>
-            </>
-          ) : (
-            <>
-              <Link to="/auth">
-                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
-                  <LogIn className="h-4 w-4" />
-                  Sign In
+        {showFullNav && (
+          <div className="hidden items-center gap-3 md:flex">
+            {user ? (
+              <>
+                <Link to="/profile" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/20">
+                    <User className="h-4 w-4 text-secondary" />
+                  </div>
+                  <span className="max-w-[140px] truncate">
+                    {user.name || user.email}
+                  </span>
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
                 </Button>
-              </Link>
-              <Link to="/auth?tab=signup">
-                <Button size="sm" className="bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90">
-                  Get Started
-                </Button>
-              </Link>
-            </>
-          )}
-        </div>
+              </>
+            ) : (
+              <>
+                <Link to="/auth">
+                  <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+                    <LogIn className="h-4 w-4" />
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/auth?tab=signup">
+                  <Button size="sm" className="bg-gradient-gold font-semibold text-primary shadow-gold hover:opacity-90">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
+          </div>
+        )}
+        
 
-        <button
-          className="md:hidden text-foreground"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {showFullNav && (
+          <button
+            className="md:hidden text-foreground"
+            onClick={() => setMobileOpen(!mobileOpen)}
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        )}
       </div>
 
-      {mobileOpen && (
+      {showFullNav && mobileOpen && (
         <div className="border-t border-border bg-card px-4 py-4 md:hidden animate-fade-in">
           {links.length > 0 && (
             <div className="space-y-1 pb-4">

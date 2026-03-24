@@ -107,7 +107,7 @@ const StudentDashboard = () => {
     let watchedSec = 0;
 
     lessons.forEach((lesson) => {
-      const lid = String(lesson._id || lesson.id || "");
+      const lid = String(lesson._id ?? "");
       const durFromProgress = progress.lessonDurations ? progress.lessonDurations[lid] : undefined;
       const lessonSec = durFromProgress ?? secondsFromDurationString(lesson.duration ?? null);
       totalSec += lessonSec;
@@ -168,7 +168,7 @@ const StudentDashboard = () => {
         </div>
 
         <h2 className="mt-12 font-heading text-xl font-semibold text-foreground">Continue Learning</h2>
-        <div className="mt-6 grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="mt-6 grid gap-4 grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {enrollments?.filter(e => e.course).map((enrollment) => {
             const course = enrollment.course;
             const id = course._id || course.id || "";

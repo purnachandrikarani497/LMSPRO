@@ -76,7 +76,7 @@ const Index = () => {
             Find the perfect course for your learning journey
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Link
             to="/courses"
             key="all-categories"

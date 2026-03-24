@@ -187,6 +187,21 @@ async function request<T>(path: string, method: HttpMethod, body?: unknown, retr
   });
   if (!response.ok) {
     const text = await response.text();
+    if (response.status === 401) {
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("lms_token");
+          window.localStorage.removeItem("lms_user");
+          window.dispatchEvent(new Event("lms_user_updated"));
+          if (!window.location.pathname.startsWith("/auth")) {
+            window.location.assign("/auth?tab=signin");
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      throw new Error(text || "Unauthorized");
+    }
     if (response.status === 503 && retryCount < 2) {
       try {
         const data = JSON.parse(text);

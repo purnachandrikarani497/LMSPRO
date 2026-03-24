@@ -14,6 +14,9 @@ const config: Config = {
       },
     },
     extend: {
+      screens: {
+        xs: "475px",
+      },
       fontFamily: {
         heading: ['Space Grotesk', 'sans-serif'],
         body: ['Plus Jakarta Sans', 'sans-serif'],
