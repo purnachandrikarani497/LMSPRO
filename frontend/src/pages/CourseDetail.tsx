@@ -9,11 +9,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, ApiNoteEntry, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, ApiNoteEntry, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken, getVideoSrc } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
 import { formatPrice } from "@/lib/utils";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = ["Overview", "Notes", "Announcements", "Reviews"];
 
@@ -70,6 +71,7 @@ const CourseDetail = () => {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
   const [hoverRating, setHoverRating] = useState(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: apiCourse, isLoading, error } = useQuery<ApiCourse>({
     queryKey: ["course", courseParam],
@@ -347,6 +349,10 @@ const CourseDetail = () => {
   const prevLesson = selectedIndex > 0 ? lessons[selectedIndex - 1] : null;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;
   const [autoplay, setAutoplay] = useState(false);
+  const previewLesson = useMemo(() => {
+    return lessons.find(l => !!l.videoUrl) ?? null;
+  }, [lessons]);
+  const previewSrc = useMemo(() => getVideoSrc(previewLesson?.videoUrl), [previewLesson?.videoUrl]);
 
   // Get sections if available, otherwise create default section from lessons
   const sections = useMemo(() => 
@@ -404,6 +410,29 @@ const CourseDetail = () => {
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
           <p className="mt-4 text-gray-600">Loading course...</p>
         </div>
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-3xl p-0">
+            <DialogHeader className="px-6 py-4">
+              <DialogTitle>Course Preview</DialogTitle>
+            </DialogHeader>
+            {previewSrc ? (
+              <div className="w-full aspect-video bg-black">
+                <video
+                  className="h-full w-full"
+                  src={previewSrc}
+                  controls
+                  playsInline
+                  autoPlay
+                  muted
+                  preload="metadata"
+                  poster={getThumbnailSrc(course.image)}
+                />
+              </div>
+            ) : (
+              <div className="p-6 text-sm text-muted-foreground">No preview available</div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -594,12 +623,27 @@ const CourseDetail = () => {
                 <div className="lg:sticky lg:top-24 z-20">
                   <div className="overflow-hidden rounded-lg bg-white shadow-lg border border-gray-200">
                     {course.image && (
-                      <img
-                        src={getThumbnailSrc(course.image) || course.image}
-                        alt={course.title}
-                        className="aspect-video w-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
+                      <div className="relative">
+                        <img
+                          src={getThumbnailSrc(course.image) || course.image}
+                          alt={course.title}
+                          className="aspect-video w-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        {previewSrc && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewOpen(true)}
+                            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/20 hover:bg-black/30 transition-colors pointer-events-auto"
+                            aria-label="Preview this course"
+                          >
+                            <span className="flex items-center justify-center h-14 w-14 rounded-full bg-white/95 text-gray-900 shadow ring-1 ring-black/10">
+                              <Play className="h-6 w-6" />
+                            </span>
+                            <span className="text-white text-sm font-medium drop-shadow">Preview this course</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                     <div className="p-6 space-y-4">
                       <div className="text-3xl font-bold text-gray-900">{formatPrice(course.price)}</div>
