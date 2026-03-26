@@ -52,6 +52,7 @@ const courseSchema = new mongoose.Schema(
     ],
     duration: { type: String },
     level: { type: String },
+    previewVideoUrl: { type: String },
     sections: [sectionSchema],
     lessons: [lessonSchema],
     quiz: [questionSchema],

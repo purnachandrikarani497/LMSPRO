@@ -254,12 +254,30 @@ router.get("/video", async (req, res) => {
     return res.status(400).json({ message: "Invalid video key" });
   }
   if (!token) {
-    return res.status(401).json({ message: "Authentication required to stream video" });
-  }
-  try {
-    jwt.verify(token, config.jwtSecret);
-  } catch {
-    return res.status(401).json({ message: "Invalid or expired token" });
+    try {
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const previewMatch = await Course.findOne({ previewVideoUrl: { $regex: escaped } }).select("_id").lean();
+      if (!previewMatch) {
+        return res.status(401).json({ message: "Authentication required to stream video" });
+      }
+      // If this key is registered as a course preview, allow public streaming (no auth)
+    } catch {
+      return res.status(401).json({ message: "Authentication required to stream video" });
+    }
+  } else {
+    try {
+      jwt.verify(token, config.jwtSecret);
+    } catch {
+      try {
+        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const previewMatch = await Course.findOne({ previewVideoUrl: { $regex: escaped } }).select("_id").lean();
+        if (!previewMatch) {
+          return res.status(401).json({ message: "Invalid or expired token" });
+        }
+      } catch {
+        return res.status(401).json({ message: "Invalid or expired token" });
+      }
+    }
   }
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
     return res.status(503).json({ message: "S3 not configured" });

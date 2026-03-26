@@ -238,6 +238,7 @@ export interface ApiCourse {
   subtitle?: string;
   description: string;
   thumbnail?: string;
+  previewVideoUrl?: string;
   instructor?: string;
   instructorPhoto?: string;
   instructorTitle?: string;
@@ -450,6 +451,7 @@ export const api = {
     description: string;
     subtitle?: string;
     thumbnail?: string;
+    previewVideoUrl?: string;
     instructor?: string;
     instructorPhoto?: string;
     instructorTitle?: string;

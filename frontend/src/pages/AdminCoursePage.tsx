@@ -59,6 +59,9 @@ const AdminCoursePage = () => {
   const [instructorBio, setInstructorBio] = useState("");
   const [announcements, setAnnouncements] = useState<{ title: string; content: string; postedAt?: string }[]>([]);
   const [metaErrors, setMetaErrors] = useState<{ description?: string; instructor?: string }>({});
+  const [previewVideoUrl, setPreviewVideoUrl] = useState("");
+  const [uploadingPreview, setUploadingPreview] = useState(false);
+  const [previewUploadProgress, setPreviewUploadProgress] = useState(0);
 
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["admin-course", id],
@@ -76,6 +79,7 @@ const AdminCoursePage = () => {
       setInstructorTitle(course.instructorTitle || "");
       setInstructorBio(course.instructorBio || "");
       setAnnouncements(course.announcements || []);
+      setPreviewVideoUrl(course.previewVideoUrl || "");
 
       if (course.sections && course.sections.length > 0) {
         // Use sections from API if available
@@ -102,12 +106,13 @@ const AdminCoursePage = () => {
 
 
   const updateCourseMutation = useMutation({
-    mutationFn: async (data: { subtitle?: string; description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string; announcements?: { title: string; content: string; postedAt?: string }[] }) => {
+    mutationFn: async (data: { subtitle?: string; description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string; announcements?: { title: string; content: string; postedAt?: string }[]; previewVideoUrl?: string }) => {
       if (!course) throw new Error("Course not loaded");
       return api.updateCourse(id!, {
         title: course.title,
         subtitle: data.subtitle,
         description: data.description,
+        previewVideoUrl: data.previewVideoUrl,
         instructor: data.instructor,
         instructorPhoto: data.instructorPhoto,
         instructorTitle: data.instructorTitle,
@@ -160,6 +165,7 @@ const AdminCoursePage = () => {
         subtitle: courseSubtitle.trim(),
         description: courseDescription.trim(),
         instructor: courseInstructor.trim(),
+        previewVideoUrl: previewVideoUrl.trim() || undefined,
         instructorPhoto: instructorPhoto.trim() || undefined,
         instructorTitle: instructorTitle.trim() || undefined,
         instructorBio: instructorBio.trim() || undefined,
@@ -997,6 +1003,60 @@ const AdminCoursePage = () => {
               />
               {metaErrors.description && <p className="mt-1 text-xs text-red-500">{metaErrors.description}</p>}
               <p className="mt-1 text-[10px] text-gray-400">{courseDescription.length}/5000 characters</p>
+            </div>
+
+            <div className="border-t border-gray-200 pt-4 mt-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">Preview Video</h3>
+              <p className="text-sm text-gray-500 mb-3">Optional course promo shown on the course page “Preview this course”.</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Preview video URL"
+                  value={previewVideoUrl}
+                  onChange={(e) => setPreviewVideoUrl(e.target.value)}
+                />
+                <input
+                  type="file"
+                  id="preview-video-upload"
+                  accept="video/mp4,video/webm,video/ogg"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingPreview(true);
+                    setPreviewUploadProgress(0);
+                    try {
+                      const { url } = await api.uploadVideo(file, (pct) => setPreviewUploadProgress(pct));
+                      setPreviewVideoUrl(url);
+                      toast({ title: "Preview uploaded", description: "Preview video URL set" });
+                    } catch (err) {
+                      toast({
+                        title: "Upload failed",
+                        description: err instanceof Error ? err.message : "Please try again",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setUploadingPreview(false);
+                      setPreviewUploadProgress(0);
+                      if (e.target) e.target.value = "";
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Upload preview video"
+                  onClick={() => document.getElementById("preview-video-upload")?.click()}
+                  disabled={uploadingPreview}
+                >
+                  {uploadingPreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                </Button>
+              </div>
+              {uploadingPreview && (
+                <div className="mt-2">
+                  <Progress value={previewUploadProgress} className="h-2 bg-amber-100 [&>div]:bg-amber-500" />
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200 pt-4 mt-6">

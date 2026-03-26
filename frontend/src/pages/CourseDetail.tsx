@@ -352,7 +352,37 @@ const CourseDetail = () => {
   const previewLesson = useMemo(() => {
     return lessons.find(l => !!l.videoUrl) ?? null;
   }, [lessons]);
-  const previewSrc = useMemo(() => getVideoSrc(previewLesson?.videoUrl), [previewLesson?.videoUrl]);
+  const previewSrc = useMemo(() => {
+    const courseLevel = apiCourse?.previewVideoUrl;
+    if (courseLevel && courseLevel.trim()) return getSecureVideoSrc(courseLevel);
+    return getSecureVideoSrc(previewLesson?.videoUrl);
+  }, [apiCourse?.previewVideoUrl, previewLesson?.videoUrl]);
+
+  const previewDialog = (
+    <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      <DialogContent className="max-w-3xl p-0">
+        <DialogHeader className="px-6 py-4">
+          <DialogTitle>Course Preview</DialogTitle>
+        </DialogHeader>
+        {previewSrc ? (
+          <div className="w-full aspect-video bg-black">
+            <video
+              className="h-full w-full"
+              src={previewSrc}
+              controls
+              playsInline
+              autoPlay
+              muted
+              preload="metadata"
+              poster={course?.image ? getThumbnailSrc(course.image) : undefined}
+            />
+          </div>
+        ) : (
+          <div className="p-6 text-sm text-muted-foreground">No preview available</div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 
   // Get sections if available, otherwise create default section from lessons
   const sections = useMemo(() => 
@@ -410,29 +440,7 @@ const CourseDetail = () => {
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
           <p className="mt-4 text-gray-600">Loading course...</p>
         </div>
-        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-3xl p-0">
-            <DialogHeader className="px-6 py-4">
-              <DialogTitle>Course Preview</DialogTitle>
-            </DialogHeader>
-            {previewSrc ? (
-              <div className="w-full aspect-video bg-black">
-                <video
-                  className="h-full w-full"
-                  src={previewSrc}
-                  controls
-                  playsInline
-                  autoPlay
-                  muted
-                  preload="metadata"
-                  poster={getThumbnailSrc(course.image)}
-                />
-              </div>
-            ) : (
-              <div className="p-6 text-sm text-muted-foreground">No preview available</div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {previewDialog}
       </div>
     );
   }
@@ -511,6 +519,7 @@ const CourseDetail = () => {
             </div>
           </div>
         </div>
+        {previewDialog}
       </div>
     );
   }
@@ -755,6 +764,7 @@ const CourseDetail = () => {
             </div>
           </div>
         </div>
+        {previewDialog}
       </div>
     );
   }
