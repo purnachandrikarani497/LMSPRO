@@ -81,7 +81,7 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border/40 bg-card/90 backdrop-blur-xl shadow-sm">
-      <div className={`${showFullNav ? "container mx-auto" : "w-full"} flex h-16 items-center px-4 sm:px-6 ${showFullNav ? "justify-between" : "justify-start"}`}>
+      <div className={`${showFullNav ? "container mx-auto" : "w-full"} flex h-16 items-center px-4 sm:px-6 justify-between`}>
         {showFullNav ? (
           <Link to="/" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
@@ -89,7 +89,14 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
             </div>
             <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
           </Link>
-        ) : null}
+        ) : (
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
+              <BookOpen className="h-5 w-5 text-primary" />
+            </div>
+            <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
+          </Link>
+        )}
         <div className="hidden items-center gap-1 md:flex">
           {links.map((link) => (
             <Link

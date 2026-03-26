@@ -107,7 +107,11 @@ const Auth = () => {
     window.localStorage.setItem("lms_token", data.token);
     window.localStorage.setItem("lms_user", JSON.stringify(data.user));
     toast({ title: "Welcome back", description: "You are now signed in" });
-    navigate("/");
+    if (data.user?.role === "admin") {
+      navigate("/admin");
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   const loginMutation = useMutation({
