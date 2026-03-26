@@ -341,20 +341,6 @@ const Auth = () => {
                 >
                   Sign In
                 </Button>
-                <div className="mt-2 flex justify-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => {
-                      setSigninEmail("admin@learnhub.com");
-                      setSigninPassword("admin123");
-                    }}
-                  >
-                    Use admin demo
-                  </Button>
-                </div>
                 <div className="text-center">
                   <Dialog open={isDialogOpen} onOpenChange={(open) => {
                     setIsDialogOpen(open);

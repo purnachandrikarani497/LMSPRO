@@ -93,14 +93,7 @@ const MainLayout = () => {
       {/* Sidebar - desktop, fixed position - admin only */}
       {showSidebar && (
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-border bg-card lg:flex">
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
-              <BookOpen className="h-5 w-5 text-primary" />
-            </div>
-            <span className="font-heading text-lg font-bold text-foreground">LearnHub</span>
-          </Link>
-        </div>
+        <div className="flex h-16 shrink-0 items-center border-b border-border px-4" />
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {sidebarLinks.map((link) => {
             const Icon = link.icon;
@@ -160,11 +153,7 @@ const MainLayout = () => {
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
-            <div className="flex h-16 items-center justify-between border-b border-border px-4">
-              <Link to="/" className="flex items-center gap-2" onClick={() => setSidebarOpen(false)}>
-                <BookOpen className="h-5 w-5 text-primary" />
-                <span className="font-heading text-lg font-bold">LearnHub</span>
-              </Link>
+            <div className="flex h-16 items-center justify-end border-b border-border px-4">
               <button onClick={() => setSidebarOpen(false)}>
                 <X className="h-5 w-5" />
               </button>
