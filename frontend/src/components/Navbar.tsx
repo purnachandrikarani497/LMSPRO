@@ -90,12 +90,15 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
             <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
           </Link>
         ) : (
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
-              <BookOpen className="h-5 w-5 text-primary" />
-            </div>
-            <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
-          </Link>
+          <>
+            <Link to="/" className="flex items-center gap-2.5 lg:hidden">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-gold">
+                <BookOpen className="h-5 w-5 text-primary" />
+              </div>
+              <span className="font-heading text-xl font-bold text-foreground">LearnHub</span>
+            </Link>
+            <span className="hidden lg:inline-block h-9" />
+          </>
         )}
         <div className="hidden items-center gap-1 md:flex">
           {links.map((link) => (

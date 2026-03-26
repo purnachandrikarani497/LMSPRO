@@ -529,6 +529,16 @@ const CourseDetail = () => {
   if (enrollmentKnown && !isEnrolled && !lessonId) {
     return (
       <div className="min-h-screen bg-gray-50">
+        <div className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-gray-200">
+          <div className="container mx-auto px-4 h-12 flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-gold">
+                <BookOpen className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-heading text-base font-bold text-gray-900">LearnHub</span>
+            </Link>
+          </div>
+        </div>
         <Helmet>
           <title>{course.title} – LearnHub Course</title>
           <meta name="description" content={course.description} />
