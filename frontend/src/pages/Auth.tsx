@@ -110,7 +110,7 @@ const Auth = () => {
     if (data.user?.role === "admin") {
       navigate("/admin");
     } else {
-      navigate("/dashboard");
+      navigate("/");
     }
   };
 
