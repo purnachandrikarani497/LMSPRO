@@ -32,6 +32,17 @@ function extractVideoKeyFromUrl(url) {
   return null;
 }
 
+function extractPdfKeyFromUrl(url) {
+  if (!url || typeof url !== "string") return null;
+  if (url.startsWith("pdfs/")) return url;
+  const m = url.match(/[?&]key=([^&]+)/);
+  if (m) {
+    const k = decodeURIComponent(m[1]);
+    if (k.startsWith("pdfs/")) return k;
+  }
+  return null;
+}
+
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -58,6 +69,19 @@ const videoUpload = multer({
   }
 });
 
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 40 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ["application/pdf"];
+    if (allowed.includes(file.mimetype) || (file.originalname || "").toLowerCase().endsWith(".pdf")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF files are allowed"));
+    }
+  }
+});
+
 const s3 = new S3Client({
   region: config.s3.region,
   credentials: config.s3.accessKeyId && config.s3.secretAccessKey
@@ -67,6 +91,45 @@ const s3 = new S3Client({
       }
     : undefined
 });
+
+async function streamLocalPdf(req, res, key) {
+  const safeName = path.basename(key);
+  const localDir = path.resolve(process.cwd(), "uploads", "pdfs");
+  const localPath = path.join(localDir, safeName);
+  if (!localPath.startsWith(localDir)) {
+    return res.status(400).json({ message: "Invalid path" });
+  }
+  let stat;
+  try {
+    stat = await fs.promises.stat(localPath);
+  } catch {
+    return res.status(404).json({ message: "PDF not found" });
+  }
+  const size = stat.size;
+  const range = req.headers.range;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Cache-Control", "private, no-cache");
+  if (range) {
+    const match = /^bytes=(\d+)-(\d*)$/.exec(range);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : size - 1;
+      const safeEnd = Math.min(end, size - 1);
+      const chunkSize = safeEnd - start + 1;
+      if (start >= size || start > safeEnd) {
+        return res.status(416).end();
+      }
+      res.status(206);
+      res.setHeader("Content-Range", `bytes ${start}-${safeEnd}/${size}`);
+      res.setHeader("Content-Length", chunkSize);
+      await pipeline(fs.createReadStream(localPath, { start, end: safeEnd }), res);
+      return;
+    }
+  }
+  res.setHeader("Content-Length", size);
+  await pipeline(fs.createReadStream(localPath), res);
+}
 
 router.post(
   "/thumbnail",
@@ -173,6 +236,62 @@ router.post(
   }
 );
 
+router.post(
+  "/pdf",
+  requireAuth,
+  requireRole(["admin"]),
+  (req, res, next) => {
+    pdfUpload.single("file")(req, res, (err) => {
+      if (err) {
+        if (err.message?.includes("Only PDF")) {
+          return res.status(400).json({ message: err.message });
+        }
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ message: "File too large. Max 40MB." });
+        }
+        return res.status(400).json({ message: err.message || "Upload error" });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      const ext = (req.file.originalname.split(".").pop() || "pdf").toLowerCase();
+      const safeExt = ext === "pdf" ? "pdf" : "pdf";
+      const key = `pdfs/${randomUUID()}.${safeExt}`;
+
+      if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
+        const uploadsDir = path.resolve(process.cwd(), "uploads", "pdfs");
+        await fs.promises.mkdir(uploadsDir, { recursive: true });
+        const filePath = path.join(uploadsDir, path.basename(key.replace("pdfs/", "")));
+        await fs.promises.writeFile(filePath, req.file.buffer);
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        const playUrl = `${baseUrl}/api/upload/pdf?key=${encodeURIComponent(key)}`;
+        return res.json({ url: playUrl, key });
+      }
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: config.s3.bucket,
+          Key: key,
+          Body: req.file.buffer,
+          ContentType: "application/pdf"
+        })
+      );
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const playUrl = `${baseUrl}/api/upload/pdf?key=${encodeURIComponent(key)}`;
+      res.json({ url: playUrl, key });
+    } catch (error) {
+      console.error("PDF upload error:", error);
+      res.status(500).json({ message: error.message || "Failed to upload PDF" });
+    }
+  }
+);
+
 router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
   // Reject direct navigation (opening URL in new tab, address bar, or "Open in new tab" from DevTools)
   const secFetchDest = req.get("Sec-Fetch-Dest");
@@ -247,6 +366,95 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
   }
 });
 
+router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
+  const secFetchDest = req.get("Sec-Fetch-Dest");
+  if (secFetchDest === "document") {
+    return res.status(403).json({ message: "PDF must be viewed from the course page" });
+  }
+
+  const referer = req.get("Referer") || req.get("Referrer");
+  const origin = req.get("Origin");
+  const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
+  const fromApp = (referer && allowedOrigins.some((o) => referer.startsWith(o))) || (origin && allowedOrigins.some((o) => origin.startsWith(o)));
+  if (!fromApp) {
+    return res.status(403).json({ message: "PDF must be viewed from the course page" });
+  }
+
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  if (!token) return res.status(401).json({ message: "Authentication required" });
+  let decoded;
+  try {
+    decoded = jwt.verify(token, config.jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+
+  const { courseId, lessonId } = req.params;
+  if (!courseId || !lessonId) return res.status(400).json({ message: "Invalid course or lesson" });
+
+  const course = await Course.findById(courseId).lean();
+  if (!course) return res.status(404).json({ message: "Course not found" });
+
+  const allLessons = course.sections?.length
+    ? course.sections.flatMap((s) => s.lessons || [])
+    : (course.lessons || []);
+  const lesson = allLessons.find((l) => l && String(l._id) === lessonId);
+  if (!lesson) {
+    return res.status(404).json({ message: "Lesson not found" });
+  }
+  if (lesson.lessonType === "video" && lesson.videoUrl) {
+    return res.status(404).json({ message: "Lesson or PDF not found" });
+  }
+  const isPdfLesson =
+    lesson.pdfUrl &&
+    (lesson.lessonType === "pdf" || (lesson.lessonType !== "video" && !lesson.videoUrl));
+  if (!isPdfLesson) return res.status(404).json({ message: "Lesson or PDF not found" });
+
+  const pdfKey = extractPdfKeyFromUrl(lesson.pdfUrl);
+  if (!pdfKey) return res.status(404).json({ message: "PDF not found" });
+
+  const isEnrolled = await Enrollment.findOne({ student: decoded.sub || decoded._id, course: courseId });
+  const isAdmin = decoded.role === "admin";
+  if (!isEnrolled && !isAdmin) return res.status(403).json({ message: "Enrollment required" });
+
+  if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
+    return streamLocalPdf(req, res, pdfKey);
+  }
+
+  try {
+    const rangeHeader = req.headers.range;
+    const getParams = { Bucket: config.s3.bucket, Key: pdfKey };
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) {
+      getParams.Range = rangeHeader;
+    }
+    const obj = await s3.send(new GetObjectCommand(getParams));
+    const contentType = obj.ContentType || "application/pdf";
+    const contentLength = obj.ContentLength;
+    const contentRange = obj.ContentRange;
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, no-cache");
+
+    if (contentRange) {
+      res.status(206);
+      res.setHeader("Content-Range", contentRange);
+      if (contentLength != null) res.setHeader("Content-Length", contentLength);
+    }
+
+    if (obj.Body && typeof obj.Body.pipe === "function") {
+      await pipeline(obj.Body, res);
+    } else {
+      const buf = await obj.Body.transformToByteArray();
+      res.setHeader("Content-Length", buf.length);
+      res.send(Buffer.from(buf));
+    }
+  } catch (err) {
+    console.error("PDF stream error:", err?.message || err);
+    if (!res.headersSent) res.status(502).json({ message: "Could not load PDF" });
+  }
+});
+
 router.get("/video", async (req, res) => {
   const key = req.query.key;
   const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
@@ -313,6 +521,57 @@ router.get("/video", async (req, res) => {
   } catch (err) {
     console.error("Video fetch error:", err?.message || err);
     res.status(502).json({ message: "Could not load video" });
+  }
+});
+
+router.get("/pdf", async (req, res) => {
+  const key = req.query.key;
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  if (!key || typeof key !== "string" || !key.startsWith("pdfs/") || key.includes("..")) {
+    return res.status(400).json({ message: "Invalid PDF key" });
+  }
+  if (!token) {
+    return res.status(401).json({ message: "Authentication required to load PDF" });
+  }
+  try {
+    jwt.verify(token, config.jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+  if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
+    return streamLocalPdf(req, res, key);
+  }
+  try {
+    const rangeHeader = req.headers.range;
+    const getParams = { Bucket: config.s3.bucket, Key: key };
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) {
+      getParams.Range = rangeHeader;
+    }
+    const obj = await s3.send(new GetObjectCommand(getParams));
+    const contentType = obj.ContentType || "application/pdf";
+    const contentLength = obj.ContentLength;
+    const contentRange = obj.ContentRange;
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, no-cache");
+
+    if (contentRange) {
+      res.status(206);
+      res.setHeader("Content-Range", contentRange);
+      if (contentLength != null) res.setHeader("Content-Length", contentLength);
+    }
+
+    if (obj.Body && typeof obj.Body.pipe === "function") {
+      await pipeline(obj.Body, res);
+    } else {
+      const buf = await obj.Body.transformToByteArray();
+      res.setHeader("Content-Length", buf.length);
+      res.send(Buffer.from(buf));
+    }
+  } catch (err) {
+    console.error("PDF fetch error:", err?.message || err);
+    res.status(502).json({ message: "Could not load PDF" });
   }
 });
 

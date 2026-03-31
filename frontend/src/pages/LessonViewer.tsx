@@ -5,10 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiCourse, ApiNoteEntry, ApiWatchTimestamps } from "@/lib/api";
-import { getSecureVideoSrc, getSecureStreamUrl } from "@/lib/api";
+import { getSecureVideoSrc, getSecureStreamUrl, getSecurePdfUrl } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
+import { LessonPdfReader } from "@/components/LessonPdfReader";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
+
+function isPdfLesson(lesson: { lessonType?: string; pdfUrl?: string; videoUrl?: string }) {
+  if (lesson.lessonType === "pdf") return !!lesson.pdfUrl;
+  if (lesson.lessonType === "video") return false;
+  return !!(lesson.pdfUrl && !lesson.videoUrl);
+}
 
 const LessonViewer = () => {
   const { courseId, lessonId } = useParams();
@@ -64,7 +71,10 @@ const LessonViewer = () => {
     );
   }
 
-  const lessons = course.lessons || [];
+  const lessons =
+    course.sections && course.sections.length > 0
+      ? course.sections.flatMap((s) => s.lessons || [])
+      : course.lessons || [];
   const currentLesson =
     lessons.find((lesson) => lesson._id === lessonId) || lessons[0] || null;
 
@@ -131,8 +141,23 @@ const LessonViewer = () => {
         <div className="grid gap-8 lg:grid-cols-[2fr,1fr]">
           <section className="space-y-6">
             <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-              <div className="aspect-video flex items-center justify-center overflow-hidden bg-muted">
-                {videoError ? (
+              <div
+                className={`flex overflow-hidden bg-muted ${
+                  isPdfLesson(currentLesson) && currentLesson.pdfUrl && currentLesson._id
+                    ? "h-[80.5vh] min-h-[80.5vh] flex-col"
+                    : "aspect-video items-center justify-center"
+                }`}
+              >
+                {isPdfLesson(currentLesson) && currentLesson.pdfUrl && currentLesson._id ? (
+                  <LessonPdfReader
+                    title={currentLesson.title}
+                    pdfSrc={getSecurePdfUrl(courseId || "", currentLesson._id)}
+                    prevDisabled={!prevLesson}
+                    nextDisabled={!nextLesson}
+                    onPrev={() => prevLesson?._id && navigate(`/course/${courseId}/lesson/${prevLesson._id}`)}
+                    onNext={() => nextLesson?._id && navigate(`/course/${courseId}/lesson/${nextLesson._id}`)}
+                  />
+                ) : videoError ? (
                   <div className="flex flex-col items-center gap-3 p-6 text-center">
                     <AlertCircle className="h-12 w-12 text-amber-500" />
                     <p className="font-medium">Video could not be loaded</p>

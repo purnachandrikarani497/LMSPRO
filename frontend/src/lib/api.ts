@@ -143,6 +143,13 @@ export function getSecureStreamUrl(courseId: string, lessonId: string): string {
   return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }
 
+/** Returns lesson-based PDF stream URL (enrollment + auth; use in iframe src) */
+export function getSecurePdfUrl(courseId: string, lessonId: string): string {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
+  const url = `${API_BASE_URL}/upload/stream/pdf/${courseId}/${lessonId}`;
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+}
+
 /** Returns HLS master playlist URL with auth token */
 export function getHlsUrl(hlsKey: string): string {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
@@ -255,10 +262,11 @@ export interface ApiCourse {
   lessons?: {
     _id?: string;
     title: string;
+    lessonType?: "video" | "pdf";
     videoUrl?: string;
+    pdfUrl?: string;
     content?: string;
     duration?: string;
-    resources?: string[];
   }[];
   sections?: {
     _id?: string;
@@ -266,10 +274,11 @@ export interface ApiCourse {
     lessons?: {
       _id?: string;
       title: string;
+      lessonType?: "video" | "pdf";
       videoUrl?: string;
+      pdfUrl?: string;
       content?: string;
       duration?: string;
-      resources?: string[];
     }[];
   }[];
   quiz?: {
@@ -467,13 +476,13 @@ export const api = {
   deleteCourse(id: string) {
     return request<{ message: string }>(`/courses/${id}`, "DELETE");
   },
-  addLesson(courseId: string, data: { title: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
+  addLesson(courseId: string, data: { title: string; lessonType?: "video" | "pdf"; videoUrl?: string; pdfUrl?: string; content?: string; duration?: string }) {
     return request<{ _id: string; title: string }>(`/courses/${courseId}/lessons`, "POST", data);
   },
   addSection(courseId: string, data: { title: string }) {
     return request<{ _id: string; title: string; lessons: any[] }>(`/courses/${courseId}/sections`, "POST", data);
   },
-  addLessonToSection(courseId: string, sectionId: string, data: { title: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
+  addLessonToSection(courseId: string, sectionId: string, data: { title: string; lessonType?: "video" | "pdf"; videoUrl?: string; pdfUrl?: string; content?: string; duration?: string }) {
     return request<{ _id: string; title: string }>(`/courses/${courseId}/sections/${sectionId}/lessons`, "POST", data);
   },
   updateSection(courseId: string, sectionId: string, data: { title: string }) {
@@ -482,7 +491,7 @@ export const api = {
   deleteSection(courseId: string, sectionId: string) {
     return request<{ message: string }>(`/courses/${courseId}/sections/${sectionId}`, "DELETE");
   },
-  updateLesson(courseId: string, lessonId: string, data: { title?: string; videoUrl?: string; content?: string; duration?: string; resources?: string[] }) {
+  updateLesson(courseId: string, lessonId: string, data: { title?: string; lessonType?: "video" | "pdf"; videoUrl?: string; pdfUrl?: string; content?: string; duration?: string }) {
     return request<{ _id: string; title: string }>(`/courses/${courseId}/lessons/${lessonId}`, "PUT", data);
   },
   deleteLesson(courseId: string, lessonId: string) {
@@ -575,6 +584,9 @@ export const api = {
   },
   async uploadVideo(file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
     return uploadWithProgress(`${API_BASE_URL}/upload/video`, file, onProgress);
+  },
+  async uploadPdf(file: File, onProgress?: (pct: number) => void): Promise<{ url: string; key: string }> {
+    return uploadWithProgress(`${API_BASE_URL}/upload/pdf`, file, onProgress);
   },
   getVideoStatus(key: string) {
     return request<ApiVideoStatus>(`/upload/video-status?key=${encodeURIComponent(key)}`, "GET");

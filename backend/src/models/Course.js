@@ -3,10 +3,11 @@ import mongoose from "mongoose";
 const lessonSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
+    lessonType: { type: String, enum: ["video", "pdf"], default: "video" },
     videoUrl: { type: String },
+    pdfUrl: { type: String },
     content: { type: String },
-    duration: { type: String },
-    resources: [{ type: String }]
+    duration: { type: String }
   },
   { _id: true }
 );

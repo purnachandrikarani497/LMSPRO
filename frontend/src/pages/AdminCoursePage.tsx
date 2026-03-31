@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Video, Clock, Upload, Loader2, Pencil, X, FileVideo } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Video, Clock, Upload, Loader2, Pencil, X, FileVideo, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -20,7 +20,7 @@ import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
-type LessonEdit = { title: string; videoUrl: string };
+type LessonEdit = { title: string; lessonType: "video" | "pdf"; videoUrl: string; pdfUrl: string };
 type Section = { _id?: string; title: string; lessons?: any[] };
 
 const AdminCoursePage = () => {
@@ -37,18 +37,20 @@ const AdminCoursePage = () => {
   const [editingSectionTitle, setEditingSectionTitle] = useState("");
   
   // Lesson management state
-  const [newLesson, setNewLesson] = useState({ title: "", videoUrl: "", duration: "" });
+  const [newLesson, setNewLesson] = useState({ title: "", lessonType: "video" as "video" | "pdf", videoUrl: "", pdfUrl: "", duration: "" });
   const [newLessonThumbnail, setNewLessonThumbnail] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFileName, setUploadFileName] = useState("");
   const [uploadPhase, setUploadPhase] = useState<"uploading" | "processing">("uploading");
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<LessonEdit>({ title: "", videoUrl: "" });
+  const [editForm, setEditForm] = useState<LessonEdit>({ title: "", lessonType: "video", videoUrl: "", pdfUrl: "" });
   const [editThumbnail, setEditThumbnail] = useState<string | null>(null);
   const [editDuration, setEditDuration] = useState<string>("");
   const [deleteTarget, setDeleteTarget] = useState<{ lessonId: string; title: string } | null>(null);
   const [deleteSectionTarget, setDeleteSectionTarget] = useState<{ sectionId: string; title: string } | null>(null);
+  const [announcementDeleteIndex, setAnnouncementDeleteIndex] = useState<number | null>(null);
   
   // Course metadata state
   const [courseSubtitle, setCourseSubtitle] = useState("");
@@ -248,23 +250,23 @@ const AdminCoursePage = () => {
         throw new Error("Please select a section first");
       }
       // Add to section if it has an ID, otherwise add to course lessons (default)
+      const isPdf = newLesson.lessonType === "pdf";
+      const base = {
+        title: newLesson.title.trim(),
+        duration: newLesson.duration.trim() || undefined,
+        lessonType: newLesson.lessonType,
+        ...(isPdf
+          ? { pdfUrl: newLesson.pdfUrl.trim(), videoUrl: undefined }
+          : { videoUrl: newLesson.videoUrl.trim(), pdfUrl: undefined })
+      };
       if (targetSection === "default") {
-        return api.addLesson(id!, {
-          title: newLesson.title.trim(),
-          duration: newLesson.duration.trim() || undefined,
-          videoUrl: newLesson.videoUrl.trim() || undefined
-        });
-      } else {
-        return api.addLessonToSection(id!, targetSection, {
-          title: newLesson.title.trim(),
-          duration: newLesson.duration.trim() || undefined,
-          videoUrl: newLesson.videoUrl.trim() || undefined
-        });
+        return api.addLesson(id!, base);
       }
+      return api.addLessonToSection(id!, targetSection, base);
     },
     onSuccess: () => {
       toast({ title: "Lesson added", description: "The lesson has been saved" });
-      setNewLesson({ title: "", videoUrl: "", duration: "" });
+      setNewLesson({ title: "", lessonType: "video", videoUrl: "", pdfUrl: "", duration: "" });
       setNewLessonThumbnail(null);
       queryClient.invalidateQueries({ queryKey: ["admin-course", id] });
       queryClient.invalidateQueries({ queryKey: ["courses"] });
@@ -280,10 +282,14 @@ const AdminCoursePage = () => {
 
   const updateLessonMutation = useMutation({
     mutationFn: async ({ lessonId, data }: { lessonId: string; data: LessonEdit }) => {
+      const isPdf = data.lessonType === "pdf";
       return api.updateLesson(id!, lessonId, {
         title: data.title.trim(),
+        lessonType: data.lessonType,
         duration: editDuration.trim() || undefined,
-        videoUrl: data.videoUrl.trim() || undefined
+        ...(isPdf
+          ? { pdfUrl: data.pdfUrl.trim() || undefined, videoUrl: undefined }
+          : { videoUrl: data.videoUrl.trim() || undefined, pdfUrl: undefined })
       });
     },
     onSuccess: () => {
@@ -322,12 +328,15 @@ const AdminCoursePage = () => {
     }
   });
 
-  const startEdit = (lesson: { _id?: string; title: string; videoUrl?: string; duration?: string }) => {
+  const startEdit = (lesson: { _id?: string; title: string; lessonType?: string; videoUrl?: string; pdfUrl?: string; duration?: string }) => {
     if (lesson._id) {
       setEditingLessonId(lesson._id);
+      const lt = lesson.lessonType === "pdf" || (lesson.pdfUrl && !lesson.videoUrl) ? "pdf" : "video";
       setEditForm({
         title: lesson.title,
-        videoUrl: lesson.videoUrl || ""
+        lessonType: lt,
+        videoUrl: lesson.videoUrl || "",
+        pdfUrl: lesson.pdfUrl || ""
       });
       setEditDuration(lesson.duration || "");
     }
@@ -610,19 +619,47 @@ const AdminCoursePage = () => {
                 toast({ title: "Title required", variant: "destructive" });
                 return;
               }
-              if (!newLesson.videoUrl.trim()) {
+              if (newLesson.lessonType === "video" && !newLesson.videoUrl.trim()) {
                 toast({ title: "Video required", description: "Please upload or paste a video URL before adding a lesson", variant: "destructive" });
+                return;
+              }
+              if (newLesson.lessonType === "pdf" && !newLesson.pdfUrl.trim()) {
+                toast({ title: "PDF required", description: "Upload a PDF or paste the document URL from the server", variant: "destructive" });
                 return;
               }
               addLessonMutation.mutate();
             }}
           >
+          <div className="flex flex-wrap gap-2">
+            <span className="text-sm font-medium text-gray-700 self-center">Content type:</span>
+            <Button
+              type="button"
+              variant={newLesson.lessonType === "video" ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setNewLesson((p) => ({ ...p, lessonType: "video" }))}
+            >
+              <Video className="h-3.5 w-3.5" />
+              Video
+            </Button>
+            <Button
+              type="button"
+              variant={newLesson.lessonType === "pdf" ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setNewLesson((p) => ({ ...p, lessonType: "pdf" }))}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              PDF
+            </Button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               placeholder="Lesson title"
               value={newLesson.title}
               onChange={(e) => setNewLesson((p) => ({ ...p, title: e.target.value }))}
             />
+            {newLesson.lessonType === "video" ? (
             <div className="flex gap-2">
               <Input
                 placeholder="Video URL or paste link"
@@ -681,8 +718,56 @@ const AdminCoursePage = () => {
                 )}
               </Button>
             </div>
+            ) : (
+            <div className="flex gap-2">
+              <Input
+                placeholder="PDF URL (after upload)"
+                value={newLesson.pdfUrl}
+                onChange={(e) => setNewLesson((p) => ({ ...p, pdfUrl: e.target.value }))}
+              />
+              <input
+                type="file"
+                id="pdf-upload"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingPdf(true);
+                  setUploadProgress(0);
+                  setUploadFileName(file.name);
+                  e.target.value = "";
+                  try {
+                    const { url } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
+                    setNewLesson((p) => ({ ...p, pdfUrl: url }));
+                    toast({ title: "PDF uploaded", description: "Document is ready to attach" });
+                  } catch (err) {
+                    toast({
+                      title: "Upload failed",
+                      description: err instanceof Error ? err.message : "Please try again",
+                      variant: "destructive"
+                    });
+                  } finally {
+                    setUploadingPdf(false);
+                    setUploadProgress(0);
+                    setUploadFileName("");
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                title="Upload PDF"
+                onClick={() => document.getElementById("pdf-upload")?.click()}
+                disabled={uploadingPdf}
+              >
+                {uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              </Button>
+            </div>
+            )}
           </div>
-          {uploadingVideo && (
+          {uploadingVideo && newLesson.lessonType === "video" && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="flex items-center gap-3 mb-2">
                 {uploadPhase === "processing" ? (
@@ -711,10 +796,30 @@ const AdminCoursePage = () => {
               )}
             </div>
           )}
+          {uploadingPdf && newLesson.lessonType === "pdf" && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-amber-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 truncate">{uploadFileName || "Uploading PDF..."}</p>
+                  <p className="text-xs text-gray-500">Uploading... {uploadProgress}%</p>
+                </div>
+                <span className="text-sm font-semibold text-amber-700">{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} className="mt-2 h-2 bg-amber-100 [&>div]:bg-amber-500" />
+            </div>
+          )}
           <Button
             type="submit"
             className="mt-4 gap-2"
-            disabled={addLessonMutation.isPending || !newLesson.title.trim() || !newLesson.videoUrl.trim() || uploadingVideo}
+            disabled={
+              addLessonMutation.isPending ||
+              !newLesson.title.trim() ||
+              (newLesson.lessonType === "video" && !newLesson.videoUrl.trim()) ||
+              (newLesson.lessonType === "pdf" && !newLesson.pdfUrl.trim()) ||
+              uploadingVideo ||
+              uploadingPdf
+            }
           >
             <Plus className="h-4 w-4" /> Add Lesson
           </Button>
@@ -746,7 +851,30 @@ const AdminCoursePage = () => {
                         updateLessonMutation.mutate({ lessonId: lesson._id!, data: editForm });
                       }}
                     >
-                      {editThumbnail && (
+                      <div className="flex flex-wrap gap-2">
+                        <span className="text-sm font-medium text-gray-700 self-center">Type:</span>
+                        <Button
+                          type="button"
+                          variant={editForm.lessonType === "video" ? "default" : "outline"}
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => setEditForm((p) => ({ ...p, lessonType: "video" }))}
+                        >
+                          <Video className="h-3.5 w-3.5" />
+                          Video
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={editForm.lessonType === "pdf" ? "default" : "outline"}
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => setEditForm((p) => ({ ...p, lessonType: "pdf" }))}
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          PDF
+                        </Button>
+                      </div>
+                      {editForm.lessonType === "video" && editThumbnail && (
                         <div>
                           <p className="text-sm font-medium text-gray-700 mb-2">Video Thumbnail</p>
                           <img src={editThumbnail} alt="thumbnail" className="w-32 h-24 object-cover rounded border border-gray-200" />
@@ -758,6 +886,7 @@ const AdminCoursePage = () => {
                           value={editForm.title}
                           onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
                         />
+                        {editForm.lessonType === "video" ? (
                         <div className="flex gap-2">
                           <Input
                             placeholder="Video URL"
@@ -813,6 +942,54 @@ const AdminCoursePage = () => {
                             {uploadingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                           </Button>
                         </div>
+                        ) : (
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="PDF URL"
+                            value={editForm.pdfUrl}
+                            onChange={(e) => setEditForm((p) => ({ ...p, pdfUrl: e.target.value }))}
+                          />
+                          <input
+                            type="file"
+                            id={`pdf-upload-edit-${lesson._id}`}
+                            accept="application/pdf,.pdf"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingPdf(true);
+                              setUploadProgress(0);
+                              setUploadFileName(file.name);
+                              e.target.value = "";
+                              try {
+                                const { url } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
+                                setEditForm((p) => ({ ...p, pdfUrl: url }));
+                                toast({ title: "PDF uploaded", description: "Document updated" });
+                              } catch (err) {
+                                toast({
+                                  title: "Upload failed",
+                                  description: err instanceof Error ? err.message : "Please try again",
+                                  variant: "destructive"
+                                });
+                              } finally {
+                                setUploadingPdf(false);
+                                setUploadProgress(0);
+                                setUploadFileName("");
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            title="Upload PDF"
+                            onClick={() => document.getElementById(`pdf-upload-edit-${lesson._id}`)?.click()}
+                            disabled={uploadingPdf}
+                          >
+                            {uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                        )}
                       </div>
                       {uploadingVideo && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -846,7 +1023,14 @@ const AdminCoursePage = () => {
                         <Button
                           type="submit"
                           size="sm"
-                          disabled={updateLessonMutation.isPending || !editForm.title.trim() || uploadingVideo}
+                          disabled={
+                            updateLessonMutation.isPending ||
+                            !editForm.title.trim() ||
+                            uploadingVideo ||
+                            uploadingPdf ||
+                            (editForm.lessonType === "video" && !editForm.videoUrl.trim()) ||
+                            (editForm.lessonType === "pdf" && !editForm.pdfUrl.trim())
+                          }
                         >
                           {updateLessonMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                         </Button>
@@ -857,7 +1041,11 @@ const AdminCoursePage = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-500 w-6 text-right">{i + 1}.</span>
                         <div className="w-24 h-16 rounded-lg border border-gray-200 flex-shrink-0 overflow-hidden bg-gray-900 relative">
-                          {lesson.videoUrl ? (
+                          {lesson.lessonType === "pdf" || (lesson.pdfUrl && !lesson.videoUrl) ? (
+                            <div className="w-full h-full flex items-center justify-center bg-stone-100">
+                              <FileText className="h-8 w-8 text-red-600" />
+                            </div>
+                          ) : lesson.videoUrl ? (
                             <video
                               src={getSecureVideoSrc(lesson.videoUrl)}
                               preload="metadata"
@@ -889,12 +1077,17 @@ const AdminCoursePage = () => {
                               {lesson.duration}
                             </span>
                           )}
-                          {lesson.videoUrl && (
+                          {lesson.lessonType === "pdf" || (lesson.pdfUrl && !lesson.videoUrl) ? (
+                            <span className="flex items-center gap-1.5">
+                              <FileText className="h-3 w-3" />
+                              PDF
+                            </span>
+                          ) : lesson.videoUrl ? (
                             <span className="flex items-center gap-1.5">
                               <Video className="h-3 w-3" />
                               Video
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex gap-1">
@@ -972,6 +1165,31 @@ const AdminCoursePage = () => {
                 onClick={() => deleteSectionTarget && deleteSectionMutation.mutate(deleteSectionTarget.sectionId)}
               >
                 {deleteSectionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={announcementDeleteIndex !== null} onOpenChange={(open) => !open && setAnnouncementDeleteIndex(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove announcement?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the announcement from the list. Save course changes to apply it on the course page.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  if (announcementDeleteIndex !== null) {
+                    setAnnouncements((prev) => prev.filter((_, i) => i !== announcementDeleteIndex));
+                  }
+                  setAnnouncementDeleteIndex(null);
+                }}
+              >
+                Remove
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1141,7 +1359,7 @@ const AdminCoursePage = () => {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setAnnouncements((prev) => prev.filter((_, i) => i !== idx))}
+                        onClick={() => setAnnouncementDeleteIndex(idx)}
                         className="p-2 rounded text-gray-500 hover:bg-red-100 hover:text-red-600 shrink-0"
                         title="Remove announcement"
                       >

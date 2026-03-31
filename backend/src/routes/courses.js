@@ -318,7 +318,7 @@ function findLessonInCourse(course, lessonId) {
 router.put("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
     const { id, lessonId } = req.params;
-    const { title, videoUrl, content, duration, resources } = req.body;
+    const { title, videoUrl, pdfUrl, lessonType, content, duration } = req.body;
     const course = await Course.findById(id);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
@@ -329,10 +329,18 @@ router.put("/:id/lessons/:lessonId", requireAuth, requireRole(["admin"]), async 
     }
     const lesson = result.lesson;
     if (typeof title === "string") lesson.title = title.trim();
+    if (lessonType === "pdf" || lessonType === "video") {
+      lesson.lessonType = lessonType;
+      if (lessonType === "pdf") {
+        lesson.videoUrl = undefined;
+      } else {
+        lesson.pdfUrl = undefined;
+      }
+    }
     if (videoUrl !== undefined) lesson.videoUrl = videoUrl?.trim() || undefined;
+    if (pdfUrl !== undefined) lesson.pdfUrl = pdfUrl?.trim() || undefined;
     if (content !== undefined) lesson.content = content?.trim() || undefined;
     if (duration !== undefined) lesson.duration = duration?.trim() || undefined;
-    if (Array.isArray(resources)) lesson.resources = resources;
     await course.save();
     res.json(lesson);
   } catch (error) {

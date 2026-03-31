@@ -14,10 +14,11 @@ export interface Course {
   lessonItems?: {
     _id?: string;
     title: string;
+    lessonType?: "video" | "pdf";
     videoUrl?: string;
+    pdfUrl?: string;
     content?: string;
     duration?: string;
-    resources?: string[];
   }[];
   level: "Beginner" | "Intermediate" | "Advanced";
   image: string;

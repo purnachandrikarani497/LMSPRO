@@ -5,6 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { categories as staticCategories } from "@/lib/mockData";
@@ -73,6 +83,7 @@ const AdminDashboard = () => {
   const [previewError, setPreviewError] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [courseToDelete, setCourseToDelete] = useState<{ id: string; title: string } | null>(null);
 
   const baseCategories = apiCategories.length > 0 ? apiCategories : staticCategories.map((c) => ({ _id: c.name, name: c.name, icon: c.icon }));
   const categoryOptions =
@@ -118,10 +129,6 @@ const AdminDashboard = () => {
     setEditingId(course.id);
     setPreviewError(false);
     setDialogOpen(true);
-  };
-
-  const handleDelete = (id: string) => {
-    setCoursesList((prev) => prev.filter((c) => c.id !== id));
   };
 
   const createMutation = useMutation<ApiCourse, Error, { title: string; description: string; thumbnail?: string; instructor: string; category: string; price: number; level: string; isPublished: boolean }>({
@@ -184,6 +191,7 @@ const AdminDashboard = () => {
     onSuccess: () => {
       toast({ title: "Course deleted", description: "The course has been removed" });
       queryClient.invalidateQueries({ queryKey: ["courses"] });
+      setCourseToDelete(null);
     },
     onError: () => {
       toast({
@@ -830,10 +838,7 @@ const AdminDashboard = () => {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => {
-                          setCoursesList((prev) => prev.filter((c) => c.id !== course.id));
-                          deleteMutation.mutate(course.id);
-                        }}
+                        onClick={() => setCourseToDelete({ id: course.id, title: course.title })}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -873,6 +878,27 @@ const AdminDashboard = () => {
 
         </div>
       </div>
+
+      <AlertDialog open={!!courseToDelete} onOpenChange={(open) => !open && setCourseToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete course?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{courseToDelete?.title}&quot;? This will remove the course and related data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => courseToDelete && deleteMutation.mutate(courseToDelete.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -229,7 +229,7 @@ const MainLayout = () => {
         <div className="flex-1">
           <Outlet />
         </div>
-        <Footer />
+        {user?.role !== "admin" && <Footer />}
       </main>
     </div>
   );

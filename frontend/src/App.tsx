@@ -73,6 +73,15 @@ const ProtectedRoute = ({ children, role }: ProtectedProps) => {
   return children;
 };
 
+/** Landing page for students/guests; admins use /admin only (no marketing hero on "/"). */
+const HomeOrAdminRedirect = () => {
+  const { user } = getAuthState();
+  if (user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+  return <Index />;
+};
+
 const App = () => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
@@ -88,7 +97,7 @@ const App = () => (
           <ScrollToTop />
           <Routes>
             <Route path="/" element={<MainLayout />}>
-              <Route index element={<Index />} />
+              <Route index element={<HomeOrAdminRedirect />} />
               <Route path="courses" element={<Courses />} />
             
               <Route path="for-business" element={<ForBusiness />} />

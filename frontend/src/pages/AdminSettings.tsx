@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Settings, Globe, CreditCard, Mail, Shield, Check, X, FolderOpen, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Settings, CreditCard, Mail, Shield, Check, X, FolderOpen, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { api, ApiSettings, ApiCategory } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,16 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 
 const SettingRow = ({
@@ -21,7 +32,7 @@ const SettingRow = ({
   value,
   status
 }: {
-  icon: typeof Globe;
+  icon: LucideIcon;
   label: string;
   value?: string | null;
   status?: "ok" | "warning" | null;
@@ -59,6 +70,7 @@ const AdminSettings = () => {
   const [editingCategory, setEditingCategory] = useState<ApiCategory | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryIcon, setCategoryIcon] = useState("");
+  const [categoryDeleteTarget, setCategoryDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data: settings, isLoading } = useQuery<ApiSettings>({
     queryKey: ["admin-settings"],
@@ -107,6 +119,7 @@ const AdminSettings = () => {
       toast({ title: "Category deleted", description: "The category has been removed. Courses using it now show 'General'." });
       setCategoryDialogOpen(false);
       setEditingCategory(null);
+      setCategoryDeleteTarget(null);
     },
     onError: (err: Error) => {
       toast({ title: "Failed to delete category", description: err.message, variant: "destructive" });
@@ -186,8 +199,7 @@ const AdminSettings = () => {
 
   const handleDeleteCategory = () => {
     if (!editingCategory) return;
-    if (!window.confirm(`Delete "${editingCategory.name}"? Courses using this category will be set to "General".`)) return;
-    deleteMutation.mutate(editingCategory._id);
+    setCategoryDeleteTarget({ id: editingCategory._id, name: editingCategory.name });
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -215,17 +227,6 @@ const AdminSettings = () => {
             </div>
           ) : (
             <>
-              <section>
-                <h2 className="mb-4 text-lg font-semibold">General</h2>
-                <div className="space-y-3">
-                  <SettingRow
-                    icon={Globe}
-                    label="Client URL"
-                    value={settings?.clientUrl || "—"}
-                  />
-                </div>
-              </section>
-
               <section>
                 <h2 className="mb-4 text-lg font-semibold">Admin Account</h2>
                 <div className="space-y-3">
@@ -308,11 +309,7 @@ const AdminSettings = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  if (window.confirm(`Delete "${cat.name}"? Courses using this category will be set to "General".`)) {
-                                    deleteMutation.mutate(cat._id);
-                                  }
-                                }}
+                                onClick={() => setCategoryDeleteTarget({ id: cat._id, name: cat.name })}
                                 disabled={deleteMutation.isPending}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -421,6 +418,27 @@ const AdminSettings = () => {
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!categoryDeleteTarget} onOpenChange={(open) => !open && setCategoryDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{categoryDeleteTarget?.name}&quot;? Courses using this category will show &quot;General&quot; instead. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => categoryDeleteTarget && deleteMutation.mutate(categoryDeleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, ChevronDown, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, Trash2, Copy, Mail } from "lucide-react";
+import { Star, Clock, BookOpen, Users, CheckCircle, ArrowLeft, FileText, Play, Pause, CheckCircle2, AlertCircle, ChevronRight, Edit, Trophy, Share2, Trash2, Copy, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,12 +9,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, ApiNoteEntry, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken, getVideoSrc } from "@/lib/api";
+import { api, ApiCourse, ApiEnrollment, ApiProgress, ApiWatchTimestamps, ApiNoteEntry, getThumbnailSrc, getSecureVideoSrc, getSecureStreamUrl, getSecurePdfUrl, mapApiCourseToCourse, getUserRoleFromToken, getUserIdFromToken, getVideoSrc } from "@/lib/api";
 import { SecureVideoPlayer } from "@/components/SecureVideoPlayer";
+import { LessonPdfReader } from "@/components/LessonPdfReader";
+import { InstructorAvatar } from "@/components/InstructorAvatar";
 import { formatPrice } from "@/lib/utils";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const tabs = ["Overview", "Notes", "Announcements", "Reviews"];
 
@@ -47,6 +59,13 @@ function formatTotalDuration(seconds: number): string {
   return `${m} min`;
 }
 
+function isPdfLesson(lesson: { lessonType?: string; pdfUrl?: string; videoUrl?: string } | null | undefined): boolean {
+  if (!lesson) return false;
+  if (lesson.lessonType === "pdf") return !!lesson.pdfUrl;
+  if (lesson.lessonType === "video") return false;
+  return !!(lesson.pdfUrl && !lesson.videoUrl);
+}
+
 const CourseDetail = () => {
   const { id, courseId, lessonId } = useParams<{ id?: string; courseId?: string; lessonId?: string }>();
   const courseParam = id ?? courseId ?? "";
@@ -62,11 +81,21 @@ const CourseDetail = () => {
   }, [lessonId]);
   const [activeTab, setActiveTab] = useState("Overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDesktopLg, setIsDesktopLg] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktopLg(mq.matches);
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
   const [note, setNote] = useState("");
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [notesFilter, setNotesFilter] = useState<"current" | "all">("current");
   const [notesSort, setNotesSort] = useState<"recent" | "oldest">("recent");
   const [editingNote, setEditingNote] = useState<{ lessonId: string; index: number } | null>(null);
+  const [noteDeleteTarget, setNoteDeleteTarget] = useState<{ lessonId: string; index: number } | null>(null);
   const seekToRef = useRef<((seconds: number) => void) | null>(null);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
@@ -191,10 +220,11 @@ const CourseDetail = () => {
   const completedLessonIds = new Set(progress?.lessonsCompleted ?? []);
 
   const isLessonComplete = useCallback(
-    (lesson: { _id?: string }) => {
+    (lesson: { _id?: string; lessonType?: string; pdfUrl?: string; videoUrl?: string }) => {
       const lid = lesson._id;
       if (!lid) return false;
       if (completedLessonIds.has(lid)) return true;
+      if (isPdfLesson(lesson)) return false;
       const dur = watchDurations[lid];
       const ts = watchTimestamps[lid];
       return typeof dur === "number" && dur > 0 && typeof ts === "number" && ts / dur >= 0.9;
@@ -212,6 +242,21 @@ const CourseDetail = () => {
     setNote("");
     setEditingNote(null);
   }, [activeNoteLessonId]);
+
+  useEffect(() => {
+    if (!isEnrolled || !courseParam || !lessonId || !selectedLesson) return;
+    if (!isPdfLesson(selectedLesson)) return;
+    if (completedLessonIds.has(lessonId)) return;
+    const t = window.setTimeout(() => {
+      api
+        .completeLesson(courseParam, lessonId)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["progress", courseParam] });
+        })
+        .catch(() => {});
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [isEnrolled, courseParam, lessonId, selectedLesson, completedLessonIds, queryClient]);
 
   // When opening course without a lesson, auto-navigate to last watched lesson (or first)
   useEffect(() => {
@@ -314,6 +359,7 @@ const CourseDetail = () => {
         notes: { ...(old?.notes ?? {}), [lessonId]: data.note ?? [] }
       }));
       toast({ title: "Note deleted", description: "Your note has been removed." });
+      setNoteDeleteTarget(null);
     },
     onError: () => {
       toast({ title: "Failed to delete note", description: "Please try again.", variant: "destructive" });
@@ -348,6 +394,30 @@ const CourseDetail = () => {
   };
   const prevLesson = selectedIndex > 0 ? lessons[selectedIndex - 1] : null;
   const nextLesson = selectedIndex >= 0 && selectedIndex + 1 < lessons.length ? lessons[selectedIndex + 1] : null;
+  const showPdfReader =
+    isEnrolled &&
+    !!selectedLesson &&
+    isPdfLesson(selectedLesson) &&
+    !!selectedLesson.pdfUrl &&
+    !!selectedLesson._id;
+
+  const videoAreaStyle = useMemo(() => {
+    if (!isDesktopLg) {
+      if (showPdfReader) {
+        return { minHeight: "min(85vh, 720px)", height: "auto" as const };
+      }
+      return undefined;
+    }
+    if (showPdfReader) {
+      return sidebarCollapsed
+        ? { height: "94vh", minHeight: "518px", maxHeight: "920px" }
+        : { height: "67vh", minHeight: "403px", maxHeight: "633px" };
+    }
+    return sidebarCollapsed
+      ? { height: "82vh", minHeight: "450px", maxHeight: "800px" }
+      : { height: "58vh", minHeight: "350px", maxHeight: "550px" };
+  }, [isDesktopLg, showPdfReader, sidebarCollapsed]);
+
   const [autoplay, setAutoplay] = useState(false);
   const previewLesson = useMemo(() => {
     return lessons.find(l => !!l.videoUrl) ?? null;
@@ -760,13 +830,19 @@ const CourseDetail = () => {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Instructor</h2>
                   <div className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-6">
-                    <img src="https://i.pravatar.cc/150?u=sarahjohnson" alt="Sarah Johnson" className="h-24 w-24 rounded-full object-cover" />
+                    <InstructorAvatar
+                      name={course.instructor || "Instructor"}
+                      photoUrl={apiCourse?.instructorPhoto}
+                      size="lg"
+                    />
                     <div>
                       <h3 className="font-bold text-lg text-gray-900">{course.instructor}</h3>
-                      <p className="text-sm text-amber-600">Lead Photographer & Educator</p>
-                      <p className="mt-2 text-sm text-gray-600">
-                        Sarah is an award-winning photographer with over 15 years of experience. She has a passion for teaching and has helped thousands of students master the art of photography.
-                      </p>
+                      {apiCourse?.instructorTitle && (
+                        <p className="text-sm text-amber-600">{apiCourse.instructorTitle}</p>
+                      )}
+                      {apiCourse?.instructorBio && (
+                        <p className="mt-2 text-sm text-gray-600 whitespace-pre-wrap">{apiCourse.instructorBio}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -920,17 +996,16 @@ const CourseDetail = () => {
         )}
       </div>
 
-      {/* Udemy-style: fixed right sidebar + scrollable left content */}
-      <div className="flex min-h-[calc(100vh-44px)]">
+      {/* Udemy-style: desktop = fixed right sidebar + scrollable main; mobile = single column (player then curriculum then tabs) */}
+      <div className="flex min-h-[calc(100vh-44px)] flex-col lg:flex-row">
         {/* Main content area */}
         <div className={`flex flex-col flex-1 min-w-0 overflow-y-auto transition-[margin] duration-300 ${sidebarCollapsed ? "" : "lg:mr-[350px]"}`}>
-          {/* Video player — fixed dimensions, never resizes when tab content changes */}
+          {/* Video player — desktop: fixed height; mobile: full-width 16:9 (PDF: tall reader) */}
           <div
-            className="shrink-0 relative w-full bg-black transition-[height] duration-300"
-            style={sidebarCollapsed
-              ? { height: '82vh', minHeight: '450px', maxHeight: '800px' }
-              : { height: '58vh', minHeight: '350px', maxHeight: '550px' }
-            }
+            className={`shrink-0 relative w-full bg-black transition-[height] duration-300 ${
+              !isDesktopLg && !showPdfReader ? "aspect-video" : ""
+            }`}
+            style={videoAreaStyle}
           >
             <div className="absolute inset-0 flex items-center justify-center">
               {isEnrolled && selectedLesson ? (
@@ -941,6 +1016,15 @@ const CourseDetail = () => {
                       <p className="font-medium text-white">Video could not be loaded</p>
                       <p className="text-sm text-gray-400">{videoError}</p>
                     </div>
+                  ) : showPdfReader ? (
+                    <LessonPdfReader
+                      title={selectedLesson.title}
+                      pdfSrc={getSecurePdfUrl(course.id, selectedLesson._id!)}
+                      prevDisabled={!prevLesson}
+                      nextDisabled={!nextLesson}
+                      onPrev={() => prevLesson?._id && navigate(`/course/${course.id}/lesson/${prevLesson._id}`)}
+                      onNext={() => nextLesson?._id && navigate(`/course/${course.id}/lesson/${nextLesson._id}`)}
+                    />
                   ) : selectedLesson.videoUrl ? (
                     (() => {
                       const rawUrl = selectedLesson.videoUrl;
@@ -976,8 +1060,10 @@ const CourseDetail = () => {
                           nextTitle={nextLesson?.title}
                           autoplay={autoplay}
                           onAutoplayChange={setAutoplay}
-                          isExpanded={sidebarCollapsed}
-                          onExpandToggle={() => setSidebarCollapsed(prev => !prev)}
+                          isExpanded={isDesktopLg ? sidebarCollapsed : true}
+                          onExpandToggle={
+                            isDesktopLg ? () => setSidebarCollapsed((prev) => !prev) : undefined
+                          }
                           initialTime={selectedLesson._id ? watchTimestamps[selectedLesson._id] : undefined}
                           onTimeReport={handleTimeReport}
                           seekToRef={seekToRef}
@@ -1018,8 +1104,121 @@ const CourseDetail = () => {
             </div>
           </div>
 
+          {/* Mobile: curriculum under player (in this column so it is full width, not beside the player) */}
+          <div className="lg:hidden w-full border-t border-border bg-background px-4 py-3">
+            <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+                <h3 className="font-bold text-gray-900">Course content</h3>
+              </div>
+              <div className="max-h-[min(55vh,28rem)] overflow-y-auto overscroll-y-contain">
+                {sections && sections.length > 0 ? (
+                  sections.map((section) => {
+                    const isExpanded = expandedSections.has(section.title);
+                    const sectionLessons = section.lessons || [];
+                    const completedCount = sectionLessons.filter(isLessonComplete).length;
+
+                    return (
+                      <div key={section.title} className="border-b border-gray-200 last:border-b-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedSections((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(section.title)) {
+                                next.delete(section.title);
+                              } else {
+                                next.add(section.title);
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full flex items-center gap-2 py-3 px-4 hover:bg-gray-50 transition text-left"
+                        >
+                          <ChevronRight
+                            className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-sm truncate">{section.title}</p>
+                            <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="divide-y divide-gray-100 pl-2">
+                            {sectionLessons.map((lesson, i) => {
+                              const lid = lesson._id;
+                              const completed = isLessonComplete(lesson);
+                              const canOpen = isEnrolled && !!lid;
+                              const lessonIsPdf = isPdfLesson(lesson);
+                              const isActive = selectedLesson?._id === lid;
+                              return (
+                                <div
+                                  key={lesson._id || i}
+                                  className={`flex items-start gap-2 px-3 py-2.5 text-sm ${
+                                    canOpen ? "cursor-pointer active:bg-gray-100" : ""
+                                  } ${
+                                    isActive
+                                      ? "mx-1 rounded-lg border-2 border-amber-400 bg-amber-50"
+                                      : canOpen
+                                        ? "hover:bg-gray-50"
+                                        : ""
+                                  }`}
+                                  onClick={() => {
+                                    if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                  }}
+                                  role={canOpen ? "button" : undefined}
+                                >
+                                  {completed && !isActive ? (
+                                    lessonIsPdf ? (
+                                      <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                        <FileText className="h-2.5 w-2.5 text-gray-600" />
+                                      </span>
+                                    ) : (
+                                      <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                    )
+                                  ) : isActive ? (
+                                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white">
+                                      {lessonIsPdf ? (
+                                        <FileText className="h-2.5 w-2.5" />
+                                      ) : (
+                                        <Pause className="h-2.5 w-2.5 fill-current" />
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                      {canOpen ? (
+                                        lessonIsPdf ? (
+                                          <FileText className="h-2.5 w-2.5 text-gray-600" />
+                                        ) : (
+                                          <Play className="h-2.5 w-2.5" />
+                                        )
+                                      ) : (
+                                        <span className="text-gray-400">○</span>
+                                      )}
+                                    </span>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
+                                    {lesson.duration && (
+                                      <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="py-6 text-center text-sm text-gray-500">No lessons added yet</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Below-video content — contain overflow so text wraps, player stays fixed */}
-          <div className="min-w-0 overflow-x-hidden shrink-0 px-6 lg:px-16 py-4 space-y-4">
+          <div className="min-w-0 overflow-x-hidden shrink-0 px-4 sm:px-6 lg:px-16 py-4 space-y-4">
             {/* Tabs */}
             <div className="border-b border-gray-200 sticky top-0 z-10 bg-white">
               <nav className="flex gap-8 overflow-x-auto">
@@ -1087,21 +1286,11 @@ const CourseDetail = () => {
                 <section>
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Instructor</h2>
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="relative w-14 h-14 flex-shrink-0">
-                      <div className="absolute inset-0 rounded-full bg-amber-100 flex items-center justify-center border-2 border-amber-200">
-                        <span className="text-lg font-bold text-amber-600">
-                          {(course.instructor || "?").charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      {apiCourse?.instructorPhoto && (
-                        <img
-                          src={apiCourse.instructorPhoto}
-                          alt={course.instructor || "Instructor"}
-                          className="relative z-10 w-14 h-14 rounded-full object-cover border-2 border-gray-200"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      )}
-                    </div>
+                    <InstructorAvatar
+                      name={course.instructor || "Instructor"}
+                      photoUrl={apiCourse?.instructorPhoto}
+                      size="sm"
+                    />
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-bold text-gray-900">{course.instructor || "Instructor"}</h3>
                       {apiCourse?.instructorTitle && (
@@ -1208,15 +1397,9 @@ const CourseDetail = () => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    if (courseParam && window.confirm("Delete this note?")) {
-                                      deleteNoteMutation.mutate({
-                                        courseId: courseParam,
-                                        lessonId: entry.lessonId,
-                                        noteIndex: entry.index
-                                      });
-                                    }
-                                  }}
+                                  onClick={() =>
+                                    setNoteDeleteTarget({ lessonId: entry.lessonId, index: entry.index })
+                                  }
                                   className="p-1.5 rounded text-gray-500 hover:bg-red-100 hover:text-red-600"
                                   title="Delete"
                                   disabled={deleteNoteMutation.isPending}
@@ -1410,6 +1593,7 @@ const CourseDetail = () => {
                               const completed = isLessonComplete(lesson);
                               const canOpen = isEnrolled && !!lid;
                               const isActive = selectedLesson?._id === lid;
+                              const lessonIsPdf = isPdfLesson(lesson);
                               const savedTs = lid ? watchTimestamps[lid] : undefined;
                               const savedDur = lid ? watchDurations[lid] : undefined;
                               const watchPct = savedTs != null && savedDur && savedDur > 0
@@ -1429,15 +1613,29 @@ const CourseDetail = () => {
                                   role={canOpen ? "button" : undefined}
                                 >
                                   {completed && !isActive ? (
-                                    <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                    lessonIsPdf ? (
+                                      <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
+                                        <FileText className="h-2.5 w-2.5 text-gray-600" />
+                                      </span>
+                                    ) : (
+                                      <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                    )
                                   ) : isActive ? (
                                     <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white">
-                                      <Pause className="h-2.5 w-2.5 fill-current" />
+                                      {lessonIsPdf ? (
+                                        <FileText className="h-2.5 w-2.5" />
+                                      ) : (
+                                        <Pause className="h-2.5 w-2.5 fill-current" />
+                                      )}
                                     </span>
                                   ) : (
                                     <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
                                       {canOpen ? (
-                                        <Play className="h-2.5 w-2.5" />
+                                        lessonIsPdf ? (
+                                          <FileText className="h-2.5 w-2.5 text-gray-600" />
+                                        ) : (
+                                          <Play className="h-2.5 w-2.5" />
+                                        )
                                       ) : (
                                         <span className="text-gray-400">○</span>
                                       )}
@@ -1447,25 +1645,15 @@ const CourseDetail = () => {
                                     <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
                                     <div className="mt-0.5 flex items-center gap-2">
                                       {isActive && (
-                                        <span className="text-xs font-medium text-amber-600">Now playing</span>
+                                        <span className="text-xs font-medium text-amber-600">
+                                          {lessonIsPdf ? "Reading" : "Now playing"}
+                                        </span>
                                       )}
                                       {!isActive && watchPct > 0 && watchPct < 90 && !completed && (
                                         <span className="text-xs font-medium text-amber-600">Resume at {formatWatchTime(savedTs!)}</span>
                                       )}
                                       {lesson.duration && (
                                         <span className="text-xs text-gray-500">{lesson.duration}</span>
-                                      )}
-                                      {lesson.resources && lesson.resources.length > 0 && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-6 gap-1 px-2 text-xs text-purple-600"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <FileText className="h-3 w-3" />
-                                          Resources
-                                          <ChevronDown className="h-3 w-3" />
-                                        </Button>
                                       )}
                                     </div>
                                     {watchPct > 0 && !completed && (
@@ -1493,89 +1681,36 @@ const CourseDetail = () => {
               )}
           </div>
         </aside>
-
-        {/* Mobile: course content below main content */}
-        <div className="lg:hidden px-4 pb-8">
-          <div className="rounded-lg border border-gray-200 bg-white">
-            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-              <h3 className="font-bold text-gray-900">Course content</h3>
-            </div>
-            <div className="max-h-[60vh] overflow-y-auto">
-              {sections && sections.length > 0 ? (
-                sections.map((section) => {
-                  const isExpanded = expandedSections.has(section.title);
-                  const sectionLessons = section.lessons || [];
-                  const completedCount = sectionLessons.filter(isLessonComplete).length;
-
-                  return (
-                    <div key={section.title} className="border-b border-gray-200 last:border-b-0">
-                      <button
-                        onClick={() => {
-                          setExpandedSections(prev => {
-                            const next = new Set(prev);
-                            if (next.has(section.title)) {
-                              next.delete(section.title);
-                            } else {
-                              next.add(section.title);
-                            }
-                            return next;
-                          });
-                        }}
-                        className="w-full flex items-center gap-2 py-3 px-4 hover:bg-gray-50 transition"
-                      >
-                        <ChevronRight
-                          className={`h-4 w-4 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                        />
-                        <div className="flex-1 text-left">
-                          <p className="font-medium text-gray-900 text-sm">{section.title}</p>
-                          <p className="text-xs text-gray-500">{completedCount} / {sectionLessons.length} completed</p>
-                        </div>
-                      </button>
-                      {isExpanded && (
-                        <div className="divide-y divide-gray-100 pl-6">
-                          {sectionLessons.map((lesson, i) => {
-                            const lid = lesson._id;
-                            const completed = isLessonComplete(lesson);
-                            const canOpen = isEnrolled && !!lid;
-                            return (
-                              <div
-                                key={lesson._id || i}
-                                className={`flex items-start gap-2 px-3 py-2.5 text-sm ${
-                                  canOpen ? "cursor-pointer hover:bg-gray-50" : ""
-                                } ${selectedLesson?._id === lid ? "bg-amber-50" : ""}`}
-                                onClick={() => {
-                                  if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
-                                }}
-                                role="button"
-                              >
-                                {completed ? (
-                                  <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
-                                ) : (
-                                  <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs">
-                                    {canOpen ? <Play className="h-2.5 w-2.5" /> : <span className="text-gray-400">○</span>}
-                                  </span>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
-                                  {lesson.duration && (
-                                    <span className="text-xs text-gray-500">{lesson.duration}</span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="py-6 text-center text-sm text-gray-500">No lessons added yet</p>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
+
+      <AlertDialog open={!!noteDeleteTarget} onOpenChange={(open) => !open && setNoteDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This note will be permanently removed. You cannot undo this action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (courseParam && noteDeleteTarget) {
+                  deleteNoteMutation.mutate({
+                    courseId: courseParam,
+                    lessonId: noteDeleteTarget.lessonId,
+                    noteIndex: noteDeleteTarget.index
+                  });
+                }
+              }}
+              disabled={deleteNoteMutation.isPending}
+            >
+              {deleteNoteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
