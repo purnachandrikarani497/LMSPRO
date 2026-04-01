@@ -413,6 +413,9 @@ export const api = {
   login(data: { email: string; password: string }) {
     return request<ApiAuthResponse>("/auth/login", "POST", data);
   },
+  googleAuth(credential: string) {
+    return request<ApiAuthResponse>("/auth/google", "POST", { credential });
+  },
   me() {
     return request<{ user: ApiUser }>("/auth/me", "GET");
   },

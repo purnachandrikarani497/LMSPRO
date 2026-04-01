@@ -31,7 +31,9 @@ export const config = {
   razorpay: {
     keyId: sanitizeEnv(process.env.RAZORPAY_KEY_ID),
     keySecret: sanitizeEnv(process.env.RAZORPAY_KEY_SECRET)
-  }
+  },
+  /** Same Web client ID as the frontend (VITE_GOOGLE_CLIENT_ID). Used to verify Google ID tokens. */
+  googleClientId: sanitizeEnv(process.env.GOOGLE_CLIENT_ID)
 };
 
 function sanitizeEnv(val) {

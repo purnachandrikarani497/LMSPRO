@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import { User } from "../models/User.js";
 import { config } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -41,7 +42,14 @@ router.post("/register", async (req, res) => {
     if (existing) {
       return res.status(400).json({ message: "Email already in use" });
     }
-    const user = await User.create({ name: nameStr, email: emailStr.toLowerCase(), phone: phoneStr, password, role });
+    const user = await User.create({
+      name: nameStr,
+      email: emailStr.toLowerCase(),
+      phone: phoneStr,
+      password,
+      role,
+      authProvider: "local"
+    });
     const token = createToken(user);
     res.status(201).json({
       user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role },
@@ -86,6 +94,9 @@ router.post("/login", async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
+    if (!user.password) {
+      return res.status(400).json({ message: "This account uses Google sign-in" });
+    }
     const valid = await user.comparePassword(password);
     if (!valid) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -98,6 +109,86 @@ router.post("/login", async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Failed to login", error: error.message });
+  }
+});
+
+/** Verify Google ID token from Sign in with Google / One Tap, issue LMS JWT */
+router.post("/google", async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential || typeof credential !== "string") {
+      return res.status(400).json({ message: "Missing Google credential" });
+    }
+    if (!config.googleClientId) {
+      return res.status(503).json({ message: "Google sign-in is not configured on the server" });
+    }
+
+    const client = new OAuth2Client(config.googleClientId);
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: config.googleClientId
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload.sub) {
+      return res.status(400).json({ message: "Invalid Google account data" });
+    }
+
+    const email = String(payload.email).toLowerCase();
+    if (email === String(config.adminEmail).toLowerCase()) {
+      return res.status(400).json({
+        message: "Administrator accounts must sign in with email and password"
+      });
+    }
+
+    const googleId = payload.sub;
+    const rawName =
+      (payload.name && String(payload.name).trim()) ||
+      [payload.given_name, payload.family_name].filter(Boolean).join(" ").trim() ||
+      email.split("@")[0] ||
+      "User";
+    const safeName = rawName
+      .replace(/[^A-Za-z\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 50) || "User";
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      if (user.googleId && user.googleId !== googleId) {
+        return res.status(400).json({ message: "This email is linked to another Google account" });
+      }
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name: safeName,
+        email,
+        googleId,
+        authProvider: "google",
+        role: "student"
+      });
+    }
+
+    const token = createToken(user);
+    res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || "",
+        role: user.role
+      },
+      token
+    });
+  } catch (error) {
+    console.error("Google auth error:", error);
+    res.status(401).json({
+      message: "Google sign-in failed",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
   }
 });
 

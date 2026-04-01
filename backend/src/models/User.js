@@ -6,7 +6,9 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     phone: { type: String },
-    password: { type: String, required: true },
+    password: { type: String },
+    googleId: { type: String, sparse: true, unique: true },
+    authProvider: { type: String, enum: ["local", "google"], default: "local" },
     role: { type: String, enum: ["admin", "student"], default: "student" },
     resetToken: { type: String },
     resetTokenExpiry: { type: Date }
@@ -18,11 +20,17 @@ userSchema.pre("save", async function () {
   if (!this.isModified("password")) {
     return;
   }
+  if (!this.password) {
+    return;
+  }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
 
 userSchema.methods.comparePassword = async function (candidate) {
+  if (!this.password) {
+    return false;
+  }
   return bcrypt.compare(candidate, this.password);
 };
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { BookOpen, Mail, Lock, User, Eye, EyeOff, CheckCircle2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -114,6 +114,9 @@ const Auth = () => {
     }
   };
 
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const googleMutateRef = useRef<(credential: string) => void>(() => {});
+
   const loginMutation = useMutation({
     mutationFn: () => api.login({ email: signinEmail.trim(), password: signinPassword }),
     onSuccess: (data) => handleAuthSuccess(data),
@@ -130,6 +133,85 @@ const Auth = () => {
       toast({ title: "Sign in failed", description: msg, variant: "destructive" });
     }
   });
+
+  const googleMutation = useMutation({
+    mutationFn: (credential: string) => api.googleAuth(credential),
+    onSuccess: (data) => handleAuthSuccess(data),
+    onError: (err: Error) => {
+      let msg = "Could not complete Google sign-in";
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+          msg = parsed.message;
+        }
+      } catch {
+        msg = err?.message || msg;
+      }
+      toast({ title: "Google sign-in failed", description: msg, variant: "destructive" });
+    }
+  });
+
+  googleMutateRef.current = (credential: string) => {
+    googleMutation.mutate(credential);
+  };
+
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    if (!googleClientId) return;
+
+    const mountGoogleButton = () => {
+      const el = googleBtnRef.current;
+      const g = window.google?.accounts?.id;
+      if (!el || !g) return;
+
+      if (!window.__lmsGoogleGsiInitialized) {
+        g.initialize({
+          client_id: googleClientId,
+          callback: (response: { credential: string }) => {
+            googleMutateRef.current(response.credential);
+          }
+        });
+        window.__lmsGoogleGsiInitialized = true;
+      }
+
+      el.innerHTML = "";
+      const width = Math.max(280, Math.min(el.offsetWidth || 400, 448));
+      g.renderButton(el, {
+        theme: "outline",
+        size: "large",
+        width,
+        text: "continue_with",
+        locale: "en"
+      });
+    };
+
+    const onScriptLoad = () => {
+      requestAnimationFrame(() => mountGoogleButton());
+    };
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://accounts.google.com/gsi/client"]'
+    );
+    if (existing) {
+      if (window.google?.accounts?.id) {
+        onScriptLoad();
+      } else {
+        existing.addEventListener("load", onScriptLoad);
+      }
+      return () => existing.removeEventListener("load", onScriptLoad);
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = onScriptLoad;
+    document.body.appendChild(script);
+    return () => {
+      script.onload = null;
+    };
+  }, [googleClientId]);
 
   const registerMutation = useMutation({
     mutationFn: () =>
@@ -249,6 +331,25 @@ const Auth = () => {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-8 shadow-card-hover">
+          {googleClientId ? (
+            <>
+              <div
+                ref={googleBtnRef}
+                className="flex min-h-[44px] w-full justify-center [&_iframe]:max-w-full"
+              />
+              {googleMutation.isPending ? (
+                <p className="mt-2 text-center text-xs text-muted-foreground">Signing in with Google…</p>
+              ) : null}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase tracking-wide">
+                  <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+                </div>
+              </div>
+            </>
+          ) : null}
           <Tabs defaultValue={defaultTab}>
             <TabsList className="mb-6 w-full">
               <TabsTrigger value="signin" className="flex-1">Sign In</TabsTrigger>
