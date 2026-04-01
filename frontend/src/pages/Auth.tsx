@@ -78,6 +78,19 @@ const validatePassword = (value: string) => {
   return null;
 };
 
+const AuthLegalLine = ({ lead }: { lead: string }) => (
+  <p className="text-center text-xs leading-relaxed text-muted-foreground">
+    {lead}{" "}
+    <Link to="/terms-of-service" className="text-secondary underline underline-offset-2 hover:text-foreground">
+      Terms
+    </Link>
+    {" & "}
+    <Link to="/privacy-policy" className="text-secondary underline underline-offset-2 hover:text-foreground">
+      Privacy
+    </Link>
+  </p>
+);
+
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "signin";
@@ -316,10 +329,11 @@ const Auth = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-hero p-4">
+    <div className="flex min-h-screen flex-col bg-gradient-hero">
       <Helmet>
         <title>Sign In / Sign Up – LearnHub LMS</title>
       </Helmet>
+      <div className="flex w-full flex-1 flex-col items-center justify-center p-4">
       <div className="w-full max-w-md animate-scale-in">
         <div className="mb-8 text-center">
           <Link to="/" className="inline-flex items-center gap-2.5">
@@ -331,25 +345,6 @@ const Auth = () => {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-8 shadow-card-hover">
-          {googleClientId ? (
-            <>
-              <div
-                ref={googleBtnRef}
-                className="flex min-h-[44px] w-full justify-center [&_iframe]:max-w-full"
-              />
-              {googleMutation.isPending ? (
-                <p className="mt-2 text-center text-xs text-muted-foreground">Signing in with Google…</p>
-              ) : null}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase tracking-wide">
-                  <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
-                </div>
-              </div>
-            </>
-          ) : null}
           <Tabs defaultValue={defaultTab}>
             <TabsList className="mb-6 w-full">
               <TabsTrigger value="signin" className="flex-1">Sign In</TabsTrigger>
@@ -753,13 +748,38 @@ const Auth = () => {
                 >
                   Create Account
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  By signing up, you agree to our Terms of Service
-                </p>
               </form>
             </TabsContent>
           </Tabs>
+
+          {googleClientId ? (
+            <>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase tracking-wide">
+                  <span className="bg-card px-2 text-muted-foreground">Or continue with Google</span>
+                </div>
+              </div>
+              <div
+                ref={googleBtnRef}
+                className="flex min-h-[44px] w-full justify-center [&_iframe]:max-w-full"
+              />
+              {googleMutation.isPending ? (
+                <p className="mt-2 text-center text-xs text-muted-foreground">Signing in with Google…</p>
+              ) : null}
+              <div className="pt-3">
+                <AuthLegalLine lead="By continuing, you agree to our" />
+              </div>
+            </>
+          ) : (
+            <div className="pt-6">
+              <AuthLegalLine lead="By continuing, you agree to our" />
+            </div>
+          )}
         </div>
+      </div>
       </div>
     </div>
   );

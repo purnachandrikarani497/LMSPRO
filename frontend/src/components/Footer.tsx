@@ -23,6 +23,7 @@ const footerColumns = [
     links: [
       { label: "Help Center", to: "/help-center" },
       { label: "Contact", to: "/contact" },
+      { label: "Terms of Service", to: "/terms-of-service" },
       { label: "Privacy Policy", to: "/privacy-policy" }
     ]
   }
