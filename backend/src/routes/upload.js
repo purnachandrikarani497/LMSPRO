@@ -21,6 +21,24 @@ import { Enrollment } from "../models/Enrollment.js";
 
 const router = express.Router();
 
+/** Web app sends Referer/Origin; native apps send Bearer or ?token= only. */
+function allowStreamFromClient(req) {
+  const referer = req.get("Referer") || req.get("Referrer");
+  const origin = req.get("Origin");
+  const allowedOrigins = [
+    config.clientUrl,
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://localhost:3000"
+  ];
+  const fromWebApp =
+    (referer && allowedOrigins.some((o) => referer.startsWith(o))) ||
+    (origin && allowedOrigins.some((o) => origin.startsWith(o)));
+  const hasQueryToken = typeof req.query.token === "string" && req.query.token.length > 0;
+  const hasBearer = req.headers.authorization?.startsWith("Bearer ");
+  return fromWebApp || hasQueryToken || hasBearer;
+}
+
 function extractVideoKeyFromUrl(url) {
   if (!url || typeof url !== "string") return null;
   if (url.startsWith("videos/")) return url;
@@ -293,17 +311,15 @@ router.post(
 );
 
 router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
-  // Reject direct navigation (opening URL in new tab, address bar, or "Open in new tab" from DevTools)
+  // Reject direct navigation without token (browser opening URL as a document).
+  // Native players (ExoPlayer / AVPlayer) may send Sec-Fetch-Dest: document with ?token= — allow.
   const secFetchDest = req.get("Sec-Fetch-Dest");
-  if (secFetchDest === "document") {
+  const tokenInQuery = typeof req.query.token === "string" && req.query.token.length > 0;
+  if (secFetchDest === "document" && !tokenInQuery) {
     return res.status(403).json({ message: "Video must be viewed from the course page" });
   }
 
-  const referer = req.get("Referer") || req.get("Referrer");
-  const origin = req.get("Origin");
-  const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
-  const fromApp = (referer && allowedOrigins.some((o) => referer.startsWith(o))) || (origin && allowedOrigins.some((o) => origin.startsWith(o)));
-  if (!fromApp) {
+  if (!allowStreamFromClient(req)) {
     return res.status(403).json({ message: "Video must be viewed from the course page" });
   }
 
@@ -338,45 +354,66 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) return res.status(503).json({ message: "S3 not configured" });
 
   try {
+    // Single ranged (or full) GET — do not open two S3 streams; the first unused body confuses clients (premature close / abort).
     const getParams = { Bucket: config.s3.bucket, Key: key };
+    const rangeHeader = typeof req.headers.range === "string" ? req.headers.range.trim() : "";
+    if (rangeHeader.startsWith("bytes=")) {
+      getParams.Range = rangeHeader;
+    }
     const obj = await s3.send(new GetObjectCommand(getParams));
-    const rangeHeader = req.headers.range;
-    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) getParams.Range = rangeHeader;
-    const objWithRange = rangeHeader ? await s3.send(new GetObjectCommand({ ...getParams, Range: rangeHeader })) : obj;
-    const stream = objWithRange.Body;
+    const stream = obj.Body;
 
     res.setHeader("Content-Type", obj.ContentType || "video/mp4");
     res.setHeader("Cache-Control", "private, no-cache");
     res.setHeader("Accept-Ranges", "bytes");
-    if (objWithRange.ContentRange) {
+    if (obj.ContentRange) {
       res.status(206);
-      res.setHeader("Content-Range", objWithRange.ContentRange);
-      if (objWithRange.ContentLength != null) res.setHeader("Content-Length", objWithRange.ContentLength);
+      res.setHeader("Content-Range", obj.ContentRange);
+    } else {
+      res.status(200);
+    }
+    if (obj.ContentLength != null && obj.ContentLength !== undefined) {
+      res.setHeader("Content-Length", String(obj.ContentLength));
     }
     if (stream && typeof stream.pipe === "function") {
-      await pipeline(stream, res);
+      try {
+        await pipeline(stream, res);
+      } catch (pipeErr) {
+        const msg = String(pipeErr?.message || pipeErr);
+        const benign =
+          msg.includes("Premature close") ||
+          msg.includes("premature close") ||
+          msg.includes("aborted") ||
+          pipeErr?.code === "ERR_STREAM_PREMATURE_CLOSE";
+        if (!benign) throw pipeErr;
+      }
     } else {
       const buf = await stream.transformToByteArray();
       res.setHeader("Content-Length", buf.length);
       res.send(Buffer.from(buf));
     }
   } catch (err) {
-    console.error("Stream fetch error:", err?.message || err);
+    const msg = String(err?.message || err);
+    const benign =
+      msg.includes("Premature close") ||
+      msg.includes("premature close") ||
+      msg.includes("aborted") ||
+      err?.code === "ERR_STREAM_PREMATURE_CLOSE";
+    if (!benign) console.error("Stream fetch error:", msg);
     if (!res.headersSent) res.status(502).json({ message: "Could not load video" });
   }
 });
 
 router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
+  const tokenInQuery = typeof req.query.token === "string" && req.query.token.length > 0;
   const secFetchDest = req.get("Sec-Fetch-Dest");
-  if (secFetchDest === "document") {
+  // Mobile WebView / in-app browser loads the PDF URL as a top-level navigation
+  // (Sec-Fetch-Dest: document) with ?token=… — allow; block bare direct opens without token.
+  if (secFetchDest === "document" && !tokenInQuery) {
     return res.status(403).json({ message: "PDF must be viewed from the course page" });
   }
 
-  const referer = req.get("Referer") || req.get("Referrer");
-  const origin = req.get("Origin");
-  const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
-  const fromApp = (referer && allowedOrigins.some((o) => referer.startsWith(o))) || (origin && allowedOrigins.some((o) => origin.startsWith(o)));
-  if (!fromApp) {
+  if (!allowStreamFromClient(req)) {
     return res.status(403).json({ message: "PDF must be viewed from the course page" });
   }
 
@@ -422,9 +459,9 @@ router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
   }
 
   try {
-    const rangeHeader = req.headers.range;
+    const rangeHeader = typeof req.headers.range === "string" ? req.headers.range.trim() : "";
     const getParams = { Bucket: config.s3.bucket, Key: pdfKey };
-    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) {
+    if (rangeHeader.startsWith("bytes=")) {
       getParams.Range = rangeHeader;
     }
     const obj = await s3.send(new GetObjectCommand(getParams));
@@ -439,18 +476,37 @@ router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
     if (contentRange) {
       res.status(206);
       res.setHeader("Content-Range", contentRange);
-      if (contentLength != null) res.setHeader("Content-Length", contentLength);
+      if (contentLength != null) res.setHeader("Content-Length", String(contentLength));
+    } else {
+      res.status(200);
+      if (contentLength != null) res.setHeader("Content-Length", String(contentLength));
     }
 
     if (obj.Body && typeof obj.Body.pipe === "function") {
-      await pipeline(obj.Body, res);
+      try {
+        await pipeline(obj.Body, res);
+      } catch (pipeErr) {
+        const msg = String(pipeErr?.message || pipeErr);
+        const benign =
+          msg.includes("Premature close") ||
+          msg.includes("premature close") ||
+          msg.includes("aborted") ||
+          pipeErr?.code === "ERR_STREAM_PREMATURE_CLOSE";
+        if (!benign) throw pipeErr;
+      }
     } else {
       const buf = await obj.Body.transformToByteArray();
       res.setHeader("Content-Length", buf.length);
       res.send(Buffer.from(buf));
     }
   } catch (err) {
-    console.error("PDF stream error:", err?.message || err);
+    const msg = String(err?.message || err);
+    const benign =
+      msg.includes("Premature close") ||
+      msg.includes("premature close") ||
+      msg.includes("aborted") ||
+      err?.code === "ERR_STREAM_PREMATURE_CLOSE";
+    if (!benign) console.error("PDF stream error:", msg);
     if (!res.headersSent) res.status(502).json({ message: "Could not load PDF" });
   }
 });

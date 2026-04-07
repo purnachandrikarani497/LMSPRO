@@ -58,7 +58,12 @@ app.use(
         "http://localhost:8080",
         "http://localhost:8081"
       ];
-      if (!origin || allowedOrigins.includes(origin)) {
+      const devLocal =
+        process.env.NODE_ENV !== "production" &&
+        origin &&
+        (origin.startsWith("http://localhost:") ||
+          origin.startsWith("http://127.0.0.1:"));
+      if (!origin || allowedOrigins.includes(origin) || devLocal) {
         return callback(null, true);
       }
       return callback(null, false);
@@ -178,8 +183,8 @@ app.use((err, req, res, next) => {
 
 // start server and attempt DB connection in background
 (async () => {
-  app.listen(config.port, () => {
-    console.log(`Server running on port ${config.port}`);
+  app.listen(config.port, config.host, () => {
+    console.log(`HTTP API listening on ${config.host}:${config.port} (reachable from LAN / device when firewall allows)`);
   });
   
   try {
