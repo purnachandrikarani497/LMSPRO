@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 import "../theme/lh_text.dart";
 import "package:go_router/go_router.dart";
 import "package:google_sign_in/google_sign_in.dart";
@@ -232,15 +233,19 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(gradient: LearnHubTheme.heroGradient),
-        child: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Color(0xFFF3F4F6),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: LearnHubTheme.authBackground,
+        body: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + MediaQuery.viewPaddingOf(context).bottom),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Column(
@@ -518,7 +523,7 @@ class _LoginScreenState extends State<LoginScreen>
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!,
-                style: const TextStyle(color: Colors.red, fontSize: 13)),
+                style: TextStyle(color: LearnHubTheme.messageWarning, fontSize: 13)),
           ],
           const SizedBox(height: 12),
           _goldButton(
@@ -615,7 +620,7 @@ class _LoginScreenState extends State<LoginScreen>
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!,
-                style: const TextStyle(color: Colors.red, fontSize: 13)),
+                style: TextStyle(color: LearnHubTheme.messageWarning, fontSize: 13)),
           ],
           const SizedBox(height: 16),
           _goldButton(
@@ -635,11 +640,11 @@ class _LoginScreenState extends State<LoginScreen>
   }) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LearnHubTheme.goldGradient,
+        color: LearnHubTheme.brandOrange,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: LearnHubTheme.goldStart.withValues(alpha: 0.35),
+            color: LearnHubTheme.brandOrange.withValues(alpha: 0.38),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -654,12 +659,12 @@ class _LoginScreenState extends State<LoginScreen>
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Center(
               child: loading
-                  ? SizedBox(
+                  ? const SizedBox(
                       height: 22,
                       width: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: LearnHubTheme.navy,
+                        color: Colors.white,
                       ),
                     )
                   : Text(

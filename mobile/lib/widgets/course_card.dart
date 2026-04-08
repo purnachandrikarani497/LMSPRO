@@ -39,7 +39,7 @@ class CourseCard extends StatelessWidget {
       case "Intermediate":
         return const Color(0xFFF59E0B).withValues(alpha: 0.95);
       case "Advanced":
-        return const Color(0xFFF43F5E).withValues(alpha: 0.95);
+        return LearnHubTheme.amber600.withValues(alpha: 0.95);
       default:
         return const Color(0xFF10B981).withValues(alpha: 0.95);
     }
@@ -128,13 +128,15 @@ class CourseCard extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       (category.isEmpty ? "General" : category).toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: LhText.body(
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
@@ -142,20 +144,20 @@ class CourseCard extends StatelessWidget {
                         color: LearnHubTheme.amber600,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       title,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: LhText.body(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        height: 1.3,
+                        height: 1.2,
                         color: LearnHubTheme.gray900,
                       ),
                     ),
                     if (instructor.isNotEmpty) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         instructor,
                         maxLines: 1,
@@ -166,7 +168,7 @@ class CourseCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Text(
@@ -198,28 +200,37 @@ class CourseCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          formatPrice(price),
-                          style: LhText.body(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: LearnHubTheme.gray900,
+                        Flexible(
+                          child: Text(
+                            formatPrice(price),
+                            style: LhText.body(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: LearnHubTheme.gray900,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (duration != null && duration!.isNotEmpty)
-                          Row(
-                            children: [
-                              Icon(Icons.schedule, size: 14, color: LearnHubTheme.gray500),
-                              const SizedBox(width: 4),
-                              Text(
-                                duration!,
-                                style: LhText.body(fontSize: 12, color: LearnHubTheme.gray500),
-                              ),
-                            ],
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.schedule, size: 14, color: LearnHubTheme.gray500),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    duration!,
+                                    style: LhText.body(fontSize: 12, color: LearnHubTheme.gray500),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                       ],
                     ),

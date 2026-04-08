@@ -11,18 +11,19 @@ import "package:path_provider/path_provider.dart";
 import "package:pdfx/pdfx.dart";
 import "package:provider/provider.dart";
 import "package:screen_protector/screen_protector.dart";
-import "package:video_player/video_player.dart";
 import "package:webview_flutter/webview_flutter.dart";
 
 import "../models/auth_user.dart";
 import "../providers/app_state.dart";
+import "../providers/course_mini_player_service.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
 import "../utils/media_urls.dart";
 import "../widgets/learnhub_app_bar.dart";
 
 class CourseLearnScreen extends StatefulWidget {
-  const CourseLearnScreen({super.key, required this.courseId, this.initialLessonId});
+  const CourseLearnScreen(
+      {super.key, required this.courseId, this.initialLessonId});
 
   final String courseId;
   final String? initialLessonId;
@@ -40,9 +41,14 @@ String formatWatchTime(double seconds) {
 
 double parseDurationToSeconds(String? duration) {
   if (duration == null || duration.trim().isEmpty) return 0;
-  final parts = duration.trim().split(":").map((p) => int.tryParse(p.replaceAll(RegExp(r"\D"), "")) ?? 0).toList();
+  final parts = duration
+      .trim()
+      .split(":")
+      .map((p) => int.tryParse(p.replaceAll(RegExp(r"\D"), "")) ?? 0)
+      .toList();
   if (parts.length == 2) return (parts[0] * 60 + parts[1]).toDouble();
-  if (parts.length >= 3) return (parts[0] * 3600 + parts[1] * 60 + parts[2]).toDouble();
+  if (parts.length >= 3)
+    return (parts[0] * 3600 + parts[1] * 60 + parts[2]).toDouble();
   if (parts.length == 1) return parts[0].toDouble();
   return 0;
 }
@@ -72,7 +78,8 @@ class _LearnData {
   final Set<String> completedLessonIds;
 }
 
-class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTickerProviderStateMixin {
+class _CourseLearnScreenState extends State<CourseLearnScreen>
+    with SingleTickerProviderStateMixin {
   Future<_LearnData>? _learnFuture;
   bool _started = false;
   String? _selectedLessonId;
@@ -84,9 +91,12 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
   double _lastSavedAt = -1;
 
   /// Live watch positions — updated without [setState] so the video layer does not rebuild every save.
-  final ValueNotifier<Map<String, double>> _liveTimestamps = ValueNotifier<Map<String, double>>({});
+  final ValueNotifier<Map<String, double>> _liveTimestamps =
+      ValueNotifier<Map<String, double>>({});
   Map<String, List<Map<String, dynamic>>>? _notesRefresh;
   Map<String, dynamic>? _courseRefresh;
+
+  CourseMiniPlayerService? _miniPlayer;
 
   @override
   void initState() {
@@ -103,6 +113,7 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
 
   @override
   void dispose() {
+    _miniPlayer?.onLearnScreenDisposed(courseId: widget.courseId);
     _saveDebounce?.cancel();
     _tabController.dispose();
     _videoTimeNotifier.dispose();
@@ -135,7 +146,9 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
             backgroundColor: LearnHubTheme.navy,
             foregroundColor: LearnHubTheme.onHero,
             elevation: 0,
-            title: Text(title, style: LhText.body(fontWeight: FontWeight.w600, color: LearnHubTheme.onHero)),
+            title: Text(title,
+                style: LhText.body(
+                    fontWeight: FontWeight.w600, color: LearnHubTheme.onHero)),
           ),
           body: body,
         ),
@@ -198,9 +211,13 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
       if ((position - _lastSavedAt).abs() < 0.25 && _lastSavedAt >= 0) return;
       _lastSavedAt = position;
       try {
-        await app.progress.saveWatchTimestamp(widget.courseId, lessonId, position, duration > 0 ? duration : null);
+        await app.progress.saveWatchTimestamp(widget.courseId, lessonId,
+            position, duration > 0 ? duration : null);
         if (mounted) {
-          _liveTimestamps.value = {..._liveTimestamps.value, lessonId: position};
+          _liveTimestamps.value = {
+            ..._liveTimestamps.value,
+            lessonId: position
+          };
         }
       } catch (_) {}
     });
@@ -239,7 +256,8 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
     return pdf != null && pdf.isNotEmpty && (v == null || v.isEmpty);
   }
 
-  List<({String sectionTitle, Map<String, dynamic> lesson})> _lessonsWithSections(Map<String, dynamic> course) {
+  List<({String sectionTitle, Map<String, dynamic> lesson})>
+      _lessonsWithSections(Map<String, dynamic> course) {
     final out = <({String sectionTitle, Map<String, dynamic> lesson})>[];
     final sections = course["sections"] as List<dynamic>? ?? [];
     if (sections.isNotEmpty) {
@@ -248,19 +266,26 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
         final title = m["title"]?.toString() ?? "Section";
         final lessons = m["lessons"] as List<dynamic>? ?? [];
         for (final l in lessons) {
-          out.add((sectionTitle: title, lesson: Map<String, dynamic>.from(l as Map)));
+          out.add((
+            sectionTitle: title,
+            lesson: Map<String, dynamic>.from(l as Map)
+          ));
         }
       }
       return out;
     }
     final top = course["lessons"] as List<dynamic>? ?? [];
     for (final l in top) {
-      out.add((sectionTitle: "Lessons", lesson: Map<String, dynamic>.from(l as Map)));
+      out.add((
+        sectionTitle: "Lessons",
+        lesson: Map<String, dynamic>.from(l as Map)
+      ));
     }
     return out;
   }
 
-  List<({String title, List<Map<String, dynamic>> lessons})> _sectionGroups(Map<String, dynamic> course) {
+  List<({String title, List<Map<String, dynamic>> lessons})> _sectionGroups(
+      Map<String, dynamic> course) {
     final sections = course["sections"] as List<dynamic>? ?? [];
     if (sections.isNotEmpty) {
       return sections.map((raw) {
@@ -268,7 +293,9 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
         final lessonList = m["lessons"] as List<dynamic>? ?? [];
         return (
           title: m["title"]?.toString() ?? "Section",
-          lessons: [for (final l in lessonList) Map<String, dynamic>.from(l as Map)],
+          lessons: [
+            for (final l in lessonList) Map<String, dynamic>.from(l as Map)
+          ],
         );
       }).toList();
     }
@@ -289,7 +316,8 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
     if (lid == null) return false;
     if (data.completedLessonIds.contains(lid)) return true;
     if (_isPdfLesson(lesson)) return false;
-    final dur = data.durations[lid] ?? parseDurationToSeconds(lesson["duration"]?.toString());
+    final dur = data.durations[lid] ??
+        parseDurationToSeconds(lesson["duration"]?.toString());
     final ts = data.timestamps[lid] ?? 0;
     return dur > 0 && ts / dur >= 0.9;
   }
@@ -297,6 +325,7 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _miniPlayer ??= context.read<CourseMiniPlayerService>();
     if (_started) return;
     _started = true;
     final app = context.read<AppState>();
@@ -311,7 +340,9 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) context.go("/login");
       });
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))));
+      return const Scaffold(
+          body: Center(
+              child: CircularProgressIndicator(color: Color(0xFFF59E0B))));
     }
 
     if (!app.isEnrolledInCourse(widget.courseId)) {
@@ -320,8 +351,10 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
         appBar: LearnHubAppBar(
           titleText: "Course",
           leading: IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: LearnHubTheme.foreground),
-            onPressed: () => context.canPop() ? context.pop() : context.go("/courses"),
+            icon:
+                Icon(Icons.arrow_back_rounded, color: LearnHubTheme.foreground),
+            onPressed: () =>
+                context.canPop() ? context.pop() : context.go("/courses"),
           ),
         ),
         body: Center(
@@ -332,20 +365,24 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
               children: [
                 Text(
                   "Enroll to watch lessons",
-                  style: LhText.display(fontSize: 22, fontWeight: FontWeight.w800),
+                  style:
+                      LhText.display(fontSize: 22, fontWeight: FontWeight.w800),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   "Open this course and tap Enroll to get access.",
                   textAlign: TextAlign.center,
-                  style: LhText.body(color: LearnHubTheme.mutedForeground, height: 1.4),
+                  style: LhText.body(
+                      color: LearnHubTheme.mutedForeground, height: 1.4),
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: () => context.go("/course/${widget.courseId}"),
-                  style: FilledButton.styleFrom(backgroundColor: LearnHubTheme.amber500),
-                  child: Text("View course", style: LhText.body(fontWeight: FontWeight.w600)),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: LearnHubTheme.amber500),
+                  child: Text("View course",
+                      style: LhText.body(fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -357,12 +394,15 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
     return Scaffold(
       backgroundColor: LearnHubTheme.background,
       body: _learnFuture == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
           : FutureBuilder<_LearnData>(
               future: _learnFuture,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B)));
+                  return const Center(
+                      child:
+                          CircularProgressIndicator(color: Color(0xFFF59E0B)));
                 }
                 if (snap.hasError || snap.data == null) {
                   return Center(
@@ -381,12 +421,18 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                 final flat = _lessonsWithSections(course);
                 if (flat.isEmpty) {
                   return Center(
-                    child: Text("No lessons in this course yet.", style: LhText.body(color: LearnHubTheme.mutedForeground)),
+                    child: Text("No lessons in this course yet.",
+                        style:
+                            LhText.body(color: LearnHubTheme.mutedForeground)),
                   );
                 }
 
-                final ids = flat.map((e) => e.lesson["_id"]?.toString()).whereType<String>().toList();
-                final initial = widget.initialLessonId != null && ids.contains(widget.initialLessonId!)
+                final ids = flat
+                    .map((e) => e.lesson["_id"]?.toString())
+                    .whereType<String>()
+                    .toList();
+                final initial = widget.initialLessonId != null &&
+                        ids.contains(widget.initialLessonId!)
                     ? widget.initialLessonId!
                     : ids.first;
                 final effectiveId = _selectedLessonId ?? initial;
@@ -398,24 +444,35 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                 final courseTitle = course["title"]?.toString() ?? "Course";
                 final groups = _sectionGroups(course);
 
-                final idx = flat.indexWhere((e) => e.lesson["_id"]?.toString() == effectiveId);
+                final idx = flat.indexWhere(
+                    (e) => e.lesson["_id"]?.toString() == effectiveId);
                 final prevLesson = idx > 0 ? flat[idx - 1].lesson : null;
-                final nextLesson = idx >= 0 && idx < flat.length - 1 ? flat[idx + 1].lesson : null;
+                final nextLesson = idx >= 0 && idx < flat.length - 1
+                    ? flat[idx + 1].lesson
+                    : null;
 
-                final totalDur = flat.fold<double>(0, (sum, e) => sum + parseDurationToSeconds(e.lesson["duration"]?.toString()));
+                final totalDur = flat.fold<double>(
+                    0,
+                    (sum, e) =>
+                        sum +
+                        parseDurationToSeconds(
+                            e.lesson["duration"]?.toString()));
 
                 return FutureBuilder<String?>(
                   future: app.auth.getToken(),
                   builder: (context, tokSnap) {
                     if (tokSnap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B)));
+                      return const Center(
+                          child: CircularProgressIndicator(
+                              color: Color(0xFFF59E0B)));
                     }
                     final token = tokSnap.data;
                     if (token == null || token.isEmpty) {
                       return Center(
                         child: Text(
                           "Session expired. Sign in again.",
-                          style: LhText.body(color: LearnHubTheme.mutedForeground),
+                          style:
+                              LhText.body(color: LearnHubTheme.mutedForeground),
                         ),
                       );
                     }
@@ -423,7 +480,8 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                     final initialSec = blended.timestamps[effectiveId] ?? 0;
 
                     final media = _LessonContent(
-                      key: ValueKey<String>("$effectiveId-${isPdf ? "p" : "v"}"),
+                      key:
+                          ValueKey<String>("$effectiveId-${isPdf ? "p" : "v"}"),
                       courseId: widget.courseId,
                       lesson: current,
                       token: token,
@@ -439,18 +497,38 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                           if (mounted) _seekVideo = fn;
                         });
                       },
+                      onOpenNotes: () => _openMoreSubpage(
+                        context,
+                        "Notes",
+                        _NotesTab(
+                          courseId: widget.courseId,
+                          lessonId: effectiveId,
+                          videoTime: _videoTimeNotifier,
+                          notes: blended.notesByLesson[effectiveId] ?? [],
+                          onReload: () => _syncNotesFromServer(app),
+                          seekVideo: _seekVideo,
+                        ),
+                      ),
                     );
 
-                    final lessonTitle = current["title"]?.toString() ?? "Lesson";
+                    final lessonTitle =
+                        current["title"]?.toString() ?? "Lesson";
 
                     return LayoutBuilder(
                       builder: (context, constraints) {
                         final mq = MediaQuery.of(context);
                         final maxH = constraints.maxHeight;
-                        final pdfH = math.min(440.0, math.max(220.0, maxH * 0.38));
+                        final pdfH =
+                            math.min(440.0, math.max(220.0, maxH * 0.38));
                         final hPad = (mq.size.width * 0.04).clamp(10.0, 22.0);
                         final sideNav = math.max(6.0, mq.padding.left + 4.0);
                         final compact = mq.size.width < 360;
+                        final miniSvc =
+                            context.watch<CourseMiniPlayerService>();
+                        final miniActive = !isPdf &&
+                            miniSvc.isMiniMode &&
+                            miniSvc.activeCourseId == widget.courseId &&
+                            miniSvc.activeLessonId == effectiveId;
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -460,7 +538,9 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  border: Border(bottom: BorderSide(color: LearnHubTheme.border)),
+                                  border: Border(
+                                      bottom: BorderSide(
+                                          color: LearnHubTheme.border)),
                                 ),
                                 child: SizedBox(
                                   height: kToolbarHeight,
@@ -468,11 +548,15 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                                     children: [
                                       SizedBox(width: math.max(0.0, hPad - 8)),
                                       IconButton(
-                                        icon: Icon(Icons.arrow_back_rounded, color: LearnHubTheme.foreground, size: compact ? 22 : 24),
-                                        onPressed: () => _onBackFromLearn(context),
+                                        icon: Icon(Icons.arrow_back_rounded,
+                                            color: LearnHubTheme.foreground,
+                                            size: compact ? 22 : 24),
+                                        onPressed: () =>
+                                            _onBackFromLearn(context),
                                         tooltip: "Back to course",
                                         padding: const EdgeInsets.all(12),
-                                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                                        constraints: const BoxConstraints(
+                                            minWidth: 44, minHeight: 44),
                                       ),
                                       Expanded(
                                         child: Text(
@@ -510,60 +594,85 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                                               right: 16,
                                               child: Align(
                                                 alignment: Alignment.topLeft,
-                                                child: _LearnPlayerLessonLabel(text: lessonTitle, compact: compact),
+                                                child: _LearnPlayerLessonLabel(
+                                                    text: lessonTitle,
+                                                    compact: compact),
                                               ),
                                             ),
                                           ],
                                         ),
                                       )
-                                    : AspectRatio(
-                                        aspectRatio: 16 / 9,
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          clipBehavior: Clip.hardEdge,
-                                          children: [
-                                            Positioned.fill(child: media),
-                                            Positioned(
-                                              left: 12,
-                                              top: 8,
-                                              right: 72,
-                                              child: Align(
-                                                alignment: Alignment.topLeft,
-                                                child: _LearnPlayerLessonLabel(text: lessonTitle, compact: compact),
-                                              ),
-                                            ),
-                                            Positioned(
-                                              left: sideNav,
-                                              top: 0,
-                                              bottom: 0,
-                                              child: Center(
-                                                child: _RoundNavIcon(
-                                                  compact: compact,
-                                                  icon: Icons.chevron_left_rounded,
-                                                  enabled: prevLesson != null,
-                                                  onTap: prevLesson == null
-                                                      ? null
-                                                      : () => setState(() => _selectedLessonId = prevLesson["_id"]?.toString()),
+                                    : IndexedStack(
+                                        index: miniActive ? 1 : 0,
+                                        sizing: StackFit.passthrough,
+                                        children: [
+                                          AspectRatio(
+                                            aspectRatio: 16 / 9,
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              clipBehavior: Clip.hardEdge,
+                                              children: [
+                                                Positioned.fill(child: media),
+                                                Positioned(
+                                                  left: 12,
+                                                  top: 8,
+                                                  right: 72,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.topLeft,
+                                                    child:
+                                                        _LearnPlayerLessonLabel(
+                                                            text: lessonTitle,
+                                                            compact: compact),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                            Positioned(
-                                              right: sideNav,
-                                              top: 0,
-                                              bottom: 0,
-                                              child: Center(
-                                                child: _RoundNavIcon(
-                                                  compact: compact,
-                                                  icon: Icons.chevron_right_rounded,
-                                                  enabled: nextLesson != null,
-                                                  onTap: nextLesson == null
-                                                      ? null
-                                                      : () => setState(() => _selectedLessonId = nextLesson["_id"]?.toString()),
+                                                Positioned(
+                                                  left: sideNav,
+                                                  top: 0,
+                                                  bottom: 0,
+                                                  child: Center(
+                                                    child: _RoundNavIcon(
+                                                      compact: compact,
+                                                      icon: Icons
+                                                          .chevron_left_rounded,
+                                                      enabled:
+                                                          prevLesson != null,
+                                                      onTap: prevLesson == null
+                                                          ? null
+                                                          : () => setState(() =>
+                                                              _selectedLessonId =
+                                                                  prevLesson[
+                                                                          "_id"]
+                                                                      ?.toString()),
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
+                                                Positioned(
+                                                  right: sideNav,
+                                                  top: 0,
+                                                  bottom: 0,
+                                                  child: Center(
+                                                    child: _RoundNavIcon(
+                                                      compact: compact,
+                                                      icon: Icons
+                                                          .chevron_right_rounded,
+                                                      enabled:
+                                                          nextLesson != null,
+                                                      onTap: nextLesson == null
+                                                          ? null
+                                                          : () => setState(() =>
+                                                              _selectedLessonId =
+                                                                  nextLesson[
+                                                                          "_id"]
+                                                                      ?.toString()),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                          const SizedBox.shrink(),
+                                        ],
                                       ),
                               ),
                             ),
@@ -574,23 +683,31 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                                   course: _courseRefresh ?? data.course,
                                   timestamps: {...data.timestamps, ...liveTs},
                                   durations: data.durations,
-                                  notesByLesson: _notesRefresh ?? data.notesByLesson,
+                                  notesByLesson:
+                                      _notesRefresh ?? data.notesByLesson,
                                   completedLessonIds: data.completedLessonIds,
                                 );
                                 return Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
                                     children: [
                                       Material(
                                         color: Colors.white,
                                         child: TabBar(
                                           controller: _tabController,
                                           labelColor: LearnHubTheme.navy,
-                                          unselectedLabelColor: LearnHubTheme.mutedForeground,
-                                          indicatorColor: LearnHubTheme.amber500,
+                                          unselectedLabelColor:
+                                              LearnHubTheme.mutedForeground,
+                                          indicatorColor:
+                                              LearnHubTheme.amber500,
                                           indicatorWeight: 3,
-                                          labelStyle: LhText.body(fontWeight: FontWeight.w800, fontSize: 14),
-                                          unselectedLabelStyle: LhText.body(fontWeight: FontWeight.w600, fontSize: 14),
+                                          labelStyle: LhText.body(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14),
+                                          unselectedLabelStyle: LhText.body(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14),
                                           tabs: const [
                                             Tab(text: "Lectures"),
                                             Tab(text: "More"),
@@ -607,48 +724,75 @@ class _CourseLearnScreenState extends State<CourseLearnScreen> with SingleTicker
                                                 groups: groups,
                                                 effectiveLessonId: effectiveId,
                                                 blended: blended,
-                                                onSelectLesson: (id) => setState(() => _selectedLessonId = id),
+                                                onSelectLesson: (id) =>
+                                                    setState(() =>
+                                                        _selectedLessonId = id),
                                                 isPdfLesson: _isPdfLesson,
-                                                isLessonComplete: (l) => _isLessonComplete(l, blended),
+                                                isLessonComplete: (l) =>
+                                                    _isLessonComplete(
+                                                        l, blended),
                                               ),
                                               _UdemyMoreTab(
-                                                onOpenOverview: () => _openMoreSubpage(
+                                                onOpenOverview: () =>
+                                                    _openMoreSubpage(
                                                   context,
                                                   "Overview",
                                                   _OverviewTab(
                                                     course: course,
-                                                    currentLessonTitle: current["title"]?.toString() ?? "",
-                                                    totalDurationLabel: formatTotalDurationLabel(totalDur),
+                                                    currentLessonTitle:
+                                                        current["title"]
+                                                                ?.toString() ??
+                                                            "",
+                                                    totalDurationLabel:
+                                                        formatTotalDurationLabel(
+                                                            totalDur),
                                                   ),
                                                 ),
-                                                onOpenNotes: () => _openMoreSubpage(
+                                                onOpenNotes: () =>
+                                                    _openMoreSubpage(
                                                   context,
                                                   "Notes",
                                                   _NotesTab(
                                                     courseId: widget.courseId,
                                                     lessonId: effectiveId,
-                                                    videoTime: _videoTimeNotifier,
-                                                    notes: blended.notesByLesson[effectiveId] ?? [],
-                                                    onReload: () => _syncNotesFromServer(app),
+                                                    videoTime:
+                                                        _videoTimeNotifier,
+                                                    notes:
+                                                        blended.notesByLesson[
+                                                                effectiveId] ??
+                                                            [],
+                                                    onReload: () =>
+                                                        _syncNotesFromServer(
+                                                            app),
                                                     seekVideo: _seekVideo,
                                                   ),
                                                 ),
-                                                onOpenAnnouncements: () => _openMoreSubpage(
+                                                onOpenAnnouncements: () =>
+                                                    _openMoreSubpage(
                                                   context,
                                                   "Announcements",
-                                                  _AnnouncementsTab(course: course),
+                                                  _AnnouncementsTab(
+                                                      course: course),
                                                 ),
-                                                onOpenReviews: () => _openMoreSubpage(
+                                                onOpenReviews: () =>
+                                                    _openMoreSubpage(
                                                   context,
                                                   "Reviews",
                                                   _ReviewsTab(
                                                     course: course,
                                                     courseId: widget.courseId,
                                                     currentUser: app.user,
-                                                    onReviewSubmitted: () async {
+                                                    onReviewSubmitted:
+                                                        () async {
                                                       try {
-                                                        final c = await app.courses.fetchCourse(widget.courseId);
-                                                        if (mounted) setState(() => _courseRefresh = c);
+                                                        final c = await app
+                                                            .courses
+                                                            .fetchCourse(widget
+                                                                .courseId);
+                                                        if (mounted)
+                                                          setState(() =>
+                                                              _courseRefresh =
+                                                                  c);
                                                       } catch (_) {}
                                                     },
                                                   ),
@@ -703,7 +847,8 @@ class _UdemyLecturesTabState extends State<_UdemyLecturesTab> {
     final open = <int>{};
     for (var i = 0; i < widget.groups.length; i++) {
       final g = widget.groups[i];
-      if (g.lessons.any((l) => l["_id"]?.toString() == widget.effectiveLessonId)) {
+      if (g.lessons
+          .any((l) => l["_id"]?.toString() == widget.effectiveLessonId)) {
         open.add(i);
       }
     }
@@ -725,7 +870,8 @@ class _UdemyLecturesTabState extends State<_UdemyLecturesTab> {
     if (oldWidget.effectiveLessonId != widget.effectiveLessonId ||
         oldWidget.groups.length != widget.groups.length) {
       final gi = widget.groups.indexWhere(
-        (g) => g.lessons.any((l) => l["_id"]?.toString() == widget.effectiveLessonId),
+        (g) => g.lessons
+            .any((l) => l["_id"]?.toString() == widget.effectiveLessonId),
       );
       if (gi >= 0) {
         setState(() => _expandedSectionIndexes.add(gi));
@@ -759,7 +905,9 @@ class _UdemyLecturesTabState extends State<_UdemyLecturesTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        _expandedSectionIndexes.contains(gi) ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                        _expandedSectionIndexes.contains(gi)
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
                         color: LearnHubTheme.navy,
                         size: 22,
                       ),
@@ -767,12 +915,16 @@ class _UdemyLecturesTabState extends State<_UdemyLecturesTab> {
                       Expanded(
                         child: Text(
                           widget.groups[gi].title,
-                          style: LhText.body(fontWeight: FontWeight.w800, fontSize: 15, color: LearnHubTheme.foreground),
+                          style: LhText.body(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: LearnHubTheme.foreground),
                         ),
                       ),
                       Text(
                         "${widget.groups[gi].lessons.length} lectures",
-                        style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground),
+                        style: LhText.body(
+                            fontSize: 12, color: LearnHubTheme.mutedForeground),
                       ),
                     ],
                   ),
@@ -783,14 +935,16 @@ class _UdemyLecturesTabState extends State<_UdemyLecturesTab> {
               for (var i = 0; i < widget.groups[gi].lessons.length; i++)
                 _UdemyLectureRow(
                   lesson: widget.groups[gi].lessons[i],
-                  isActive: widget.groups[gi].lessons[i]["_id"]?.toString() == widget.effectiveLessonId,
+                  isActive: widget.groups[gi].lessons[i]["_id"]?.toString() ==
+                      widget.effectiveLessonId,
                   isPdf: widget.isPdfLesson(widget.groups[gi].lessons[i]),
                   onTap: () {
                     final id = widget.groups[gi].lessons[i]["_id"]?.toString();
                     if (id != null && id.isNotEmpty) widget.onSelectLesson(id);
                   },
                   data: widget.blended,
-                  isComplete: widget.isLessonComplete(widget.groups[gi].lessons[i]),
+                  isComplete:
+                      widget.isLessonComplete(widget.groups[gi].lessons[i]),
                 ),
             Divider(height: 1, color: LearnHubTheme.gray200),
           ],
@@ -829,12 +983,12 @@ class _UdemyLectureRow extends StatelessWidget {
     if (isComplete) frac = 1;
 
     final showResume = !isPdf && total > 0 && watched > 5 && frac < 0.92;
-    final meta = isPdf
-        ? "PDF"
-        : (dur.isNotEmpty ? "Video · $dur" : "Video");
+    final meta = isPdf ? "PDF" : (dur.isNotEmpty ? "Video · $dur" : "Video");
 
     final accent = isActive ? LearnHubTheme.navy : LearnHubTheme.gray500;
-    final bg = isActive ? LearnHubTheme.amber500.withValues(alpha: 0.08) : Colors.transparent;
+    final bg = isActive
+        ? LearnHubTheme.amber500.withValues(alpha: 0.08)
+        : Colors.transparent;
 
     return Material(
       color: bg,
@@ -848,9 +1002,12 @@ class _UdemyLectureRow extends StatelessWidget {
               SizedBox(
                 width: 32,
                 child: isComplete
-                    ? Icon(Icons.check_circle_rounded, size: 22, color: LearnHubTheme.amber500)
+                    ? Icon(Icons.check_circle_rounded,
+                        size: 22, color: LearnHubTheme.amber500)
                     : Icon(
-                        isPdf ? Icons.picture_as_pdf_outlined : Icons.play_circle_outline_rounded,
+                        isPdf
+                            ? Icons.picture_as_pdf_outlined
+                            : Icons.play_circle_outline_rounded,
                         size: 22,
                         color: accent,
                       ),
@@ -870,7 +1027,8 @@ class _UdemyLectureRow extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       meta,
-                      style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground),
+                      style: LhText.body(
+                          fontSize: 12, color: LearnHubTheme.mutedForeground),
                     ),
                     if (!isPdf && total > 0) ...[
                       const SizedBox(height: 8),
@@ -889,7 +1047,10 @@ class _UdemyLectureRow extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           "Resume at ${formatWatchTime(watched)}",
-                          style: LhText.body(fontSize: 11, fontWeight: FontWeight.w600, color: LearnHubTheme.amber500),
+                          style: LhText.body(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: LearnHubTheme.amber500),
                         ),
                       ),
                   ],
@@ -922,8 +1083,11 @@ class _UdemyMoreTab extends StatelessWidget {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         leading: Icon(icon, color: LearnHubTheme.mutedForeground),
-        title: Text(label, style: LhText.body(fontWeight: FontWeight.w600, color: LearnHubTheme.foreground)),
-        trailing: Icon(Icons.chevron_right_rounded, color: LearnHubTheme.gray400),
+        title: Text(label,
+            style: LhText.body(
+                fontWeight: FontWeight.w600, color: LearnHubTheme.foreground)),
+        trailing:
+            Icon(Icons.chevron_right_rounded, color: LearnHubTheme.gray400),
         onTap: onTap,
       );
     }
@@ -969,7 +1133,8 @@ class _RoundNavIcon extends StatelessWidget {
         onTap: enabled ? onTap : null,
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: Icon(icon, color: enabled ? Colors.white : Colors.white38, size: iconSize),
+          child: Icon(icon,
+              color: enabled ? Colors.white : Colors.white38, size: iconSize),
         ),
       ),
     );
@@ -989,7 +1154,9 @@ class _OverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rating = (course["rating"] is num) ? (course["rating"] as num).toDouble() : double.tryParse("${course["rating"]}") ?? 0;
+    final rating = (course["rating"] is num)
+        ? (course["rating"] as num).toDouble()
+        : double.tryParse("${course["rating"]}") ?? 0;
     final rc = course["ratingCount"] ?? course["reviews"]?.length ?? 0;
     final rcn = rc is num ? rc.toInt() : int.tryParse("$rc") ?? 0;
     final desc = course["description"]?.toString() ?? "";
@@ -1001,35 +1168,51 @@ class _OverviewTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
         if (currentLessonTitle.isNotEmpty)
-          Text(currentLessonTitle, style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(currentLessonTitle,
+              style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(rating.toStringAsFixed(1), style: LhText.body(fontWeight: FontWeight.w800, fontSize: 16, color: LearnHubTheme.amber600)),
+            Text(rating.toStringAsFixed(1),
+                style: LhText.body(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: LearnHubTheme.amber600)),
             const SizedBox(width: 6),
             Row(
               children: List.generate(5, (i) {
                 return Icon(
-                  i < rating.floor() ? Icons.star_rounded : Icons.star_border_rounded,
+                  i < rating.floor()
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
                   size: 18,
-                  color: i < rating.floor() ? const Color(0xFFFBBF24) : LearnHubTheme.gray300,
+                  color: i < rating.floor()
+                      ? const Color(0xFFFBBF24)
+                      : LearnHubTheme.gray300,
                 );
               }),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text("($rcn ratings)", style: LhText.body(fontSize: 13, color: LearnHubTheme.gray600)),
+              child: Text("($rcn ratings)",
+                  style:
+                      LhText.body(fontSize: 13, color: LearnHubTheme.gray600)),
             ),
-            Text(totalDurationLabel, style: LhText.body(fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(totalDurationLabel,
+                style: LhText.body(fontWeight: FontWeight.w700, fontSize: 13)),
           ],
         ),
         const SizedBox(height: 20),
-        Text("About this course", style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text("About this course",
+            style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        Text(desc.isEmpty ? "No description available." : desc, style: LhText.body(height: 1.45, fontSize: 14, color: LearnHubTheme.gray700)),
+        Text(desc.isEmpty ? "No description available." : desc,
+            style: LhText.body(
+                height: 1.45, fontSize: 14, color: LearnHubTheme.gray700)),
         const SizedBox(height: 24),
-        Text("Instructor", style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text("Instructor",
+            style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1037,19 +1220,31 @@ class _OverviewTab extends StatelessWidget {
             CircleAvatar(
               radius: 28,
               backgroundColor: LearnHubTheme.gray200,
-              child: Text(instructor.isNotEmpty ? instructor[0].toUpperCase() : "?", style: LhText.display(fontWeight: FontWeight.w800)),
+              child: Text(
+                  instructor.isNotEmpty ? instructor[0].toUpperCase() : "?",
+                  style: LhText.display(fontWeight: FontWeight.w800)),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(instructor, style: LhText.body(fontWeight: FontWeight.w800, fontSize: 16)),
+                  Text(instructor,
+                      style: LhText.body(
+                          fontWeight: FontWeight.w800, fontSize: 16)),
                   if (title != null && title.isNotEmpty)
-                    Text(title, style: LhText.body(fontSize: 13, color: LearnHubTheme.amber600, fontWeight: FontWeight.w600)),
+                    Text(title,
+                        style: LhText.body(
+                            fontSize: 13,
+                            color: LearnHubTheme.amber600,
+                            fontWeight: FontWeight.w600)),
                   if (bio != null && bio.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text(bio, style: LhText.body(fontSize: 13, height: 1.4, color: LearnHubTheme.gray600)),
+                    Text(bio,
+                        style: LhText.body(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: LearnHubTheme.gray600)),
                   ],
                 ],
               ),
@@ -1097,7 +1292,8 @@ class _NotesTabState extends State<_NotesTab> {
     if (text.isEmpty) return;
     setState(() => _saving = true);
     try {
-      await app.progress.saveNote(widget.courseId, widget.lessonId, text, widget.videoTime.value);
+      await app.progress.saveNote(
+          widget.courseId, widget.lessonId, text, widget.videoTime.value);
       _controller.clear();
       await widget.onReload();
     } finally {
@@ -1111,14 +1307,16 @@ class _NotesTabState extends State<_NotesTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Text("Notes", style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text("Notes",
+            style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         ValueListenableBuilder<double>(
           valueListenable: widget.videoTime,
           builder: (_, t, __) {
             return Text(
               "Saved at ${formatWatchTime(t)}",
-              style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground),
+              style: LhText.body(
+                  fontSize: 12, color: LearnHubTheme.mutedForeground),
             );
           },
         ),
@@ -1139,37 +1337,51 @@ class _NotesTabState extends State<_NotesTab> {
           alignment: Alignment.centerLeft,
           child: FilledButton(
             onPressed: _saving ? null : () => _save(app),
-            style: FilledButton.styleFrom(backgroundColor: LearnHubTheme.amber600),
+            style:
+                FilledButton.styleFrom(backgroundColor: LearnHubTheme.amber600),
             child: _saving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text("Save note", style: LhText.body(fontWeight: FontWeight.w700)),
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text("Save note",
+                    style: LhText.body(fontWeight: FontWeight.w700)),
           ),
         ),
         const SizedBox(height: 20),
         Text("This lecture", style: LhText.body(fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         if (widget.notes.isEmpty)
-          Text("No notes yet.", style: LhText.body(color: LearnHubTheme.mutedForeground))
+          Text("No notes yet.",
+              style: LhText.body(color: LearnHubTheme.mutedForeground))
         else
           ...widget.notes.asMap().entries.map((e) {
             final i = e.key;
             final n = e.value;
-            final ts = (n["videoTimestamp"] is num) ? (n["videoTimestamp"] as num).toDouble() : double.tryParse("${n["videoTimestamp"]}") ?? 0;
+            final ts = (n["videoTimestamp"] is num)
+                ? (n["videoTimestamp"] as num).toDouble()
+                : double.tryParse("${n["videoTimestamp"]}") ?? 0;
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                title: Text(n["text"]?.toString() ?? "", style: LhText.body(height: 1.35)),
+                title: Text(n["text"]?.toString() ?? "",
+                    style: LhText.body(height: 1.35)),
                 subtitle: Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: TextButton(
                     onPressed: () => widget.seekVideo?.call(ts),
-                    child: Text("Jump to ${formatWatchTime(ts)}", style: LhText.body(fontWeight: FontWeight.w700, color: LearnHubTheme.amber600)),
+                    child: Text("Jump to ${formatWatchTime(ts)}",
+                        style: LhText.body(
+                            fontWeight: FontWeight.w700,
+                            color: LearnHubTheme.amber600)),
                   ),
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline_rounded),
                   onPressed: () async {
-                    await app.progress.deleteNote(widget.courseId, widget.lessonId, i);
+                    await app.progress
+                        .deleteNote(widget.courseId, widget.lessonId, i);
                     await widget.onReload();
                   },
                 ),
@@ -1193,10 +1405,12 @@ class _AnnouncementsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Text("Announcements", style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text("Announcements",
+            style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         if (list.isEmpty)
-          Text("No announcements yet.", style: LhText.body(color: LearnHubTheme.mutedForeground))
+          Text("No announcements yet.",
+              style: LhText.body(color: LearnHubTheme.mutedForeground))
         else
           ...list.map((a) {
             final m = Map<String, dynamic>.from(a as Map);
@@ -1207,15 +1421,19 @@ class _AnnouncementsTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(m["title"]?.toString() ?? "", style: LhText.body(fontWeight: FontWeight.w800)),
+                    Text(m["title"]?.toString() ?? "",
+                        style: LhText.body(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 6),
-                    Text(m["content"]?.toString() ?? "", style: LhText.body(height: 1.35)),
+                    Text(m["content"]?.toString() ?? "",
+                        style: LhText.body(height: 1.35)),
                     if (m["postedAt"] != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           "Posted ${_formatDate(m["postedAt"])}",
-                          style: LhText.body(fontSize: 11, color: LearnHubTheme.mutedForeground),
+                          style: LhText.body(
+                              fontSize: 11,
+                              color: LearnHubTheme.mutedForeground),
                         ),
                       ),
                   ],
@@ -1280,27 +1498,39 @@ class _ReviewsTabState extends State<_ReviewsTab> {
     final reviews = widget.course["reviews"] as List<dynamic>? ?? [];
     final uid = widget.currentUser?.id;
     final mine = _userReview(reviews, uid);
-    final rating = (widget.course["rating"] is num) ? (widget.course["rating"] as num).toDouble() : 0;
+    final rating = (widget.course["rating"] is num)
+        ? (widget.course["rating"] as num).toDouble()
+        : 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Text("Student feedback", style: LhText.display(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text("Student feedback",
+            style: LhText.display(fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 16),
         Center(
           child: Column(
             children: [
-              Text(rating.toStringAsFixed(1), style: LhText.display(fontSize: 44, fontWeight: FontWeight.w800, color: LearnHubTheme.amber500)),
+              Text(rating.toStringAsFixed(1),
+                  style: LhText.display(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w800,
+                      color: LearnHubTheme.amber500)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: List.generate(5, (i) {
                   return Icon(
-                    i < rating.floor() ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: i < rating.floor() ? const Color(0xFFFBBF24) : LearnHubTheme.gray300,
+                    i < rating.floor()
+                        ? Icons.star_rounded
+                        : Icons.star_border_rounded,
+                    color: i < rating.floor()
+                        ? const Color(0xFFFBBF24)
+                        : LearnHubTheme.gray300,
                   );
                 }),
               ),
-              Text("Average rating", style: LhText.body(color: LearnHubTheme.mutedForeground)),
+              Text("Average rating",
+                  style: LhText.body(color: LearnHubTheme.mutedForeground)),
             ],
           ),
         ),
@@ -1313,23 +1543,30 @@ class _ReviewsTabState extends State<_ReviewsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Your review", style: LhText.body(fontWeight: FontWeight.w800)),
+                  Text("Your review",
+                      style: LhText.body(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  Text(mine["comment"]?.toString() ?? "", style: LhText.body(height: 1.35)),
+                  Text(mine["comment"]?.toString() ?? "",
+                      style: LhText.body(height: 1.35)),
                 ],
               ),
             ),
           )
         else ...[
-          Text("Rate this course", style: LhText.body(fontWeight: FontWeight.w700)),
+          Text("Rate this course",
+              style: LhText.body(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           Row(
             children: List.generate(5, (i) {
               final star = i + 1;
               return IconButton(
                 onPressed: () => setState(() => _rating = star),
-                icon: Icon(star <= _rating ? Icons.star_rounded : Icons.star_border_rounded),
-                color: star <= _rating ? const Color(0xFFFBBF24) : LearnHubTheme.gray400,
+                icon: Icon(star <= _rating
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded),
+                color: star <= _rating
+                    ? const Color(0xFFFBBF24)
+                    : LearnHubTheme.gray400,
               );
             }),
           ),
@@ -1338,34 +1575,44 @@ class _ReviewsTabState extends State<_ReviewsTab> {
             maxLines: 3,
             decoration: InputDecoration(
               hintText: "Write your review…",
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 8),
           FilledButton(
-            onPressed: _submitting || _rating < 1 || _comment.text.trim().isEmpty
-                ? null
-                : () async {
-                    setState(() => _submitting = true);
-                    try {
-                      await app.courses.submitReview(widget.courseId, rating: _rating, comment: _comment.text.trim());
-                      await widget.onReviewSubmitted();
-                    } finally {
-                      if (mounted) setState(() => _submitting = false);
-                    }
-                  },
-            style: FilledButton.styleFrom(backgroundColor: LearnHubTheme.amber600),
-            child: Text(_submitting ? "Submitting…" : "Submit review", style: LhText.body(fontWeight: FontWeight.w700)),
+            onPressed:
+                _submitting || _rating < 1 || _comment.text.trim().isEmpty
+                    ? null
+                    : () async {
+                        setState(() => _submitting = true);
+                        try {
+                          await app.courses.submitReview(widget.courseId,
+                              rating: _rating, comment: _comment.text.trim());
+                          await widget.onReviewSubmitted();
+                        } finally {
+                          if (mounted) setState(() => _submitting = false);
+                        }
+                      },
+            style:
+                FilledButton.styleFrom(backgroundColor: LearnHubTheme.amber600),
+            child: Text(_submitting ? "Submitting…" : "Submit review",
+                style: LhText.body(fontWeight: FontWeight.w700)),
           ),
         ],
         const SizedBox(height: 20),
-        Text("Reviews", style: LhText.body(fontWeight: FontWeight.w800, fontSize: 16)),
+        Text("Reviews",
+            style: LhText.body(fontWeight: FontWeight.w800, fontSize: 16)),
         const SizedBox(height: 8),
         ...reviews.map((r) {
           if (r is! Map) return const SizedBox.shrink();
           final m = Map<String, dynamic>.from(r);
-          final name = m["user"] is Map ? (m["user"] as Map)["name"]?.toString() ?? "Student" : "Student";
-          final rr = (m["rating"] is num) ? (m["rating"] as num).toInt() : int.tryParse("${m["rating"]}") ?? 0;
+          final name = m["user"] is Map
+              ? (m["user"] as Map)["name"]?.toString() ?? "Student"
+              : "Student";
+          final rr = (m["rating"] is num)
+              ? (m["rating"] as num).toInt()
+              : int.tryParse("${m["rating"]}") ?? 0;
           return Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: Column(
@@ -1373,10 +1620,19 @@ class _ReviewsTabState extends State<_ReviewsTab> {
               children: [
                 Text(name, style: LhText.body(fontWeight: FontWeight.w700)),
                 Row(
-                  children: List.generate(5, (i) => Icon(i < rr ? Icons.star_rounded : Icons.star_border_rounded, size: 16, color: const Color(0xFFFBBF24))),
+                  children: List.generate(
+                      5,
+                      (i) => Icon(
+                          i < rr
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          size: 16,
+                          color: const Color(0xFFFBBF24))),
                 ),
                 const SizedBox(height: 4),
-                Text(m["comment"]?.toString() ?? "", style: LhText.body(height: 1.35, color: LearnHubTheme.gray700)),
+                Text(m["comment"]?.toString() ?? "",
+                    style: LhText.body(
+                        height: 1.35, color: LearnHubTheme.gray700)),
                 const Divider(height: 24),
               ],
             ),
@@ -1398,6 +1654,7 @@ class _LessonContent extends StatelessWidget {
     required this.initialVideoSeconds,
     required this.onVideoProgress,
     required this.onSeekReady,
+    this.onOpenNotes,
   });
 
   final String courseId;
@@ -1408,6 +1665,7 @@ class _LessonContent extends StatelessWidget {
   final double initialVideoSeconds;
   final void Function(double position, double duration) onVideoProgress;
   final void Function(void Function(double) seek) onSeekReady;
+  final VoidCallback? onOpenNotes;
 
   @override
   Widget build(BuildContext context) {
@@ -1425,17 +1683,21 @@ class _LessonContent extends StatelessWidget {
       if (lessonId.isEmpty) return _msg("Invalid lesson");
       final uri = MediaUrls.lessonStreamUrl(courseId, lessonId, token);
       return _ChewieNetwork(
+        courseId: courseId,
+        lessonId: lessonId,
         uri: uri,
         initialSeconds: initialVideoSeconds,
         onVideoProgress: onVideoProgress,
         onSeekReady: onSeekReady,
+        onOpenNotes: onOpenNotes,
       );
     }
 
     if (isEmbedHost(raw)) {
       final yt = extractYoutubeId(raw);
       if (yt != null) {
-        return _EmbedWebView(url: "https://www.youtube.com/embed/$yt?playsinline=1");
+        return _EmbedWebView(
+            url: "https://www.youtube.com/embed/$yt?playsinline=1");
       }
       final vm = extractVimeoId(raw);
       if (vm != null) {
@@ -1446,10 +1708,13 @@ class _LessonContent extends StatelessWidget {
 
     final proxied = MediaUrls.secureVideoProxy(raw, token) ?? raw;
     return _ChewieNetwork(
+      courseId: courseId,
+      lessonId: lessonId,
       uri: proxied,
       initialSeconds: initialVideoSeconds,
       onVideoProgress: onVideoProgress,
       onSeekReady: onSeekReady,
+      onOpenNotes: onOpenNotes,
     );
   }
 
@@ -1462,9 +1727,13 @@ class _LessonContent extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, size: 40, color: LearnHubTheme.amber500),
+            Icon(Icons.error_outline_rounded,
+                size: 40, color: LearnHubTheme.amber500),
             const SizedBox(height: 12),
-            Text(text, textAlign: TextAlign.center, style: LhText.body(color: Colors.white, fontWeight: FontWeight.w500)),
+            Text(text,
+                textAlign: TextAlign.center,
+                style: LhText.body(
+                    color: Colors.white, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -1473,7 +1742,8 @@ class _LessonContent extends StatelessWidget {
 }
 
 class _PdfLessonViewer extends StatefulWidget {
-  const _PdfLessonViewer({required this.courseId, required this.lessonId, required this.app});
+  const _PdfLessonViewer(
+      {required this.courseId, required this.lessonId, required this.app});
 
   final String courseId;
   final String lessonId;
@@ -1497,8 +1767,8 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
 
   Future<void> _loadPdf() async {
     try {
-      final Uint8List bytes =
-          await widget.app.progress.fetchLessonPdfBytes(widget.courseId, widget.lessonId);
+      final Uint8List bytes = await widget.app.progress
+          .fetchLessonPdfBytes(widget.courseId, widget.lessonId);
       if (bytes.lengthInBytes < 16) {
         if (mounted) {
           setState(() {
@@ -1545,9 +1815,12 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, size: 40, color: LearnHubTheme.amber500),
+            Icon(Icons.error_outline_rounded,
+                size: 40, color: LearnHubTheme.amber500),
             const SizedBox(height: 12),
-            Text(_error!, textAlign: TextAlign.center, style: LhText.body(color: LearnHubTheme.gray700)),
+            Text(_error!,
+                textAlign: TextAlign.center,
+                style: LhText.body(color: LearnHubTheme.gray700)),
             if (_tempPdfPath != null) ...[
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -1569,7 +1842,8 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
             children: [
               const CircularProgressIndicator(color: Color(0xFFF59E0B)),
               const SizedBox(height: 16),
-              Text("Loading PDF…", style: LhText.body(color: LearnHubTheme.gray600)),
+              Text("Loading PDF…",
+                  style: LhText.body(color: LearnHubTheme.gray600)),
             ],
           ),
         ),
@@ -1586,7 +1860,8 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
             padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
             child: Row(
               children: [
-                Icon(Icons.picture_as_pdf_rounded, color: LearnHubTheme.onHero, size: 20),
+                Icon(Icons.picture_as_pdf_rounded,
+                    color: LearnHubTheme.onHero, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1616,9 +1891,13 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
                 IconButton(
                   tooltip: "Open externally",
                   padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                  onPressed: _tempPdfPath == null ? null : () => OpenFile.open(_tempPdfPath!),
-                  icon: Icon(Icons.open_in_new_rounded, color: LearnHubTheme.onHero, size: 22),
+                  constraints:
+                      const BoxConstraints(minWidth: 40, minHeight: 40),
+                  onPressed: _tempPdfPath == null
+                      ? null
+                      : () => OpenFile.open(_tempPdfPath!),
+                  icon: Icon(Icons.open_in_new_rounded,
+                      color: LearnHubTheme.onHero, size: 22),
                 ),
               ],
             ),
@@ -1645,130 +1924,118 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
 
 class _ChewieNetwork extends StatefulWidget {
   const _ChewieNetwork({
+    required this.courseId,
+    required this.lessonId,
     required this.uri,
     required this.initialSeconds,
     required this.onVideoProgress,
     required this.onSeekReady,
+    this.onOpenNotes,
   });
 
+  final String courseId;
+  final String lessonId;
   final String uri;
   final double initialSeconds;
   final void Function(double position, double duration) onVideoProgress;
   final void Function(void Function(double) seek) onSeekReady;
+  final VoidCallback? onOpenNotes;
 
   @override
   State<_ChewieNetwork> createState() => _ChewieNetworkState();
 }
 
 class _ChewieNetworkState extends State<_ChewieNetwork> {
-  VideoPlayerController? _video;
-  ChewieController? _chewie;
   String? _error;
-  VoidCallback? _listener;
 
   @override
   void initState() {
     super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    try {
-      final c = VideoPlayerController.networkUrl(Uri.parse(widget.uri));
-      await c.initialize();
-      if (!mounted) return;
-      _video = c;
-      if (widget.initialSeconds > 1) {
-        await c.seekTo(Duration(milliseconds: (widget.initialSeconds * 1000).round()));
-      }
-      final ar = c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9;
-      // Chewie material controls: play/pause, scrubber, fullscreen, mute, overflow menu
-      // (quality/speed when the source supports them), buffer bar, themed colors.
-      _chewie = ChewieController(
-        videoPlayerController: c,
-        autoPlay: false,
-        looping: false,
-        aspectRatio: ar,
-        allowFullScreen: true,
-        allowMuting: true,
-        showControls: true,
-        materialProgressColors: ChewieProgressColors(
-          playedColor: LearnHubTheme.amber500,
-          handleColor: LearnHubTheme.amber500,
-          backgroundColor: LearnHubTheme.gray700,
-          bufferedColor: LearnHubTheme.gray500,
-        ),
-        errorBuilder: (_, __) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline_rounded, size: 44, color: LearnHubTheme.amber500),
-              const SizedBox(height: 10),
-              Text(
-                "Video could not be loaded",
-                style: LhText.body(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-      widget.onSeekReady((sec) {
-        final v = _video;
-        if (v == null) return;
-        v.seekTo(Duration(milliseconds: (sec * 1000).round()));
-        v.play();
-      });
-      _listener = () {
-        final v = _video!;
-        if (!v.value.isInitialized) return;
-        widget.onVideoProgress(
-          v.value.position.inMilliseconds / 1000.0,
-          v.value.duration.inMilliseconds / 1000.0,
-        );
-      };
-      c.addListener(_listener!);
-      setState(() {});
-    } catch (e) {
-      setState(() => _error = e.toString());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
-  void dispose() {
-    if (_listener != null) _video?.removeListener(_listener!);
-    _chewie?.dispose();
-    _video?.dispose();
-    super.dispose();
+  void didUpdateWidget(_ChewieNetwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uri != widget.uri ||
+        oldWidget.lessonId != widget.lessonId ||
+        oldWidget.courseId != widget.courseId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    }
+  }
+
+  Future<void> _load() async {
+    final svc = context.read<CourseMiniPlayerService>();
+    try {
+      await svc.ensureVideo(
+        courseId: widget.courseId,
+        lessonId: widget.lessonId,
+        uri: widget.uri,
+        initialSeconds: widget.initialSeconds,
+        onVideoProgress: widget.onVideoProgress,
+        onOpenNotes: widget.onOpenNotes,
+      );
+      if (!mounted) return;
+      widget.onSeekReady((sec) => unawaited(svc.seekToSeconds(sec)));
+      if (mounted) setState(() => _error = null);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return Container(
-        color: LearnHubTheme.gray900,
-        padding: const EdgeInsets.all(16),
-        alignment: Alignment.center,
-        child: Text(_error!, style: LhText.body(color: Colors.white70, fontSize: 13), textAlign: TextAlign.center),
-      );
-    }
-    if (_chewie == null || _video == null) {
-      return Container(
-        color: Colors.black,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(color: Color(0xFFF59E0B)),
-            const SizedBox(height: 14),
-            Text("Loading video…", style: LhText.body(color: Colors.white70, fontSize: 13)),
-          ],
-        ),
-      );
-    }
-    return RepaintBoundary(
-      child: ColoredBox(color: Colors.black, child: Chewie(controller: _chewie!)),
+    return Consumer<CourseMiniPlayerService>(
+      builder: (context, svc, _) {
+        if (_error != null) {
+          return Container(
+            color: LearnHubTheme.gray900,
+            padding: const EdgeInsets.all(16),
+            alignment: Alignment.center,
+            child: Text(_error!,
+                style: LhText.body(color: Colors.white70, fontSize: 13),
+                textAlign: TextAlign.center),
+          );
+        }
+        final ready = svc.hasVideo && svc.activeUri == widget.uri;
+        if (!ready) {
+          return Container(
+            color: Colors.black,
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+                const SizedBox(height: 14),
+                Text("Loading video…",
+                    style: LhText.body(color: Colors.white70, fontSize: 13)),
+              ],
+            ),
+          );
+        }
+        final miniHere = svc.isMiniMode &&
+            svc.activeCourseId == widget.courseId &&
+            svc.activeLessonId == widget.lessonId;
+        if (miniHere) {
+          return ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  "Playing in mini player",
+                  textAlign: TextAlign.center,
+                  style: LhText.body(color: Colors.white54, fontSize: 13),
+                ),
+              ),
+            ),
+          );
+        }
+        return RepaintBoundary(
+          child: ColoredBox(
+              color: Colors.black, child: Chewie(controller: svc.chewie!)),
+        );
+      },
     );
   }
 }

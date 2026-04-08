@@ -40,6 +40,14 @@ class LearnHubTheme {
   static Color get amber400 => const Color(0xFFFBBF24);
   static Color get amber500 => const Color(0xFFF59E0B);
   static Color get amber600 => const Color(0xFFD97706);
+  /// Web marketing / header accent (orange book logo, CTAs).
+  static Color get brandOrange => amber500;
+
+  /// Web `/auth` page — flat dark navy (no photo).
+  static Color get authBackground => navyDark;
+
+  /// Error text on light surfaces — dark amber (template) instead of pure red.
+  static Color get messageWarning => const Color(0xFFC2410C);
 
   /// Foreground text (`--foreground`).
   static Color get foreground => _hsl(222 / 360, 0.47, 0.11);

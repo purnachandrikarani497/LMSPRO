@@ -4,6 +4,7 @@ import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
 
+import "../config/api_config.dart";
 import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
 import "../utils/formatters.dart";
@@ -128,6 +129,66 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return list;
   }
 
+  void _showCourseActions(Map<String, dynamic> course) {
+    final id = _courseId(course);
+    if (id.isEmpty) return;
+    final title = "${course["title"] ?? "Course"}";
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: LhText.display(fontSize: 16, fontWeight: FontWeight.w800)),
+            ),
+            ListTile(
+              leading: Icon(Icons.settings_outlined, color: LearnHubTheme.navy),
+              title: Text("Manage content", style: LhText.body(fontWeight: FontWeight.w700)),
+              subtitle: Text("Sections, lessons, uploads in the app", style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground)),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push("/admin/course/$id/manage");
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.edit_outlined, color: LearnHubTheme.navy),
+              title: Text("Edit details", style: LhText.body(fontWeight: FontWeight.w700)),
+              subtitle: Text("Title, price, thumbnail, category…", style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground)),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push("/admin/course/$id/edit").then((saved) {
+                  if (saved == true && mounted) _load();
+                });
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.visibility_outlined, color: LearnHubTheme.mutedForeground),
+              title: Text("Preview as student", style: LhText.body(fontWeight: FontWeight.w700)),
+              subtitle: Text("Open the public course page", style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground)),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push("/course/$id");
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
+              title: Text("Delete course", style: LhText.body(fontWeight: FontWeight.w700, color: const Color(0xFFDC2626))),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDelete(course);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmDelete(Map<String, dynamic> course) async {
     final id = _courseId(course);
     if (id.isEmpty) return;
@@ -195,6 +256,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       key: _scaffoldKey,
       drawer: const LearnHubDrawer(),
       backgroundColor: LearnHubTheme.background,
+      resizeToAvoidBottomInset: true,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final saved = await context.push<bool>("/admin/course/new");
+          if (saved == true && context.mounted) await _load();
+        },
+        icon: const Icon(Icons.add_rounded),
+        label: Text("Add course", style: LhText.body(fontWeight: FontWeight.w800)),
+        backgroundColor: LearnHubTheme.amber500,
+        foregroundColor: LearnHubTheme.navy,
+      ),
       appBar: LearnHubAppBar(
         leading: IconButton(
           icon: Icon(Icons.menu_rounded, color: LearnHubTheme.foreground),
@@ -207,16 +279,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icon(Icons.people_outline, color: LearnHubTheme.mutedForeground),
             onPressed: () => context.push("/admin/users"),
           ),
-          IconButton(
-            tooltip: "Sign out",
-            icon: Icon(Icons.logout_rounded, color: LearnHubTheme.mutedForeground),
-            onPressed: () async {
-              await app.auth.logout();
-              if (!context.mounted) return;
-              app.setUser(null);
-              context.go("/login");
-            },
-          ),
         ],
       ),
       body: RefreshIndicator(
@@ -226,7 +288,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ? const Center(child: CircularProgressIndicator())
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  20,
+                  20,
+                  20 + MediaQuery.paddingOf(context).bottom + 88,
+                ),
                 children: [
                   Text(
                     "Admin Dashboard",
@@ -297,9 +364,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Create or edit courses with uploads and lesson structure in the LearnHub web admin.",
-                    style: LhText.body(fontSize: 12, height: 1.4, color: LearnHubTheme.gray600),
-                  ),
+                  "Tap a course for actions. Edit details or Manage for sections & lessons.",
+                  style: LhText.body(fontSize: 12, height: 1.4, color: LearnHubTheme.gray600),
+                ),
                   const SizedBox(height: 20),
                   Text(
                     "Courses",
@@ -394,15 +461,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                     )
                   else
-                    ...pageSlice.map((c) => _CourseAdminRow(
-                          course: c,
-                          thumb: _thumbUrl(c),
-                          onOpen: () {
-                            final id = _courseId(c);
-                            if (id.isNotEmpty) context.push("/course/$id");
-                          },
-                          onDelete: () => _confirmDelete(c),
-                        )),
+                    ...pageSlice.map(
+                          (c) => _CourseAdminRow(
+                            course: c,
+                            thumb: _thumbUrl(c),
+                            onCardTap: () => _showCourseActions(c),
+                          ),
+                        ),
                   if (filtered.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Row(
@@ -434,8 +499,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _thumbUrl(Map<String, dynamic> c) {
     final t = c["thumbnail"]?.toString().trim();
-    if (t != null && t.isNotEmpty) return t;
-    return _fallbackThumb;
+    if (t == null || t.isEmpty) return _fallbackThumb;
+    if (t.startsWith("http")) return t;
+    if (t.startsWith("thumbnails/")) {
+      final base = ApiConfig.baseUrl.replaceAll(RegExp(r"/api/?$"), "");
+      return "$base/api/upload/thumb?key=${Uri.encodeComponent(t)}";
+    }
+    return t;
   }
 }
 
@@ -517,14 +587,12 @@ class _CourseAdminRow extends StatelessWidget {
   const _CourseAdminRow({
     required this.course,
     required this.thumb,
-    required this.onOpen,
-    required this.onDelete,
+    required this.onCardTap,
   });
 
   final Map<String, dynamic> course;
   final String thumb;
-  final VoidCallback onOpen;
-  final VoidCallback onDelete;
+  final VoidCallback onCardTap;
 
   @override
   Widget build(BuildContext context) {
@@ -542,94 +610,97 @@ class _CourseAdminRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: LearnHubTheme.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: InkWell(
-                onTap: onOpen,
-                borderRadius: BorderRadius.circular(8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 112,
-                        height: 63,
-                        child: CachedNetworkImage(
-                          imageUrl: thumb,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: LearnHubTheme.gray200),
-                          errorWidget: (_, __, ___) => Container(
-                            color: LearnHubTheme.gray200,
-                            child: Icon(Icons.image_not_supported_outlined, color: LearnHubTheme.mutedForeground),
-                          ),
-                        ),
+      child: InkWell(
+        onTap: onCardTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 108,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 112,
+                    height: 63,
+                    child: CachedNetworkImage(
+                      imageUrl: thumb,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: LearnHubTheme.gray200),
+                      errorWidget: (_, __, ___) => Container(
+                        color: LearnHubTheme.gray200,
+                        child: Icon(Icons.image_not_supported_outlined, color: LearnHubTheme.mutedForeground),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: LhText.body(fontWeight: FontWeight.w700, fontSize: 15),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            instructor,
-                            style: LhText.body(fontSize: 13, color: LearnHubTheme.mutedForeground),
-                          ),
-                          if (category.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: LearnHubTheme.gray100,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  category,
-                                  style: LhText.body(fontSize: 11, fontWeight: FontWeight.w600),
-                                ),
-                              ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: LhText.body(fontWeight: FontWeight.w700, fontSize: 15, height: 1.15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        instructor,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: LhText.body(fontSize: 13, color: LearnHubTheme.mutedForeground),
+                      ),
+                      if (category.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: LearnHubTheme.gray100,
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 4,
-                            children: [
-                              Text(
-                                "$studs students",
-                                style: LhText.body(fontSize: 12, color: LearnHubTheme.gray600),
-                              ),
-                              Text(price, style: LhText.body(fontSize: 12, fontWeight: FontWeight.w600)),
-                              Text(
-                                "${rating.toStringAsFixed(1)} ★",
-                                style: LhText.body(fontSize: 12, color: LearnHubTheme.amber600),
-                              ),
-                            ],
+                            child: Text(
+                              category,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: LhText.body(fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              "$studs students",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: LhText.body(fontSize: 12, color: LearnHubTheme.gray600),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(price, style: LhText.body(fontSize: 12, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 8),
+                          Text(
+                            "${rating.toStringAsFixed(1)} ★",
+                            style: LhText.body(fontSize: 12, color: LearnHubTheme.amber600),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+                Icon(Icons.chevron_right_rounded, color: LearnHubTheme.gray400),
+              ],
             ),
-            IconButton(
-              tooltip: "Delete course",
-              icon: Icon(Icons.delete_outline_rounded, color: LearnHubTheme.gray500),
-              onPressed: onDelete,
-            ),
-          ],
+          ),
         ),
       ),
     );

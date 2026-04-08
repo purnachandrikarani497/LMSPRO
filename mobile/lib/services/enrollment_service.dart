@@ -15,4 +15,19 @@ class EnrollmentService {
   Future<Map<String, dynamic>> enroll(String courseId) async {
     return _api.postJson("/enrollments", {"courseId": courseId.trim()});
   }
+
+  /// After Razorpay SDK success — `POST /enrollments/verify`.
+  Future<Map<String, dynamic>> verifyEnrollment({
+    required String courseId,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    return _api.postJson("/enrollments/verify", {
+      "courseId": courseId.trim(),
+      "razorpay_order_id": razorpayOrderId,
+      "razorpay_payment_id": razorpayPaymentId,
+      "razorpay_signature": razorpaySignature,
+    });
+  }
 }

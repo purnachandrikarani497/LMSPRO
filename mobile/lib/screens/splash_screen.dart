@@ -6,6 +6,7 @@ import "package:provider/provider.dart";
 import "../navigation/after_auth.dart";
 import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
+import "../widgets/learnhub_hero_background.dart";
 import "../widgets/learnhub_logo.dart";
 
 class SplashScreen extends StatefulWidget {
@@ -37,10 +38,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(gradient: LearnHubTheme.heroGradient),
+      body: LearnHubHeroBackground(
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -66,7 +64,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 height: 28,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: LearnHubTheme.goldStart,
+                  color: LearnHubTheme.brandOrange,
                 ),
               ),
             ],

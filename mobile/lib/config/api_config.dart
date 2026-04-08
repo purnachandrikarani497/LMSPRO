@@ -175,6 +175,24 @@ class ApiConfig {
     return "http://127.0.0.1:5000/api/";
   }
 
+  /// LearnHub **web** origin for deep links (Vite default **8080** when API is on **5000**).
+  static String get webAppOrigin {
+    try {
+      final u = Uri.parse(baseUrl);
+      final webPort = (u.hasPort && u.port == 5000) ? 8080 : (u.hasPort ? u.port : 8080);
+      return Uri(
+        scheme: u.scheme.isEmpty ? "http" : u.scheme,
+        host: u.host,
+        port: webPort,
+      ).origin;
+    } catch (_) {
+      return "http://127.0.0.1:8080";
+    }
+  }
+
+  /// Full URL to the web admin course editor (`AdminCoursePage`).
+  static String adminWebCourseManageUrl(String courseId) => "${webAppOrigin}/admin/course/$courseId";
+
   /// `host:port` or full origin for pre-filling the setup field (no `/api` suffix).
   static String get manualEntryHint {
     final raw = baseUrl.trim();

@@ -26,6 +26,10 @@ dependencies:
   open_file: ^3.5.10
   google_fonts: ^8.0.2
   pdfx: ^2.9.2
+  url_launcher: ^6.3.1
+  image_picker: ^1.1.2
+  file_picker: ^8.1.6
+  razorpay_flutter: ^1.4.0
 
 dev_dependencies:
   flutter_test:

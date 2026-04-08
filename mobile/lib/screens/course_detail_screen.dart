@@ -4,6 +4,7 @@ import "package:dio/dio.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
+import "package:razorpay_flutter/razorpay_flutter.dart";
 
 import "../config/api_config.dart";
 import "../providers/app_state.dart";
@@ -29,13 +30,78 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   bool _started = false;
   bool _enrolling = false;
   final Set<String> _expanded = {};
+  Razorpay? _razorpay;
 
   @override
   void initState() {
     super.initState();
+    _razorpay = Razorpay();
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onRazorpaySuccess);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _onRazorpayError);
+    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _onRazorpayExternalWallet);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppState>().refreshEnrollments();
     });
+  }
+
+  @override
+  void dispose() {
+    _razorpay?.clear();
+    super.dispose();
+  }
+
+  Future<void> _onRazorpaySuccess(PaymentSuccessResponse response) async {
+    final paymentId = response.paymentId;
+    final orderId = response.orderId;
+    final signature = response.signature;
+    if (paymentId == null || orderId == null || signature == null) {
+      if (mounted) {
+        setState(() => _enrolling = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Incomplete payment response.", style: LhText.body())),
+        );
+      }
+      return;
+    }
+    final app = context.read<AppState>();
+    try {
+      await app.enrollments.verifyEnrollment(
+        courseId: widget.courseId,
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+        razorpaySignature: signature,
+      );
+      await app.refreshEnrollments();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Payment successful. You're enrolled!", style: LhText.body()),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+      setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("$e", style: LhText.body())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enrolling = false);
+    }
+  }
+
+  void _onRazorpayError(PaymentFailureResponse response) {
+    if (mounted) setState(() => _enrolling = false);
+    if (response.code == Razorpay.PAYMENT_CANCELLED) return;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(response.message ?? "Payment failed", style: LhText.body())),
+    );
+  }
+
+  void _onRazorpayExternalWallet(ExternalWalletResponse response) {
+    if (mounted) setState(() => _enrolling = false);
   }
 
   @override
@@ -77,22 +143,38 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       final data = await app.enrollInCourse(widget.courseId);
       if (!context.mounted) return;
       if (data.containsKey("orderId")) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "This course is paid. Complete checkout on the LearnHub website (Razorpay).",
-              style: LhText.body(),
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("You're enrolled! Scroll down for lessons.", style: LhText.body()),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
+        final key = data["key"]?.toString();
+        final orderId = data["orderId"]?.toString();
+        final amount = data["amount"];
+        if (key == null || orderId == null || amount == null) {
+          if (mounted) setState(() => _enrolling = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Invalid payment session from server.", style: LhText.body())),
+          );
+          return;
+        }
+        final options = <String, dynamic>{
+          "key": key,
+          "amount": (amount as num).toInt(),
+          "currency": data["currency"]?.toString() ?? "INR",
+          "name": "LearnHub",
+          "description": "Course enrollment",
+          "order_id": orderId,
+          "prefill": {
+            "email": app.user?.email ?? "",
+            "name": app.user?.name ?? "",
+          },
+        };
+        _razorpay!.open(options);
+        if (mounted) setState(() => _enrolling = false);
+        return;
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("You're enrolled! Scroll down for lessons.", style: LhText.body()),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
     } on DioException catch (e) {
       if (!context.mounted) return;
       final data = e.response?.data;
@@ -377,51 +459,103 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                         SizedBox(
                                           width: double.infinity,
                                           child: enrolled
-                                              ? FilledButton(
-                                                  onPressed: () {
-                                                    context.push("/course/${widget.courseId}/learn");
-                                                  },
-                                                  style: FilledButton.styleFrom(
-                                                    backgroundColor: const Color(0xFF10B981),
-                                                    foregroundColor: Colors.white,
-                                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                  ),
-                                                  child: Text(
-                                                    "Continue learning",
-                                                    style: LhText.body(
-                                                      fontWeight: FontWeight.w700,
-                                                      fontSize: 17,
+                                              ? Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                  children: [
+                                                    FilledButton(
+                                                      onPressed: () {
+                                                        context.push("/course/${widget.courseId}/learn");
+                                                      },
+                                                      style: FilledButton.styleFrom(
+                                                        backgroundColor: const Color(0xFF10B981),
+                                                        foregroundColor: Colors.white,
+                                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      ),
+                                                      child: Text(
+                                                        "Continue learning",
+                                                        style: LhText.body(
+                                                          fontWeight: FontWeight.w700,
+                                                          fontSize: 17,
+                                                        ),
+                                                      ),
                                                     ),
-                                                  ),
+                                                    if (isAdmin) ...[
+                                                      const SizedBox(height: 10),
+                                                      OutlinedButton.icon(
+                                                        onPressed: () => context.push("/admin/course/${widget.courseId}/manage"),
+                                                        icon: Icon(Icons.settings_outlined, color: LearnHubTheme.navy, size: 20),
+                                                        label: Text("Manage course", style: LhText.body(fontWeight: FontWeight.w700, color: LearnHubTheme.navy)),
+                                                      ),
+                                                    ],
+                                                  ],
                                                 )
-                                              : FilledButton(
-                                                  onPressed: _enrolling
-                                                      ? null
-                                                      : () => _onEnroll(context),
-                                                  style: FilledButton.styleFrom(
-                                                    backgroundColor: LearnHubTheme.amber500,
-                                                    foregroundColor: Colors.white,
-                                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                  ),
-                                                  child: _enrolling
-                                                      ? const SizedBox(
-                                                          height: 22,
-                                                          width: 22,
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            color: Colors.white,
-                                                          ),
-                                                        )
-                                                      : Text(
-                                                          priceNum <= 0 ? "Enroll free" : "Enroll now",
-                                                          style: LhText.body(
-                                                            fontWeight: FontWeight.w700,
-                                                            fontSize: 17,
+                                              : isAdmin
+                                                  ? Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                      children: [
+                                                        FilledButton.icon(
+                                                          onPressed: () =>
+                                                              context.push("/admin/course/${widget.courseId}/manage"),
+                                                          icon: const Icon(Icons.settings_outlined),
+                                                          label: Text("Manage content", style: LhText.body(fontWeight: FontWeight.w800)),
+                                                          style: FilledButton.styleFrom(
+                                                            backgroundColor: LearnHubTheme.navy,
+                                                            foregroundColor: Colors.white,
+                                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                                           ),
                                                         ),
-                                                ),
+                                                        const SizedBox(height: 10),
+                                                        OutlinedButton.icon(
+                                                          onPressed: () => context.push("/admin/course/${widget.courseId}/edit"),
+                                                          icon: Icon(Icons.edit_outlined, color: LearnHubTheme.navy, size: 20),
+                                                          label: Text("Edit details", style: LhText.body(fontWeight: FontWeight.w700, color: LearnHubTheme.navy)),
+                                                        ),
+                                                        const SizedBox(height: 6),
+                                                        TextButton(
+                                                          onPressed: _enrolling ? null : () => _onEnroll(context),
+                                                          child: _enrolling
+                                                              ? SizedBox(
+                                                                  height: 20,
+                                                                  width: 20,
+                                                                  child: CircularProgressIndicator(strokeWidth: 2, color: LearnHubTheme.amber500),
+                                                                )
+                                                              : Text(
+                                                                  "Enroll as student (preview)",
+                                                                  style: LhText.body(
+                                                                    fontWeight: FontWeight.w600,
+                                                                    color: LearnHubTheme.mutedForeground,
+                                                                  ),
+                                                                ),
+                                                        ),
+                                                      ],
+                                                    )
+                                                  : FilledButton(
+                                                      onPressed: _enrolling ? null : () => _onEnroll(context),
+                                                      style: FilledButton.styleFrom(
+                                                        backgroundColor: LearnHubTheme.amber500,
+                                                        foregroundColor: Colors.white,
+                                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      ),
+                                                      child: _enrolling
+                                                          ? const SizedBox(
+                                                              height: 22,
+                                                              width: 22,
+                                                              child: CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                color: Colors.white,
+                                                              ),
+                                                            )
+                                                          : Text(
+                                                              priceNum <= 0 ? "Enroll free" : "Enroll now",
+                                                              style: LhText.body(
+                                                                fontWeight: FontWeight.w700,
+                                                                fontSize: 17,
+                                                              ),
+                                                            ),
+                                                    ),
                                         ),
                                         const SizedBox(height: 8),
                                         Text(

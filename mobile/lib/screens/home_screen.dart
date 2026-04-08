@@ -9,6 +9,7 @@ import "../theme/lh_text.dart";
 import "../widgets/course_card.dart";
 import "../widgets/learnhub_app_bar.dart";
 import "../widgets/learnhub_drawer.dart";
+import "../widgets/learnhub_hero_background.dart";
 import "../widgets/profile_menu_button.dart";
 
 /// Student home — aligned with web `Index.tsx` (hero, category grid, featured, why us, CTA).
@@ -134,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 final featured = courses.take(3).toList();
+                final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
                 return RefreshIndicator(
                   color: LearnHubTheme.amber500,
@@ -228,6 +230,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   builder: (context, c) {
                                     final cw = c.maxWidth;
                                     final cols = cw >= 900 ? 3 : (cw >= 520 ? 2 : 1);
+                                    // width/height — tighter so cards don’t leave a tall white band under the price.
+                                    final aspect = cols == 3 ? 1.02 : (cols == 2 ? 1.06 : 1.16);
                                     return GridView.builder(
                                       shrinkWrap: true,
                                       physics: const NeverScrollableScrollPhysics(),
@@ -235,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         crossAxisCount: cols,
                                         mainAxisSpacing: 12,
                                         crossAxisSpacing: 12,
-                                        childAspectRatio: 0.78,
+                                        childAspectRatio: aspect,
                                       ),
                                       itemCount: featured.length,
                                       itemBuilder: (context, i) {
@@ -273,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sliver: SliverToBoxAdapter(child: _WhyUsGrid()),
                       ),
                       SliverToBoxAdapter(child: _CtaBlock()),
-                      const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                      SliverToBoxAdapter(child: SizedBox(height: 32 + bottomSafe)),
                     ],
                   ),
                 );
@@ -291,9 +295,7 @@ class _HeroBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(gradient: LearnHubTheme.heroGradient),
+    return LearnHubHeroBackground(
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -325,24 +327,24 @@ class _HeroBlock extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
-                "Unlock Your Potential with ",
+              Text.rich(
+                TextSpan(
+                  style: LhText.display(fontSize: 26, fontWeight: FontWeight.w800, height: 1.15, color: LearnHubTheme.onHero),
+                  children: [
+                    const TextSpan(text: "Unlock Your Potential with "),
+                    TextSpan(
+                      text: "World-Class",
+                      style: LhText.display(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                        color: LearnHubTheme.brandOrange,
+                      ),
+                    ),
+                    const TextSpan(text: " Learning"),
+                  ],
+                ),
                 textAlign: TextAlign.center,
-                style: LhText.display(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  height: 1.15,
-                  color: LearnHubTheme.onHero,
-                ),
-              ),
-              ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (bounds) => LearnHubTheme.goldGradient.createShader(bounds),
-                child: Text(
-                  "World-Class Learning",
-                  textAlign: TextAlign.center,
-                  style: LhText.display(fontSize: 26, fontWeight: FontWeight.w900, height: 1.15, color: Colors.white),
-                ),
               ),
               const SizedBox(height: 14),
               Text(

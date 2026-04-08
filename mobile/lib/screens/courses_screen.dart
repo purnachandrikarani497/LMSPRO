@@ -172,7 +172,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 final filtered = _applyFilters(source);
                 final w = MediaQuery.sizeOf(context).width;
                 final crossAxis = w >= 700 ? 2 : 1;
-                final gridAspect = crossAxis >= 2 ? 0.82 : 0.92;
+                final gridAspect = crossAxis >= 2 ? 1.05 : 1.16;
 
                 return RefreshIndicator(
                   color: LearnHubTheme.amber500,
@@ -284,7 +284,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       )
                     else
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 28),
+                        padding: EdgeInsets.fromLTRB(12, 0, 12, 28 + MediaQuery.paddingOf(context).bottom),
                         sliver: SliverGrid(
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: crossAxis,

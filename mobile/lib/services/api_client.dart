@@ -113,6 +113,27 @@ class ApiClient {
     await _dio.delete<void>(_apiPath(path));
   }
 
+  /// Multipart upload (`file` field) — thumbnails, PDFs, videos.
+  Future<Map<String, dynamic>> postMultipartFile(
+    String path,
+    String filePath, {
+    String fieldName = "file",
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    final name = filePath.replaceAll("\\", "/").split("/").last;
+    final form = FormData.fromMap({
+      fieldName: await MultipartFile.fromFile(filePath, filename: name),
+    });
+    final res = await _dio.post<Map<String, dynamic>>(
+      _apiPath(path),
+      data: form,
+      onSendProgress: onSendProgress,
+    );
+    final d = res.data;
+    if (d == null) throw Exception("Empty upload response");
+    return d;
+  }
+
   /// Binary GET (e.g. full PDF download) — auth via interceptor Bearer token.
   Future<Uint8List> getBytes(String path) async {
     final res = await _dio.get<List<int>>(

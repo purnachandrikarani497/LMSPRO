@@ -1,7 +1,12 @@
+import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 
 import "config/api_config.dart";
+import "providers/app_state.dart";
+import "screens/admin_course_edit_screen.dart";
+import "screens/admin_course_manage_screen.dart";
 import "screens/admin_dashboard_screen.dart";
+import "screens/admin_settings_screen.dart";
 import "screens/admin_users_screen.dart";
 import "screens/course_detail_screen.dart";
 import "screens/course_learn_screen.dart";
@@ -14,9 +19,29 @@ import "screens/profile_screen.dart";
 import "screens/setup_api_screen.dart";
 import "screens/splash_screen.dart";
 
-GoRouter createAppRouter() {
+/// [app] drives auth redirects; must be the same instance as [ChangeNotifierProvider].
+GoRouter createAppRouter(AppState app) {
   return GoRouter(
     initialLocation: ApiConfig.needsLanSetup ? "/setup-api" : "/splash",
+    refreshListenable: app,
+    redirect: (BuildContext context, GoRouterState state) {
+      final loggedIn = app.user != null;
+      final path = state.uri.path;
+      final role = app.user?.role;
+
+      final isPublic = path == "/login" || path == "/splash" || path == "/setup-api";
+
+      if (!loggedIn && !isPublic) {
+        return "/login";
+      }
+      if (loggedIn && path == "/login") {
+        return role == "admin" ? "/admin" : "/home";
+      }
+      if (loggedIn && path.startsWith("/admin") && role != "admin") {
+        return "/home";
+      }
+      return null;
+    },
     routes: [
       GoRoute(
         path: "/setup-api",
@@ -37,6 +62,28 @@ GoRouter createAppRouter() {
       GoRoute(
         path: "/admin/users",
         builder: (_, __) => const AdminUsersScreen(),
+      ),
+      GoRoute(
+        path: "/admin/settings",
+        builder: (_, __) => const AdminSettingsScreen(),
+      ),
+      GoRoute(
+        path: "/admin/course/new",
+        builder: (_, __) => const AdminCourseEditScreen(),
+      ),
+      GoRoute(
+        path: "/admin/course/:id/manage",
+        builder: (_, st) {
+          final id = st.pathParameters["id"] ?? "";
+          return AdminCourseManageScreen(courseId: id);
+        },
+      ),
+      GoRoute(
+        path: "/admin/course/:id/edit",
+        builder: (_, st) {
+          final id = st.pathParameters["id"] ?? "";
+          return AdminCourseEditScreen(courseId: id);
+        },
       ),
       GoRoute(
         path: "/home",

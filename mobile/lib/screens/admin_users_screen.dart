@@ -63,18 +63,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         titleText: "Users & activity",
-        actions: [
-          IconButton(
-            tooltip: "Sign out",
-            icon: Icon(Icons.logout_rounded, color: LearnHubTheme.mutedForeground),
-            onPressed: () async {
-              await app.auth.logout();
-              if (!context.mounted) return;
-              app.setUser(null);
-              context.go("/login");
-            },
-          ),
-        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

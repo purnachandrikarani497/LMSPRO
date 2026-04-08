@@ -6,6 +6,7 @@ import "package:provider/provider.dart";
 import "../config/api_config.dart";
 import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
+import "../widgets/learnhub_hero_background.dart";
 
 /// Shown on first launch on a physical Android device so the user can enter the PC LAN IP.
 class SetupApiScreen extends StatefulWidget {
@@ -79,10 +80,7 @@ class _SetupApiScreenState extends State<SetupApiScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(gradient: LearnHubTheme.heroGradient),
+      body: LearnHubHeroBackground(
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -134,7 +132,7 @@ class _SetupApiScreenState extends State<SetupApiScreen> {
                         ),
                         if (_error != null) ...[
                           const SizedBox(height: 12),
-                          Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                          Text(_error!, style: TextStyle(color: LearnHubTheme.messageWarning, fontSize: 13)),
                         ],
                         const SizedBox(height: 16),
                         FilledButton(

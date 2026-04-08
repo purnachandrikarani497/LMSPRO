@@ -3,7 +3,7 @@ import "package:flutter/material.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
 
-/// LearnHub mark + wordmark (navy/gold — same family as web). Use everywhere instead of ad‑hoc icons.
+/// LearnHub mark — orange tile + white book (matches web header / marketing).
 class LearnHubLogoMark extends StatelessWidget {
   const LearnHubLogoMark({super.key, this.size = 40, this.borderRadius = 10});
 
@@ -16,17 +16,17 @@ class LearnHubLogoMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: LearnHubTheme.goldGradient,
+        color: LearnHubTheme.brandOrange,
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           BoxShadow(
-            color: LearnHubTheme.navy.withValues(alpha: 0.25),
+            color: LearnHubTheme.brandOrange.withValues(alpha: 0.35),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Icon(Icons.menu_book_rounded, color: LearnHubTheme.navy, size: size * 0.52),
+      child: Icon(Icons.menu_book_rounded, color: Colors.white, size: size * 0.52),
     );
   }
 }

@@ -101,6 +101,14 @@ class LearnHubDrawer extends StatelessWidget {
                 },
               ),
               _DrawerTile(
+                icon: Icons.settings_outlined,
+                label: "Settings",
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push("/admin/settings");
+                },
+              ),
+              _DrawerTile(
                 icon: Icons.storefront_outlined,
                 label: "Course catalog",
                 onTap: () {
@@ -119,7 +127,19 @@ class LearnHubDrawer extends StatelessWidget {
                 context.push("/setup-api");
               },
             ),
-            const SizedBox(height: 8),
+            if (user != null)
+              ListTile(
+                leading: Icon(Icons.logout_rounded, color: LearnHubTheme.mutedForeground, size: 22),
+                title: Text("Sign out", style: LhText.body(fontWeight: FontWeight.w600, fontSize: 15)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await app.auth.logout();
+                  app.setUser(null);
+                  if (context.mounted) context.go("/login");
+                },
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            SizedBox(height: 8 + MediaQuery.paddingOf(context).bottom),
           ],
         ),
       ),
