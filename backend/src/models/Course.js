@@ -45,11 +45,14 @@ const courseSchema = new mongoose.Schema(
     rating: { type: Number, default: 0 },
     students: { type: Number, default: 0 },
     reviews: [
-      {
-        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-        rating: { type: Number, required: true },
-        comment: { type: String, required: true },
-      },
+      new mongoose.Schema(
+        {
+          user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          rating: { type: Number, required: true },
+          comment: { type: String, required: true },
+        },
+        { timestamps: true }
+      ),
     ],
     duration: { type: String },
     level: { type: String },

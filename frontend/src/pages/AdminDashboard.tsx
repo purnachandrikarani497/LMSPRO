@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Edit, Trash2, Users, BookOpen, TrendingUp, Upload, Loader2, Settings, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { categories as staticCategories } from "@/lib/mockData";
 import type { Course } from "@/lib/mockData";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiAdminEnrollment, ApiCategory, ApiCourse, getThumbnailSrc, mapApiCourseToCourse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -31,11 +31,18 @@ interface StatCardProps {
   label: string;
   value: string;
   trend?: string;
+  onClick?: () => void;
 }
 
 
-const StatCard = ({ icon: Icon, label, value, trend }: StatCardProps) => (
-  <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+const StatCard = ({ icon: Icon, label, value, trend, onClick }: StatCardProps) => (
+  <div
+    className={`rounded-xl border border-border bg-card p-5 shadow-card ${onClick ? "cursor-pointer hover:border-secondary/50 hover:shadow-md transition-all" : ""}`}
+    onClick={onClick}
+    role={onClick ? "button" : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+  >
     <div className="flex items-center justify-between">
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
@@ -51,7 +58,9 @@ const StatCard = ({ icon: Icon, label, value, trend }: StatCardProps) => (
 
 const AdminDashboard = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const tableRef = useRef<HTMLDivElement>(null);
   const { data: apiCourses } = useQuery<ApiCourse[]>({
     queryKey: ["courses"],
     queryFn: () => api.getCourses()
@@ -84,6 +93,7 @@ const AdminDashboard = () => {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [courseToDelete, setCourseToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const baseCategories = apiCategories.length > 0 ? apiCategories : staticCategories.map((c) => ({ _id: c.name, name: c.name, icon: c.icon }));
   const categoryOptions =
@@ -113,6 +123,7 @@ const AdminDashboard = () => {
     setNewCategoryInput("");
     setEditingId(null);
     setPreviewError(false);
+    setFieldErrors({});
   };
 
   const fallbackImage = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=400&fit=crop";
@@ -207,6 +218,14 @@ const AdminDashboard = () => {
       ? new Set(adminEnrollments.filter((e) => e.student).map((e) => e.student!._id)).size
       : 0;
 
+  // Build a map of courseId -> actual enrollment count from real enrollment data
+  const enrollmentCountByCourse = (adminEnrollments ?? []).reduce<Record<string, number>>((acc, e) => {
+    if (!e.course) return acc;
+    const courseId = typeof e.course === "object" ? (e.course._id || e.course.id) : String(e.course);
+    if (courseId) acc[courseId] = (acc[courseId] ?? 0) + 1;
+    return acc;
+  }, {});
+
   const handleSubmit = () => {
     const title = form.title.trim();
     const description = form.description.trim();
@@ -215,151 +234,64 @@ const AdminDashboard = () => {
     const alphaRegex = /^[A-Za-z\s]+$/;
     const textRegex = /^[A-Za-z0-9\s.,'\n-]+$/;
 
+    const errors: Record<string, string> = {};
+
     if (!title) {
-      toast({
-        title: "Course title is required",
-        description: "Please enter a course title (no spaces only)",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (title.length === 1) {
-      toast({
-        title: "Course title too short",
-        description: "Title must be at least 2 characters",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (!alphaRegex.test(title) || title.length > 50) {
-      toast({
-        title: "Invalid course title",
-        description: "Title must contain only letters and spaces, maximum 50 characters",
-        variant: "destructive"
-      });
-      return;
+      errors.title = "Course title is required";
+    } else if (title.length < 2) {
+      errors.title = "Title must be at least 2 characters";
+    } else if (!alphaRegex.test(title) || title.length > 50) {
+      errors.title = "Title must contain only letters and spaces, max 50 characters";
     }
 
     if (!description) {
-      toast({
-        title: "Description is required",
-        description: "Please enter a course description (no spaces only)",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (description.length === 1) {
-      toast({
-        title: "Description too short",
-        description: "Description must be at least 2 characters",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (!textRegex.test(description) || description.length > 500) {
-      toast({
-        title: "Invalid description",
-        description: "Description can include letters, numbers, spaces and basic punctuation, maximum 500 characters",
-        variant: "destructive"
-      });
-      return;
+      errors.description = "Description is required";
+    } else if (description.length < 2) {
+      errors.description = "Description must be at least 2 characters";
+    } else if (description.length > 500) {
+      errors.description = "Description cannot exceed 500 characters";
     }
 
     if (!instructor) {
-      toast({
-        title: "Instructor name is required",
-        description: "Please enter an instructor name (no spaces only)",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (instructor.length === 1) {
-      toast({
-        title: "Instructor name too short",
-        description: "Instructor name must be at least 2 characters",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (!alphaRegex.test(instructor) || instructor.length > 50) {
-      toast({
-        title: "Invalid instructor name",
-        description: "Instructor name must contain only letters and spaces, maximum 50 characters",
-        variant: "destructive"
-      });
-      return;
+      errors.instructor = "Instructor name is required";
+    } else if (instructor.length < 2) {
+      errors.instructor = "Instructor name must be at least 2 characters";
+    } else if (!alphaRegex.test(instructor) || instructor.length > 50) {
+      errors.instructor = "Instructor name must contain only letters and spaces, max 50 characters";
     }
 
     const category = form.category === "__new__" ? newCategoryInput.trim() : form.category;
     if (!category) {
-      toast({
-        title: "Category is required",
-        description: form.category === "__new__" ? "Please enter a new category name" : "Please select a category",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (category.length < 2) {
-      toast({
-        title: "Category too short",
-        description: "Category must be at least 2 characters",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (!/^[A-Za-z\s]+$/.test(category) || category.length > 30) {
-      toast({
-        title: "Invalid category",
-        description: "Category must contain only letters and spaces, maximum 30 characters",
-        variant: "destructive"
-      });
-      return;
+      errors.category = form.category === "__new__" ? "Please enter a new category name" : "Please select a category";
+    } else if (category.length < 2) {
+      errors.category = "Category must be at least 2 characters";
+    } else if (!/^[A-Za-z\s]+$/.test(category) || category.length > 30) {
+      errors.category = "Category must contain only letters and spaces, max 30 characters";
     }
 
     const priceRaw = form.price.trim();
     const priceDigits = priceRaw.replace(/\D/g, "");
     if (!priceDigits) {
-      toast({
-        title: "Price is required",
-        description: "Please enter a price greater than 0",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (priceDigits.length > 9) {
-      toast({
-        title: "Invalid price",
-        description: "Price cannot exceed 9 digits",
-        variant: "destructive"
-      });
-      return;
-    }
-    const priceNumber = Number(priceDigits);
-    if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
-      toast({
-        title: "Invalid price",
-        description: "Price must be a positive number",
-        variant: "destructive"
-      });
-      return;
+      errors.price = "Price is required";
+    } else if (priceDigits.length > 9) {
+      errors.price = "Price cannot exceed 9 digits";
+    } else {
+      const priceNumber = Number(priceDigits);
+      if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+        errors.price = "Price must be a positive number";
+      }
     }
 
     if (!image) {
-      toast({
-        title: "Thumbnail is required",
-        description: "Upload an image or paste an image URL",
-        variant: "destructive"
-      });
-      return;
+      errors.image = "Thumbnail is required — upload an image or paste a URL";
+    } else if (image.length < 2) {
+      errors.image = "Image URL must be at least 2 characters";
     }
-    if (image.length === 1) {
-      toast({
-        title: "Invalid thumbnail",
-        description: "Image URL must be at least 2 characters",
-        variant: "destructive"
-      });
-      return;
-    }
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    const priceNumber = Number(priceDigits);
 
     setForm((prev) => ({ ...prev, price: priceDigits, title, description, instructor, image }));
 
@@ -387,7 +319,7 @@ const AdminDashboard = () => {
           coursesList.reduce((sum, course) => sum + (course.rating ?? 0), 0) /
           coursesList.length
         ).toFixed(1)
-      : "0.0";
+      : "0";
 
   const handleSort = (col: "course" | "category" | "students" | "price" | "rating") => {
     if (sortBy === col) {
@@ -420,7 +352,7 @@ const AdminDashboard = () => {
         cmp = (a.category || "").localeCompare(b.category || "");
         break;
       case "students":
-        cmp = (a.students ?? 0) - (b.students ?? 0);
+        cmp = (enrollmentCountByCourse[a.id] ?? 0) - (enrollmentCountByCourse[b.id] ?? 0);
         break;
       case "price":
         cmp = (a.price ?? 0) - (b.price ?? 0);
@@ -465,89 +397,72 @@ const AdminDashboard = () => {
                 className="grid gap-4 py-4"
                 onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
               >
-                <Input
-                  placeholder="Course Title"
-                  value={form.title}
-                  maxLength={50}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^[a-zA-Z\s]*$/.test(value)) {
-                      if (value.length === 50) {
-                        toast({
-                          title: "Title max length reached",
-                          description: "Course title cannot exceed 50 characters",
-                          variant: "destructive"
-                        });
+                <div>
+                  <Input
+                    placeholder="Course Title"
+                    value={form.title}
+                    maxLength={50}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^[a-zA-Z\s]*$/.test(value)) {
+                        setForm({ ...form, title: value });
+                        setFieldErrors((prev) => ({ ...prev, title: value.length === 50 ? "Course title cannot exceed 50 characters" : "" }));
+                      } else {
+                        setFieldErrors((prev) => ({ ...prev, title: "Course title can only contain letters and spaces" }));
                       }
-                      setForm({ ...form, title: value });
-                    } else {
-                      toast({
-                        title: "Invalid character",
-                        description: "Course title can only contain letters and spaces",
-                        variant: "destructive"
-                      });
-                    }
-                  }}
-                />
-                <Textarea
-                  placeholder="Description"
-                  value={form.description}
-                  maxLength={500}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^[a-zA-Z0-9\s.,'\n-]*$/.test(value)) {
-                      if (value.length === 500) {
-                        toast({
-                          title: "Description max length reached",
-                          description: "Description cannot exceed 500 characters",
-                          variant: "destructive"
-                        });
+                    }}
+                  />
+                  {fieldErrors.title && <p className="mt-1 text-xs text-destructive">{fieldErrors.title}</p>}
+                </div>
+                <div>
+                  <div className="relative">
+                    <Textarea
+                      placeholder="Description"
+                      value={form.description}
+                      maxLength={500}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.length <= 500) {
+                          setForm({ ...form, description: value });
+                          setFieldErrors((prev) => ({ ...prev, description: "" }));
+                        }
+                      }}
+                    />
+                    <span className={`absolute bottom-2 right-2 text-xs ${form.description.length >= 500 ? "text-destructive" : "text-muted-foreground"}`}>
+                      {form.description.length}/500
+                    </span>
+                  </div>
+                  {fieldErrors.description && <p className="mt-1 text-xs text-destructive">{fieldErrors.description}</p>}
+                </div>
+                <div>
+                  <Input
+                    placeholder="Instructor Name"
+                    value={form.instructor}
+                    maxLength={50}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^[a-zA-Z\s]*$/.test(value)) {
+                        setForm({ ...form, instructor: value });
+                        setFieldErrors((prev) => ({ ...prev, instructor: value.length === 50 ? "Instructor name cannot exceed 50 characters" : "" }));
+                      } else {
+                        setFieldErrors((prev) => ({ ...prev, instructor: "Instructor name can only contain letters and spaces" }));
                       }
-                      setForm({ ...form, description: value });
-                    } else {
-                      toast({
-                        title: "Invalid character",
-                        description: "Description can only contain letters, numbers, spaces, and basic punctuation",
-                        variant: "destructive"
-                      });
-                    }
-                  }}
-                />
-                <Input
-                  placeholder="Instructor Name"
-                  value={form.instructor}
-                  maxLength={50}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^[a-zA-Z\s]*$/.test(value)) {
-                      if (value.length === 50) {
-                        toast({
-                          title: "Instructor name max length reached",
-                          description: "Instructor name cannot exceed 50 characters",
-                          variant: "destructive"
-                        });
-                      }
-                      setForm({ ...form, instructor: value });
-                    } else {
-                      toast({
-                        title: "Invalid character",
-                        description: "Instructor name can only contain letters and spaces",
-                        variant: "destructive"
-                      });
-                    }
-                  }}
-                />
+                    }}
+                  />
+                  {fieldErrors.instructor && <p className="mt-1 text-xs text-destructive">{fieldErrors.instructor}</p>}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Select
                       value={form.category}
                       onValueChange={(v) => {
                         setForm({ ...form, category: v });
+                        setFieldErrors((prev) => ({ ...prev, category: "" }));
                         if (v !== "__new__") setNewCategoryInput("");
                       }}
                     >
                       <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-48 overflow-y-auto">
                         {categoryOptions.map((c) => (
                           <SelectItem key={c.name} value={c.name}>
                             {c.icon ? `${c.icon} ` : ""}{c.name}
@@ -563,11 +478,15 @@ const AdminDashboard = () => {
                         maxLength={30}
                         onChange={(e) => {
                           const v = e.target.value;
-                          if (/^[A-Za-z\s]*$/.test(v)) setNewCategoryInput(v);
+                          if (/^[A-Za-z\s]*$/.test(v)) {
+                            setNewCategoryInput(v);
+                            setFieldErrors((prev) => ({ ...prev, category: "" }));
+                          }
                         }}
                         className="mt-1"
                       />
                     )}
+                    {fieldErrors.category && <p className="mt-1 text-xs text-destructive">{fieldErrors.category}</p>}
                   </div>
                   <Select value={form.level} onValueChange={(v) => setForm({ ...form, level: v as Course["level"] })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -578,35 +497,24 @@ const AdminDashboard = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <Input
-                  type="number"
-                  placeholder="Price (₹)"
-                  className="input-no-spinner"
-                  value={form.price}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "");
-                    if (value.length > 9) {
-                      toast({
-                        title: "Price max digits reached",
-                        description: "Price cannot exceed 9 digits",
-                        variant: "destructive"
-                      });
-                      return;
-                    }
-                    if (value.length <= 9) {
-                      const numValue = Number(value);
-                      if (numValue > 0) {
-                        setForm({ ...form, price: value });
-                      } else {
-                        toast({
-                          title: "Invalid price",
-                          description: "Price must be greater than 0",
-                          variant: "destructive"
-                        });
+                <div>
+                  <Input
+                    type="number"
+                    placeholder="Price (₹)"
+                    className="input-no-spinner"
+                    value={form.price}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      if (value.length > 9) {
+                        setFieldErrors((prev) => ({ ...prev, price: "Price cannot exceed 9 digits" }));
+                        return;
                       }
-                    }
-                  }}
-                />
+                      setForm({ ...form, price: value });
+                      setFieldErrors((prev) => ({ ...prev, price: "" }));
+                    }}
+                  />
+                  {fieldErrors.price && <p className="mt-1 text-xs text-destructive">{fieldErrors.price}</p>}
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Course thumbnail</label>
                   <div className="flex gap-2">
@@ -630,6 +538,7 @@ const AdminDashboard = () => {
                         try {
                           const { url, key } = await api.uploadThumbnail(file);
                           setForm((prev) => ({ ...prev, image: key || url }));
+                          setFieldErrors((prev) => ({ ...prev, image: "" }));
                           toast({ title: "Image uploaded", description: "Thumbnail ready" });
                         } catch (err) {
                           URL.revokeObjectURL(blobUrl);
@@ -665,10 +574,12 @@ const AdminDashboard = () => {
                           setPreviewBlobUrl(null);
                         }
                         setForm({ ...form, image: e.target.value });
+                        setFieldErrors((prev) => ({ ...prev, image: "" }));
                         setPreviewError(false);
                       }}
                     />
                   </div>
+                  {fieldErrors.image && <p className="mt-1 text-xs text-destructive">{fieldErrors.image}</p>}
                   {(form.image || previewBlobUrl) && (
                     <div className="mt-1 flex h-24 w-40 items-center justify-center overflow-hidden rounded border border-border bg-muted/50">
                       {previewError && !previewBlobUrl ? (
@@ -706,9 +617,34 @@ const AdminDashboard = () => {
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard icon={BookOpen} label="Total Courses" value={String(coursesList.length)} />
-          <StatCard icon={Users} label="Total Students" value={uniqueStudents.toString()} />
-          <StatCard icon={TrendingUp} label="Avg Rating" value={avgRating} />
+          <StatCard
+            icon={BookOpen}
+            label="Total Courses"
+            value={String(coursesList.length)}
+            onClick={() => {
+              setSearchQuery("");
+              setSortBy(null);
+              setPage(1);
+              setTimeout(() => tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+            }}
+          />
+          <StatCard
+            icon={Users}
+            label="Total Students"
+            value={uniqueStudents.toString()}
+            onClick={() => navigate("/admin/users")}
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Avg Rating"
+            value={avgRating}
+            onClick={() => {
+              setSortBy("rating");
+              setSortDir("desc");
+              setPage(1);
+              setTimeout(() => tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+            }}
+          />
         </div>
 
         <div className="mt-10 space-y-4">
@@ -727,7 +663,7 @@ const AdminDashboard = () => {
             </p>
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-card">
+          <div className="rounded-xl border border-border bg-card shadow-card" ref={tableRef}>
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
@@ -818,11 +754,11 @@ const AdminDashboard = () => {
                     <Badge variant="outline" className="text-xs">{course.category}</Badge>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                    {course.students.toLocaleString()}
+                    {(enrollmentCountByCourse[course.id] ?? 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="font-semibold text-sm">{formatPrice(course.price)}</TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                    ⭐ {course.rating}
+                    ⭐ {(() => { const r = course.rating ?? 0; return r === 0 ? "0" : r.toFixed(1); })()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">

@@ -12,8 +12,8 @@ interface StoredUser {
   role?: "admin" | "student";
 }
 
-const NAME_MAX = 30;
-const EMAIL_MAX = 20;
+const NAME_MAX = 50;
+const EMAIL_MAX = 60;
 const PHONE_DIGITS = 10;
 
 const Profile = () => {
@@ -53,6 +53,7 @@ const Profile = () => {
 
   const handlePhoneChange = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, PHONE_DIGITS);
+    if (digits.length > 0 && !/^[6-9]/.test(digits)) return;
     setPhone(digits);
   };
 
@@ -77,7 +78,12 @@ const Profile = () => {
       return;
     }
     if (!email.includes("@")) {
-      toast({ title: "Invalid email", description: "Email must contain @ character.", variant: "destructive" });
+      toast({ title: "Invalid email", description: "Please enter a valid email address.", variant: "destructive" });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      toast({ title: "Invalid email", description: "Please enter a valid email address (e.g. you@example.com).", variant: "destructive" });
       return;
     }
 
@@ -87,6 +93,10 @@ const Profile = () => {
     }
     if (phone.replace(/\D/g, "").length !== PHONE_DIGITS) {
       toast({ title: "Invalid phone", description: "Phone number must be exactly 10 digits.", variant: "destructive" });
+      return;
+    }
+    if (!/^[6-9]/.test(phone)) {
+      toast({ title: "Invalid phone", description: "Phone number must start with 6, 7, 8, or 9.", variant: "destructive" });
       return;
     }
 

@@ -61,7 +61,19 @@ router.post("/:id/reviews", requireAuth, async (req, res) => {
 
     // After saving, populate the user info on the new review to return it
     const finalCourse = await Course.findById(course._id).populate('reviews.user', 'name');
-    res.status(201).json(finalCourse);
+
+    // Backfill createdAt from ObjectId timestamp (same as GET route)
+    const reviewTimestamps = (finalCourse.reviews || []).map((r) => ({
+      id: r._id?.toString(),
+      ts: r.createdAt || (r._id ? r._id.getTimestamp() : null),
+    }));
+    const courseObj = finalCourse.toObject();
+    courseObj.reviews = (courseObj.reviews || []).map((r, i) => ({
+      ...r,
+      createdAt: reviewTimestamps[i]?.ts || r.createdAt,
+    }));
+
+    res.status(201).json(courseObj);
   } catch (error) {
     console.error("[Review] Error:", error);
     res.status(500).json({ message: "Failed to submit review" });
@@ -95,7 +107,20 @@ router.get("/:id", async (req, res) => {
       course.rating = course.reviews.reduce((acc, review) => acc + review.rating, 0) / course.reviews.length;
     }
 
-    res.json(course);
+    // Backfill createdAt from ObjectId timestamp for reviews that don't have it
+    // Must extract timestamp BEFORE toObject() since _id becomes a plain object after
+    const reviewTimestamps = (course.reviews || []).map((r) => ({
+      id: r._id?.toString(),
+      ts: r.createdAt || (r._id ? r._id.getTimestamp() : null),
+    }));
+
+    const courseObj = course.toObject();
+    courseObj.reviews = (courseObj.reviews || []).map((r, i) => ({
+      ...r,
+      createdAt: reviewTimestamps[i]?.ts || r.createdAt,
+    }));
+
+    res.json(courseObj);
   } catch (error) {
     console.error("Error fetching course by id:", error);
     res.status(500).json({ message: "Failed to fetch course" });
@@ -151,15 +176,14 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
     }
 
     const alphaRegex = /^[A-Za-z\s]+$/;
-    const descRegex = /^[A-Za-z0-9\s.,'\n-]+$/;
     if (!alphaRegex.test(title.trim()) || title.trim().length > 50) {
       return res.status(400).json({
         message: "Title must contain only letters and spaces, maximum 50 characters"
       });
     }
-    if (!descRegex.test(description.trim()) || description.trim().length > 500) {
+    if (description.trim().length > 500) {
       return res.status(400).json({
-        message: "Description can include letters, numbers, spaces and basic punctuation, maximum 500 characters"
+        message: "Description cannot exceed 500 characters"
       });
     }
     if (!alphaRegex.test(instructor.trim()) || instructor.trim().length > 50) {
@@ -375,7 +399,6 @@ router.put("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
   try {
     const update = { ...req.body };
     const alphaRegex = /^[A-Za-z\s]+$/;
-    const descRegex = /^[A-Za-z0-9\s.,'\n-]+$/;
     if (typeof update.title === "string") {
       const t = update.title.trim();
       if (!t || t.length < 2 || !alphaRegex.test(t) || t.length > 50) {
@@ -385,8 +408,11 @@ router.put("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     }
     if (typeof update.description === "string") {
       const d = update.description.trim();
-      if (!d || d.length < 2 || !descRegex.test(d) || d.length > 500) {
-        return res.status(400).json({ message: "Invalid description: alphanumeric with basic punctuation, 2–500 chars" });
+      if (!d || d.length < 2) {
+        return res.status(400).json({ message: "Description must be at least 2 characters" });
+      }
+      if (d.length > 500) {
+        return res.status(400).json({ message: "Description cannot exceed 500 characters" });
       }
       update.description = d;
     }
@@ -408,7 +434,18 @@ router.put("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     if (update.category && update.category.trim()) {
       update.category = await ensureCategoryExists(update.category);
     }
-    const course = await Course.findByIdAndUpdate(req.params.id, update, {
+    // Explicitly handle fields that can be cleared (empty string → unset)
+    const unsetFields = {};
+    ["instructorBio", "instructorTitle", "instructorPhoto", "subtitle", "previewVideoUrl"].forEach((field) => {
+      if (typeof update[field] === "string" && update[field].trim() === "") {
+        unsetFields[field] = "";
+        delete update[field];
+      }
+    });
+    const mongoUpdate = Object.keys(unsetFields).length > 0
+      ? { $set: update, $unset: unsetFields }
+      : { $set: update };
+    const course = await Course.findByIdAndUpdate(req.params.id, mongoUpdate, {
       new: true
     });
     if (!course) {

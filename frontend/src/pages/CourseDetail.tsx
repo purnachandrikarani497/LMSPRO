@@ -59,6 +59,20 @@ function formatTotalDuration(seconds: number): string {
   return `${m} min`;
 }
 
+function timeAgo(dateStr?: string | Date | null): string | null {
+  if (!dateStr) return null;
+  const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) { const m = Math.floor(diff / 60); return `${m} minute${m === 1 ? "" : "s"} ago`; }
+  if (diff < 86400) { const h = Math.floor(diff / 3600); return `${h} hour${h === 1 ? "" : "s"} ago`; }
+  if (diff < 604800) { const d2 = Math.floor(diff / 86400); return `${d2} day${d2 === 1 ? "" : "s"} ago`; }
+  if (diff < 2592000) { const w = Math.floor(diff / 604800); return `${w} week${w === 1 ? "" : "s"} ago`; }
+  if (diff < 31536000) { const mo = Math.floor(diff / 2592000); return `${mo} month${mo === 1 ? "" : "s"} ago`; }
+  const yr = Math.floor(diff / 31536000); return `${yr} year${yr === 1 ? "" : "s"} ago`;
+}
+
 function isPdfLesson(lesson: { lessonType?: string; pdfUrl?: string; videoUrl?: string } | null | undefined): boolean {
   if (!lesson) return false;
   if (lesson.lessonType === "pdf") return !!lesson.pdfUrl;
@@ -1257,9 +1271,7 @@ const CourseDetail = () => {
                       </div>
                       <span className="text-gray-500 underline">({(course.ratingCount || 0).toLocaleString()} ratings)</span>
                     </div>
-                    <div className="font-medium text-gray-900">
-                      {totalHours} total
-                    </div>
+
                   </div>
 
                   <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
@@ -1466,15 +1478,12 @@ const CourseDetail = () => {
                     <div className="space-y-6">
                       <div className="flex items-center gap-4">
                         <h3 className="text-lg font-bold">Reviews</h3>
-                        <div className="w-full max-w-xs">
-                          <input type="text" placeholder="Search reviews..." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
-                        </div>
                       </div>
                       <div className="border-b border-gray-200 pb-4">
                         {userReview ? (
                           <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
                             <h4 className="text-md font-semibold mb-2 text-amber-800">Your Review</h4>
-                            <div className="flex items-center gap-1 mb-2">
+                            <div className="flex items-center gap-1 mb-1">
                               {Array.from({ length: 5 }, (_, i) => (
                                 <Star
                                   key={i}
@@ -1483,6 +1492,11 @@ const CourseDetail = () => {
                                   }`}
                                 />
                               ))}
+                              {(() => {
+                                    const ts = userReview.createdAt || userReview.date || userReview.updatedAt;
+                                    const label = timeAgo(ts);
+                                    return label ? <span className="ml-2 text-xs text-gray-500">{label}</span> : null;
+                                  })()}
                             </div>
                             <p className="text-gray-700 italic">"{userReview.comment || userReview.text}"</p>
                           </div>
@@ -1521,16 +1535,22 @@ const CourseDetail = () => {
                         {apiCourse?.reviews?.map((r, idx) => (
                           <div key={r._id || r.id || idx} className="border-b border-gray-200 pb-4">
                             <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold">
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold uppercase">
                                 {(r.user?.name || r.author || "U")[0]}
                               </div>
                               <div>
-                                <p className="font-semibold text-gray-800">{r.user?.name || r.author || "User"}</p>
-                                <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                                <p className="font-semibold text-gray-800 leading-tight">{r.user?.name || r.author || "User"}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5 mb-1">
                                   <div className="flex gap-0.5">
-                                    {Array.from({ length: 5 }, (_, i) => (<Star key={i} className={`h-3 w-3 ${i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />))}
+                                    {Array.from({ length: 5 }, (_, i) => (
+                                      <Star key={i} className={`h-3.5 w-3.5 ${i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />
+                                    ))}
                                   </div>
-                                  <span>{r.date || (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "Just now")}</span>
+                                  {(() => {
+                                    const ts = r.createdAt || r.date || r.updatedAt;
+                                    const label = timeAgo(ts);
+                                    return label ? <span className="text-xs text-gray-500 font-medium">{label}</span> : null;
+                                  })()}
                                 </div>
                                 <p className="text-sm text-gray-700">{r.comment || r.text}</p>
                               </div>

@@ -60,6 +60,7 @@ const AdminCoursePage = () => {
   const [instructorTitle, setInstructorTitle] = useState("");
   const [instructorBio, setInstructorBio] = useState("");
   const [announcements, setAnnouncements] = useState<{ title: string; content: string; postedAt?: string }[]>([]);
+  const [announcementErrors, setAnnouncementErrors] = useState<{ title?: string; content?: string }[]>([]);
   const [metaErrors, setMetaErrors] = useState<{ description?: string; instructor?: string }>({});
   const [previewVideoUrl, setPreviewVideoUrl] = useState("");
   const [uploadingPreview, setUploadingPreview] = useState(false);
@@ -108,7 +109,7 @@ const AdminCoursePage = () => {
 
 
   const updateCourseMutation = useMutation({
-    mutationFn: async (data: { subtitle?: string; description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string; announcements?: { title: string; content: string; postedAt?: string }[]; previewVideoUrl?: string }) => {
+    mutationFn: async (data: { subtitle?: string; description: string; instructor: string; instructorPhoto?: string; instructorTitle?: string; instructorBio?: string | ""; announcements?: { title: string; content: string; postedAt?: string }[]; previewVideoUrl?: string }) => {
       if (!course) throw new Error("Course not loaded");
       return api.updateCourse(id!, {
         title: course.title,
@@ -162,7 +163,18 @@ const AdminCoursePage = () => {
 
     setMetaErrors(errors);
 
-    if (Object.keys(errors).length === 0) {
+    // Validate announcements
+    const annErrors = announcements.map((a) => {
+      const e: { title?: string; content?: string } = {};
+      if (!a.title.trim()) e.title = "Title is required";
+      if (!a.content.trim()) e.content = "Content is required";
+      else if (a.content.length > 200) e.content = "Content cannot exceed 200 characters";
+      return e;
+    });
+    setAnnouncementErrors(annErrors);
+    const hasAnnErrors = annErrors.some((e) => e.title || e.content);
+
+    if (Object.keys(errors).length === 0 && !hasAnnErrors) {
       updateCourseMutation.mutate({
         subtitle: courseSubtitle.trim(),
         description: courseDescription.trim(),
@@ -170,7 +182,7 @@ const AdminCoursePage = () => {
         previewVideoUrl: previewVideoUrl.trim() || undefined,
         instructorPhoto: instructorPhoto.trim() || undefined,
         instructorTitle: instructorTitle.trim() || undefined,
-        instructorBio: instructorBio.trim() || undefined,
+        instructorBio: instructorBio.trim(),
         announcements: announcements.map((a) => ({
           title: a.title.trim(),
           content: a.content.trim(),
@@ -659,113 +671,7 @@ const AdminCoursePage = () => {
               value={newLesson.title}
               onChange={(e) => setNewLesson((p) => ({ ...p, title: e.target.value }))}
             />
-            {newLesson.lessonType === "video" ? (
-            <div className="flex gap-2">
-              <Input
-                placeholder="Video URL or paste link"
-                value={newLesson.videoUrl}
-                onChange={(e) => setNewLesson((p) => ({ ...p, videoUrl: e.target.value }))}
-              />
-              <input
-                type="file"
-                id="video-upload"
-                accept="video/mp4,video/webm,video/ogg"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setUploadingVideo(true);
-                  setUploadProgress(0);
-                  setUploadPhase("uploading");
-                  setUploadFileName(file.name);
-                  e.target.value = "";
-                  try {
-                    const duration = await extractDurationFromFile(file);
-                    const thumbnail = await extractThumbnailFromFile(file);
-                    const { url } = await api.uploadVideo(file, (pct) => {
-                      setUploadProgress(pct);
-                      if (pct >= 100) setUploadPhase("processing");
-                    });
-                    setNewLesson((p) => ({ ...p, videoUrl: url, duration: duration || "" }));
-                    if (thumbnail) setNewLessonThumbnail(thumbnail);
-                    toast({ title: "Video uploaded", description: "Duration and thumbnail auto-detected" });
-                  } catch (err) {
-                    toast({
-                      title: "Upload failed",
-                      description: err instanceof Error ? err.message : "Please try again",
-                      variant: "destructive"
-                    });
-                  } finally {
-                    setUploadingVideo(false);
-                    setUploadProgress(0);
-                    setUploadPhase("uploading");
-                    setUploadFileName("");
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                title="Upload video file (MP4, WebM)"
-                onClick={() => document.getElementById("video-upload")?.click()}
-                disabled={uploadingVideo}
-              >
-                {uploadingVideo ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            ) : (
-            <div className="flex gap-2">
-              <Input
-                placeholder="PDF URL (after upload)"
-                value={newLesson.pdfUrl}
-                onChange={(e) => setNewLesson((p) => ({ ...p, pdfUrl: e.target.value }))}
-              />
-              <input
-                type="file"
-                id="pdf-upload"
-                accept="application/pdf,.pdf"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setUploadingPdf(true);
-                  setUploadProgress(0);
-                  setUploadFileName(file.name);
-                  e.target.value = "";
-                  try {
-                    const { url } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
-                    setNewLesson((p) => ({ ...p, pdfUrl: url }));
-                    toast({ title: "PDF uploaded", description: "Document is ready to attach" });
-                  } catch (err) {
-                    toast({
-                      title: "Upload failed",
-                      description: err instanceof Error ? err.message : "Please try again",
-                      variant: "destructive"
-                    });
-                  } finally {
-                    setUploadingPdf(false);
-                    setUploadProgress(0);
-                    setUploadFileName("");
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                title="Upload PDF"
-                onClick={() => document.getElementById("pdf-upload")?.click()}
-                disabled={uploadingPdf}
-              >
-                {uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              </Button>
-            </div>
-            )}
+
           </div>
           {uploadingVideo && newLesson.lessonType === "video" && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -886,110 +792,7 @@ const AdminCoursePage = () => {
                           value={editForm.title}
                           onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
                         />
-                        {editForm.lessonType === "video" ? (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Video URL"
-                            value={editForm.videoUrl}
-                            onChange={(e) => setEditForm((p) => ({ ...p, videoUrl: e.target.value }))}
-                          />
-                          <input
-                            type="file"
-                            id={`video-upload-edit-${lesson._id}`}
-                            accept="video/mp4,video/webm,video/ogg"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setUploadingVideo(true);
-                              setUploadProgress(0);
-                              setUploadPhase("uploading");
-                              setUploadFileName(file.name);
-                              e.target.value = "";
-                              try {
-                                const duration = await extractDurationFromFile(file);
-                                const thumbnail = await extractThumbnailFromFile(file);
-                                const { url } = await api.uploadVideo(file, (pct) => {
-                                  setUploadProgress(pct);
-                                  if (pct >= 100) setUploadPhase("processing");
-                                });
-                                setEditForm((p) => ({ ...p, videoUrl: url }));
-                                setEditDuration(duration || "");
-                                if (thumbnail) setEditThumbnail(thumbnail);
-                                toast({ title: "Video uploaded", description: "Duration and thumbnail auto-detected" });
-                              } catch (err) {
-                                toast({
-                                  title: "Upload failed",
-                                  description: err instanceof Error ? err.message : "Please try again",
-                                  variant: "destructive"
-                                });
-                              } finally {
-                                setUploadingVideo(false);
-                                setUploadProgress(0);
-                                setUploadPhase("uploading");
-                                setUploadFileName("");
-                              }
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            title="Upload video"
-                            onClick={() => document.getElementById(`video-upload-edit-${lesson._id}`)?.click()}
-                            disabled={uploadingVideo}
-                          >
-                            {uploadingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                        ) : (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="PDF URL"
-                            value={editForm.pdfUrl}
-                            onChange={(e) => setEditForm((p) => ({ ...p, pdfUrl: e.target.value }))}
-                          />
-                          <input
-                            type="file"
-                            id={`pdf-upload-edit-${lesson._id}`}
-                            accept="application/pdf,.pdf"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setUploadingPdf(true);
-                              setUploadProgress(0);
-                              setUploadFileName(file.name);
-                              e.target.value = "";
-                              try {
-                                const { url } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
-                                setEditForm((p) => ({ ...p, pdfUrl: url }));
-                                toast({ title: "PDF uploaded", description: "Document updated" });
-                              } catch (err) {
-                                toast({
-                                  title: "Upload failed",
-                                  description: err instanceof Error ? err.message : "Please try again",
-                                  variant: "destructive"
-                                });
-                              } finally {
-                                setUploadingPdf(false);
-                                setUploadProgress(0);
-                                setUploadFileName("");
-                              }
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            title="Upload PDF"
-                            onClick={() => document.getElementById(`pdf-upload-edit-${lesson._id}`)?.click()}
-                            disabled={uploadingPdf}
-                          >
-                            {uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                        )}
+
                       </div>
                       {uploadingVideo && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -1185,6 +988,7 @@ const AdminCoursePage = () => {
                 onClick={() => {
                   if (announcementDeleteIndex !== null) {
                     setAnnouncements((prev) => prev.filter((_, i) => i !== announcementDeleteIndex));
+                    setAnnouncementErrors((prev) => prev.filter((_, i) => i !== announcementDeleteIndex));
                   }
                   setAnnouncementDeleteIndex(null);
                 }}
@@ -1332,25 +1136,51 @@ const AdminCoursePage = () => {
                       <div className="flex-1 min-w-0 space-y-2">
                         <Input
                           value={ann.title}
-                          onChange={(e) =>
+                          onChange={(e) => {
                             setAnnouncements((prev) =>
                               prev.map((a, i) => (i === idx ? { ...a, title: e.target.value } : a))
-                            )
-                          }
+                            );
+                            setAnnouncementErrors((prev) => {
+                              const next = [...prev];
+                              if (!next[idx]) next[idx] = {};
+                              next[idx] = { ...next[idx], title: "" };
+                              return next;
+                            });
+                          }}
                           placeholder="Announcement title"
                           className="font-medium"
                         />
+                        {announcementErrors[idx]?.title && (
+                          <p className="text-xs text-red-500">{announcementErrors[idx].title}</p>
+                        )}
                         <textarea
                           value={ann.content}
-                          onChange={(e) =>
-                            setAnnouncements((prev) =>
-                              prev.map((a, i) => (i === idx ? { ...a, content: e.target.value } : a))
-                            )
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.length <= 200) {
+                              setAnnouncements((prev) =>
+                                prev.map((a, i) => (i === idx ? { ...a, content: val } : a))
+                              );
+                              setAnnouncementErrors((prev) => {
+                                const next = [...prev];
+                                if (!next[idx]) next[idx] = {};
+                                next[idx] = { ...next[idx], content: "" };
+                                return next;
+                              });
+                            }
+                          }}
                           placeholder="Announcement content"
                           className="w-full min-h-[60px] p-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                          maxLength={500}
+                          maxLength={200}
                         />
+                        <div className="flex items-center justify-between">
+                          {announcementErrors[idx]?.content ? (
+                            <p className="text-xs text-red-500">{announcementErrors[idx].content}</p>
+                          ) : <span />}
+                          <span className={`text-xs ${ann.content.length >= 200 ? "text-red-500" : "text-gray-400"}`}>
+                            {ann.content.length}/200
+                          </span>
+                        </div>
                         {ann.postedAt && (
                           <p className="text-xs text-gray-400">
                             Posted: {new Date(ann.postedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
@@ -1371,7 +1201,7 @@ const AdminCoursePage = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setAnnouncements((prev) => [...prev, { title: "", content: "", postedAt: new Date().toISOString() }])}
+                  onClick={() => { setAnnouncements((prev) => [...prev, { title: "", content: "", postedAt: new Date().toISOString() }]); setAnnouncementErrors((prev) => [...prev, {}]); }}
                   className="w-full border-dashed"
                 >
                   <Plus className="h-4 w-4 mr-2" />
