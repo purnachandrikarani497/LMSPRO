@@ -564,20 +564,7 @@ const AdminDashboard = () => {
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                       {uploading ? "Uploading…" : "Upload image"}
                     </Button>
-                    <Input
-                      placeholder="Upload image or paste URL"
-                      value={form.image}
-                      className="flex-1 min-w-0"
-                      onChange={(e) => {
-                        if (previewBlobUrl) {
-                          URL.revokeObjectURL(previewBlobUrl);
-                          setPreviewBlobUrl(null);
-                        }
-                        setForm({ ...form, image: e.target.value });
-                        setFieldErrors((prev) => ({ ...prev, image: "" }));
-                        setPreviewError(false);
-                      }}
-                    />
+
                   </div>
                   {fieldErrors.image && <p className="mt-1 text-xs text-destructive">{fieldErrors.image}</p>}
                   {(form.image || previewBlobUrl) && (
