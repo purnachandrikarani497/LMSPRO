@@ -1665,12 +1665,28 @@ const CourseDetail = () => {
                                     <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
                                     <div className="mt-0.5 flex items-center gap-2">
                                       {isActive && (
-                                        <span className="text-xs font-medium text-amber-600">
+                                        <button
+                                          type="button"
+                                          className="text-xs font-medium text-amber-600 hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            seekToRef.current?.(0);
+                                          }}
+                                        >
                                           {lessonIsPdf ? "Reading" : "Now playing"}
-                                        </span>
+                                        </button>
                                       )}
                                       {!isActive && watchPct > 0 && watchPct < 90 && !completed && (
-                                        <span className="text-xs font-medium text-amber-600">Resume at {formatWatchTime(savedTs!)}</span>
+                                        <button
+                                          type="button"
+                                          className="text-xs font-medium text-amber-600 hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                          }}
+                                        >
+                                          Resume at {formatWatchTime(savedTs!)}
+                                        </button>
                                       )}
                                       {lesson.duration && (
                                         <span className="text-xs text-gray-500">{lesson.duration}</span>

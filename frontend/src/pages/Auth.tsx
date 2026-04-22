@@ -33,8 +33,8 @@ const validateName = (value: string) => {
   if (!trimmed) {
     return "Enter your full name";
   }
-  if (!/^[a-zA-Z\s]+$/.test(trimmed)) {
-    return "Name can only contain characters";
+  if (!/^[a-zA-Z0-9\s]+$/.test(trimmed)) {
+    return "Name can only contain letters, numbers, and spaces";
   }
   if (trimmed.length > nameMaxLength) {
     return `Use at most ${nameMaxLength} characters`;
@@ -74,6 +74,12 @@ const validatePassword = (value: string) => {
   }
   if (trimmed.length > passwordMaxLength) {
     return `Use at most ${passwordMaxLength} characters`;
+  }
+  if (!/[a-zA-Z]/.test(trimmed)) {
+    return "Password must contain at least one letter";
+  }
+  if (!/[0-9]/.test(trimmed)) {
+    return "Password must contain at least one number";
   }
   return null;
 };
@@ -385,9 +391,6 @@ const Auth = () => {
                       }}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {signinEmail.length}/{emailMaxLength}
-                  </p>
                   {signinErrors.email && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.email}</p>
                   )}
@@ -427,9 +430,6 @@ const Auth = () => {
                       {showSigninPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {signinPassword.length}/{passwordMaxLength}
-                  </p>
                   {signinErrors.password && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signinErrors.password}</p>
                   )}
@@ -604,8 +604,8 @@ const Auth = () => {
                           toast({ title: "Max limit reached", description: `Name cannot exceed ${nameMaxLength} characters`, variant: "destructive" });
                           return;
                         }
-                        if (value && !/^[a-zA-Z\s]+$/.test(value)) {
-                          toast({ title: "Invalid character", description: "Name can only contain characters", variant: "destructive" });
+                        if (value && !/^[a-zA-Z0-9\s]+$/.test(value)) {
+                          toast({ title: "Invalid character", description: "Name can only contain letters, numbers, and spaces", variant: "destructive" });
                           return;
                         }
                         setSignupName(value);
@@ -622,9 +622,6 @@ const Auth = () => {
                       }}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {signupName.length}/{nameMaxLength}
-                  </p>
                   {signupErrors.name && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.name}</p>
                   )}
@@ -658,9 +655,6 @@ const Auth = () => {
                       }}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {signupEmail.length}/{emailMaxLength}
-                  </p>
                   {signupErrors.email && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.email}</p>
                   )}
@@ -692,9 +686,6 @@ const Auth = () => {
                       }}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {signupPhone.length}/{phoneMaxLength}
-                  </p>
                   {signupErrors.phone && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.phone}</p>
                   )}
@@ -734,9 +725,6 @@ const Auth = () => {
                       {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {signupPassword.length}/{passwordMaxLength}
-                  </p>
                   {signupErrors.password && (
                     <p className="mt-1 text-xs font-medium text-destructive">{signupErrors.password}</p>
                   )}

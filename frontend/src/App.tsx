@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { Component, type ReactNode } from "react";
 import Index from "@/pages/Index";
 import Courses from "@/pages/Courses";
 import CourseDetail from "@/pages/CourseDetail";
@@ -33,7 +34,43 @@ import Flashcards from "@/pages/Flashcards";
 import Quizzes from "@/pages/Quizzes";
 import ScrollToTop from "@/components/ScrollToTop";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-8 text-center">
+          <h1 className="text-2xl font-bold text-foreground">Something went wrong</h1>
+          <p className="text-sm text-muted-foreground max-w-md">
+            {this.state.error?.message || "An unexpected error occurred. Please refresh the page."}
+          </p>
+          <button
+            className="rounded-lg bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+            onClick={() => window.location.assign("/")}
+          >
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type UserRole = "admin" | "student";
 
@@ -84,6 +121,7 @@ const HomeOrAdminRedirect = () => {
 };
 
 const App = () => (
+  <AppErrorBoundary>
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -176,6 +214,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </HelmetProvider>
+  </AppErrorBoundary>
 );
 
 export default App;
