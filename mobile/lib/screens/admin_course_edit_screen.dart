@@ -1,3 +1,4 @@
+import "package:cached_network_image/cached_network_image.dart";
 import "package:dio/dio.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
@@ -7,6 +8,7 @@ import "package:provider/provider.dart";
 import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
+import "../utils/media_urls.dart";
 
 /// Create or edit course metadata (parity with web admin course dialog).
 class AdminCourseEditScreen extends StatefulWidget {
@@ -39,14 +41,20 @@ class _AdminCourseEditScreenState extends State<AdminCourseEditScreen> {
 
   static const _levels = ["Beginner", "Intermediate", "Advanced"];
 
+  void _onThumbChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    _thumbnail.addListener(_onThumbChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
   @override
   void dispose() {
+    _thumbnail.removeListener(_onThumbChanged);
     _title.dispose();
     _description.dispose();
     _instructor.dispose();
@@ -145,7 +153,20 @@ class _AdminCourseEditScreenState extends State<AdminCourseEditScreen> {
     if (x == null || !mounted) return;
     setState(() => _uploadingThumb = true);
     try {
-      final res = await app.admin.uploadThumbnail(x.path);
+      final bytes = await x.readAsBytes();
+      if (bytes.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Could not read image", style: LhText.body()), backgroundColor: const Color(0xFFDC2626)),
+          );
+        }
+        return;
+      }
+      var name = x.name;
+      if (name.trim().isEmpty) {
+        name = "thumbnail.jpg";
+      }
+      final res = await app.admin.uploadThumbnailBytes(bytes, name);
       if (!mounted) return;
       final url = res["url"]?.toString().trim();
       final key = res["key"]?.toString().trim();
@@ -268,19 +289,27 @@ class _AdminCourseEditScreenState extends State<AdminCourseEditScreen> {
     final catVal = categoryDropdownValue();
 
     return Scaffold(
-      backgroundColor: LearnHubTheme.background,
+      backgroundColor: LearnHubTheme.gray50,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: LearnHubTheme.foreground,
+        backgroundColor: LearnHubTheme.navy,
+        foregroundColor: LearnHubTheme.onHero,
         elevation: 0,
         title: Text(
           widget.isCreate ? "New course" : "Edit course",
-          style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800),
+          style: LhText.display(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: LearnHubTheme.onHero,
+            letterSpacing: -0.2,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
-            child: Text("Save", style: LhText.body(fontWeight: FontWeight.w800, color: LearnHubTheme.navy)),
+            child: Text(
+              "Save",
+              style: LhText.body(fontWeight: FontWeight.w800, color: LearnHubTheme.amber500),
+            ),
           ),
         ],
       ),
@@ -352,15 +381,27 @@ class _AdminCourseEditScreenState extends State<AdminCourseEditScreen> {
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    "Thumbnail",
+                    style: LhText.body(fontWeight: FontWeight.w800, fontSize: 13, color: LearnHubTheme.foreground),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Upload a cover image or paste a URL. Shown on course cards.",
+                    style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground, height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  _thumbnailPreview(),
+                  const SizedBox(height: 10),
                   TextFormField(
                     controller: _thumbnail,
-                    decoration: _dec("Thumbnail *", "URL or use upload"),
+                    decoration: _dec("Thumbnail URL / path *", "Filled automatically after upload"),
                     validator: _validateThumb,
                     maxLines: 2,
                   ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: (_saving || _uploadingThumb) ? null : _pickAndUploadThumbnail,
                       icon: _uploadingThumb
@@ -369,10 +410,15 @@ class _AdminCourseEditScreenState extends State<AdminCourseEditScreen> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: LearnHubTheme.navy),
                             )
-                          : const Icon(Icons.upload_rounded, size: 20),
+                          : Icon(Icons.photo_library_outlined, size: 20, color: LearnHubTheme.navy),
                       label: Text(
-                        _uploadingThumb ? "Uploading…" : "Upload image",
-                        style: LhText.body(fontWeight: FontWeight.w700),
+                        _uploadingThumb ? "Uploading…" : "Choose from gallery",
+                        style: LhText.body(fontWeight: FontWeight.w700, color: LearnHubTheme.navy),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: LearnHubTheme.gray300),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -408,6 +454,46 @@ class _AdminCourseEditScreenState extends State<AdminCourseEditScreen> {
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: LearnHubTheme.border),
+      ),
+    );
+  }
+
+  Widget _thumbnailPreview() {
+    final url = MediaUrls.courseThumbnailUrl(_thumbnail.text.trim());
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: url == null
+            ? Container(
+                color: LearnHubTheme.gray100,
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.image_outlined, size: 40, color: LearnHubTheme.gray400),
+                    const SizedBox(height: 8),
+                    Text(
+                      "No preview yet",
+                      style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground),
+                    ),
+                  ],
+                ),
+              )
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  color: LearnHubTheme.gray100,
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(color: Color(0xFFF59E0B), strokeWidth: 2),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  color: LearnHubTheme.gray100,
+                  alignment: Alignment.center,
+                  child: Icon(Icons.broken_image_outlined, size: 36, color: LearnHubTheme.gray400),
+                ),
+              ),
       ),
     );
   }

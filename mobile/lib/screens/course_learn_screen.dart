@@ -1,4 +1,5 @@
 import "dart:async";
+import "dart:convert";
 import "dart:io";
 import "dart:math" as math;
 import "dart:typed_data";
@@ -12,6 +13,7 @@ import "package:pdfx/pdfx.dart";
 import "package:provider/provider.dart";
 import "package:screen_protector/screen_protector.dart";
 import "package:webview_flutter/webview_flutter.dart";
+import "package:youtube_player_iframe/youtube_player_iframe.dart";
 
 import "../models/auth_user.dart";
 import "../providers/app_state.dart";
@@ -519,7 +521,7 @@ class _CourseLearnScreenState extends State<CourseLearnScreen>
                         final mq = MediaQuery.of(context);
                         final maxH = constraints.maxHeight;
                         final pdfH =
-                            math.min(440.0, math.max(220.0, maxH * 0.38));
+                            math.min(560.0, math.max(280.0, maxH * 0.52));
                         final hPad = (mq.size.width * 0.04).clamp(10.0, 22.0);
                         final sideNav = math.max(6.0, mq.padding.left + 4.0);
                         final compact = mq.size.width < 360;
@@ -700,7 +702,7 @@ class _CourseLearnScreenState extends State<CourseLearnScreen>
                                           unselectedLabelColor:
                                               LearnHubTheme.mutedForeground,
                                           indicatorColor:
-                                              LearnHubTheme.amber500,
+                                            LearnHubTheme.amber500,
                                           indicatorWeight: 3,
                                           labelStyle: LhText.body(
                                               fontWeight: FontWeight.w800,
@@ -881,10 +883,11 @@ class _UdemyLecturesTabState extends State<_UdemyLecturesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final padBottom = 32.0 + MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
       color: LearnHubTheme.gray50,
       child: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
+        padding: EdgeInsets.only(bottom: padBottom),
         children: [
           for (var gi = 0; gi < widget.groups.length; gi++) ...[
             Material(
@@ -1001,16 +1004,17 @@ class _UdemyLectureRow extends StatelessWidget {
             children: [
               SizedBox(
                 width: 32,
-                child: isComplete
-                    ? Icon(Icons.check_circle_rounded,
-                        size: 22, color: LearnHubTheme.amber500)
-                    : Icon(
-                        isPdf
-                            ? Icons.picture_as_pdf_outlined
-                            : Icons.play_circle_outline_rounded,
-                        size: 22,
-                        color: accent,
-                      ),
+                child: isPdf
+                    ? Icon(Icons.picture_as_pdf_outlined,
+                        size: 22, color: accent)
+                    : isComplete
+                        ? Icon(Icons.check_circle_rounded,
+                            size: 22, color: LearnHubTheme.amber500)
+                        : Icon(
+                            Icons.play_circle_outline_rounded,
+                            size: 22,
+                            color: accent,
+                          ),
               ),
               Expanded(
                 child: Column(
@@ -1092,9 +1096,11 @@ class _UdemyMoreTab extends StatelessWidget {
       );
     }
 
+    final moreBottom = 24.0 + MediaQuery.paddingOf(context).bottom;
     return ColoredBox(
       color: Colors.white,
       child: ListView(
+        padding: EdgeInsets.only(bottom: moreBottom),
         children: [
           tile("Overview", Icons.info_outline_rounded, onOpenOverview),
           Divider(height: 1, color: LearnHubTheme.gray200),
@@ -1673,7 +1679,8 @@ class _LessonContent extends StatelessWidget {
 
     if (isPdf) {
       if (lessonId.isEmpty) return _msg("Invalid lesson");
-      return _PdfLessonViewer(courseId: courseId, lessonId: lessonId, app: app);
+      return _PdfLessonViewer(
+          courseId: courseId, lessonId: lessonId, app: app, token: token);
     }
 
     final raw = lesson["videoUrl"]?.toString() ?? "";
@@ -1696,8 +1703,12 @@ class _LessonContent extends StatelessWidget {
     if (isEmbedHost(raw)) {
       final yt = extractYoutubeId(raw);
       if (yt != null) {
-        return _EmbedWebView(
-            url: "https://www.youtube.com/embed/$yt?playsinline=1");
+        return _YoutubeLessonPlayer(
+          videoId: yt,
+          initialSeconds: initialVideoSeconds,
+          onVideoProgress: onVideoProgress,
+          onSeekReady: onSeekReady,
+        );
       }
       final vm = extractVimeoId(raw);
       if (vm != null) {
@@ -1742,12 +1753,17 @@ class _LessonContent extends StatelessWidget {
 }
 
 class _PdfLessonViewer extends StatefulWidget {
-  const _PdfLessonViewer(
-      {required this.courseId, required this.lessonId, required this.app});
+  const _PdfLessonViewer({
+    required this.courseId,
+    required this.lessonId,
+    required this.app,
+    required this.token,
+  });
 
   final String courseId;
   final String lessonId;
   final AppState app;
+  final String token;
 
   @override
   State<_PdfLessonViewer> createState() => _PdfLessonViewerState();
@@ -1767,12 +1783,32 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
 
   Future<void> _loadPdf() async {
     try {
-      final Uint8List bytes = await widget.app.progress
-          .fetchLessonPdfBytes(widget.courseId, widget.lessonId);
+      final Uint8List bytes = await widget.app.progress.fetchLessonPdfBytes(
+          widget.courseId, widget.lessonId, widget.token);
       if (bytes.lengthInBytes < 16) {
         if (mounted) {
           setState(() {
             _error = "Empty PDF";
+            _loading = false;
+          });
+        }
+        return;
+      }
+      if (!_bytesLookLikePdf(bytes)) {
+        String? hint;
+        try {
+          final s =
+              utf8.decode(bytes.take(800).toList(), allowMalformed: true);
+          final t = s.trimLeft();
+          if (t.startsWith("{")) {
+            final j = jsonDecode(t) as Map<String, dynamic>?;
+            hint = j?["message"]?.toString();
+          }
+        } catch (_) {}
+        if (mounted) {
+          setState(() {
+            _error = hint ??
+                "Could not open PDF. Check enrollment or try “Open externally”.";
             _loading = false;
           });
         }
@@ -1786,7 +1822,7 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
       if (!mounted) return;
       _pdfController?.dispose();
       _pdfController = PdfController(
-        document: PdfDocument.openData(bytes),
+        document: PdfDocument.openFile(f.path),
       );
       setState(() => _loading = false);
     } catch (e) {
@@ -1798,6 +1834,13 @@ class _PdfLessonViewerState extends State<_PdfLessonViewer> {
       }
     }
   }
+
+  static bool _bytesLookLikePdf(Uint8List b) =>
+      b.length >= 5 &&
+      b[0] == 0x25 &&
+      b[1] == 0x50 &&
+      b[2] == 0x44 &&
+      b[3] == 0x46;
 
   @override
   void dispose() {
@@ -2036,6 +2079,98 @@ class _ChewieNetworkState extends State<_ChewieNetwork> {
               color: Colors.black, child: Chewie(controller: svc.chewie!)),
         );
       },
+    );
+  }
+}
+
+/// YouTube lessons: iframe player with working controls, time, and skip (replaces bare WebView embed).
+class _YoutubeLessonPlayer extends StatefulWidget {
+  const _YoutubeLessonPlayer({
+    required this.videoId,
+    required this.initialSeconds,
+    required this.onVideoProgress,
+    required this.onSeekReady,
+  });
+
+  final String videoId;
+  final double initialSeconds;
+  final void Function(double position, double duration) onVideoProgress;
+  final void Function(void Function(double) seek) onSeekReady;
+
+  @override
+  State<_YoutubeLessonPlayer> createState() => _YoutubeLessonPlayerState();
+}
+
+class _YoutubeLessonPlayerState extends State<_YoutubeLessonPlayer> {
+  YoutubePlayerController? _controller;
+  Timer? _progressTimer;
+  StreamSubscription<YoutubePlayerValue>? _streamSub;
+
+  @override
+  void initState() {
+    super.initState();
+    final start = widget.initialSeconds > 1.0 ? widget.initialSeconds : null;
+    _controller = YoutubePlayerController.fromVideoId(
+      videoId: widget.videoId,
+      params: const YoutubePlayerParams(
+        showControls: true,
+        showFullscreenButton: true,
+        strictRelatedVideos: true,
+        color: "white",
+      ),
+      autoPlay: false,
+      startSeconds: start,
+    );
+    widget.onSeekReady((sec) {
+      final c = _controller;
+      if (c == null) return;
+      unawaited(c.seekTo(seconds: sec, allowSeekAhead: true));
+      unawaited(c.playVideo());
+    });
+    final c = _controller!;
+    _streamSub = c.stream.listen((_) => _emitProgress());
+    _progressTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _emitProgress());
+  }
+
+  Future<void> _emitProgress() async {
+    final c = _controller;
+    if (!mounted || c == null) return;
+    final d = c.value.metaData.duration.inMilliseconds / 1000.0;
+    if (d <= 0) return;
+    try {
+      final pos = await c.currentTime;
+      widget.onVideoProgress(pos, d);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    _streamSub?.cancel();
+    final c = _controller;
+    _controller = null;
+    if (c != null) unawaited(c.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    if (c == null) {
+      return const ColoredBox(
+        color: Colors.black,
+        child: Center(
+            child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
+      );
+    }
+    return ColoredBox(
+      color: Colors.black,
+      child: YoutubePlayer(
+        controller: c,
+        aspectRatio: 16 / 9,
+        backgroundColor: Colors.black,
+      ),
     );
   }
 }

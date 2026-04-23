@@ -5,6 +5,7 @@
  * Example policy for public read: { "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::lms-s3-speshway/thumbnails/*" }
  */
 import express from "express";
+import mongoose from "mongoose";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import { pipeline } from "node:stream/promises";
@@ -18,25 +19,66 @@ import { enqueueTranscode, getVideoStatus } from "../services/transcoder.js";
 import { Video } from "../models/Video.js";
 import { Course } from "../models/Course.js";
 import { Enrollment } from "../models/Enrollment.js";
+import { Progress } from "../models/Progress.js";
 
 const router = express.Router();
 
-/** Web app sends Referer/Origin; native apps send Bearer or ?token= only. */
-function allowStreamFromClient(req) {
-  const referer = req.get("Referer") || req.get("Referrer");
-  const origin = req.get("Origin");
-  const allowedOrigins = [
-    config.clientUrl,
-    "http://localhost:5173",
-    "http://localhost:8080",
-    "http://localhost:3000"
-  ];
-  const fromWebApp =
-    (referer && allowedOrigins.some((o) => referer.startsWith(o))) ||
-    (origin && allowedOrigins.some((o) => origin.startsWith(o)));
-  const hasQueryToken = typeof req.query.token === "string" && req.query.token.length > 0;
-  const hasBearer = req.headers.authorization?.startsWith("Bearer ");
-  return fromWebApp || hasQueryToken || hasBearer;
+/** JWT for lesson/video streams: query (?token=), Authorization, or X-LMS-Stream-Token (some CDNs strip Authorization on media GETs). */
+function extractStreamJwt(req) {
+  let q = req.query.token;
+  if (Array.isArray(q)) q = q.find((x) => typeof x === "string" && x.trim().length > 0) ?? q[0];
+  if (typeof q === "string" && q.trim().length > 0) return q.trim();
+  const auth = req.headers.authorization;
+  if (typeof auth === "string") {
+    const m = auth.match(/^Bearer\s+(\S+)/i);
+    if (m) return m[1].trim();
+  }
+  const x = req.headers["x-lms-stream-token"];
+  if (typeof x === "string" && x.trim().length > 0) return x.trim();
+  return null;
+}
+
+/** Match [Enrollment] / [Progress] whether `student` was stored as a string or ObjectId. */
+function studentIdCandidatesForStream(decoded) {
+  const raw = decoded.sub ?? decoded._id;
+  if (raw == null || raw === "") return [];
+  const s = String(raw).trim();
+  const out = [s];
+  if (/^[a-fA-F0-9]{24}$/.test(s)) {
+    try {
+      out.push(new mongoose.Types.ObjectId(s));
+    } catch {
+      /* ignore */
+    }
+  }
+  return out;
+}
+
+/** Match [course] id whether stored as string or ObjectId (same as [student]). */
+function courseIdCandidatesForStream(courseId) {
+  if (courseId == null || courseId === "") return [];
+  const s = String(courseId).trim();
+  const out = [s];
+  if (/^[a-fA-F0-9]{24}$/.test(s)) {
+    try {
+      out.push(new mongoose.Types.ObjectId(s));
+    } catch {
+      /* ignore */
+    }
+  }
+  return out;
+}
+
+/** Student may load lesson streams if admin, enrolled, or has progress for the course (mobile + web). */
+async function userMayAccessStreamContent(decoded, courseId) {
+  if (decoded.role === "admin") return true;
+  const sc = studentIdCandidatesForStream(decoded);
+  const cc = courseIdCandidatesForStream(courseId);
+  if (sc.length === 0 || cc.length === 0) return false;
+  const q = { student: { $in: sc }, course: { $in: cc } };
+  if (await Enrollment.findOne(q)) return true;
+  if (await Progress.findOne(q)) return true;
+  return false;
 }
 
 function extractVideoKeyFromUrl(url) {
@@ -311,19 +353,7 @@ router.post(
 );
 
 router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
-  // Reject direct navigation without token (browser opening URL as a document).
-  // Native players (ExoPlayer / AVPlayer) may send Sec-Fetch-Dest: document with ?token= — allow.
-  const secFetchDest = req.get("Sec-Fetch-Dest");
-  const tokenInQuery = typeof req.query.token === "string" && req.query.token.length > 0;
-  if (secFetchDest === "document" && !tokenInQuery) {
-    return res.status(403).json({ message: "Video must be viewed from the course page" });
-  }
-
-  if (!allowStreamFromClient(req)) {
-    return res.status(403).json({ message: "Video must be viewed from the course page" });
-  }
-
-  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  const token = extractStreamJwt(req);
   if (!token) return res.status(401).json({ message: "Authentication required" });
   let decoded;
   try {
@@ -347,9 +377,8 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
   const key = extractVideoKeyFromUrl(lesson.videoUrl);
   if (!key) return res.status(404).json({ message: "Video not found" });
 
-  const isEnrolled = await Enrollment.findOne({ student: decoded.sub || decoded._id, course: courseId });
-  const isAdmin = decoded.role === "admin";
-  if (!isEnrolled && !isAdmin) return res.status(403).json({ message: "Enrollment required" });
+  const mayAccess = await userMayAccessStreamContent(decoded, courseId);
+  if (!mayAccess) return res.status(403).json({ message: "Enrollment required" });
 
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) return res.status(503).json({ message: "S3 not configured" });
 
@@ -405,19 +434,7 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
 });
 
 router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
-  const tokenInQuery = typeof req.query.token === "string" && req.query.token.length > 0;
-  const secFetchDest = req.get("Sec-Fetch-Dest");
-  // Mobile WebView / in-app browser loads the PDF URL as a top-level navigation
-  // (Sec-Fetch-Dest: document) with ?token=… — allow; block bare direct opens without token.
-  if (secFetchDest === "document" && !tokenInQuery) {
-    return res.status(403).json({ message: "PDF must be viewed from the course page" });
-  }
-
-  if (!allowStreamFromClient(req)) {
-    return res.status(403).json({ message: "PDF must be viewed from the course page" });
-  }
-
-  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  const token = extractStreamJwt(req);
   if (!token) return res.status(401).json({ message: "Authentication required" });
   let decoded;
   try {
@@ -450,9 +467,8 @@ router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
   const pdfKey = extractPdfKeyFromUrl(lesson.pdfUrl);
   if (!pdfKey) return res.status(404).json({ message: "PDF not found" });
 
-  const isEnrolled = await Enrollment.findOne({ student: decoded.sub || decoded._id, course: courseId });
-  const isAdmin = decoded.role === "admin";
-  if (!isEnrolled && !isAdmin) return res.status(403).json({ message: "Enrollment required" });
+  const mayAccess = await userMayAccessStreamContent(decoded, courseId);
+  if (!mayAccess) return res.status(403).json({ message: "Enrollment required" });
 
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
     return streamLocalPdf(req, res, pdfKey);
@@ -513,7 +529,7 @@ router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
 
 router.get("/video", async (req, res) => {
   const key = req.query.key;
-  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  const token = extractStreamJwt(req);
   if (!key || typeof key !== "string" || !key.startsWith("videos/") || key.includes("..")) {
     return res.status(400).json({ message: "Invalid video key" });
   }
@@ -582,7 +598,7 @@ router.get("/video", async (req, res) => {
 
 router.get("/pdf", async (req, res) => {
   const key = req.query.key;
-  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  const token = extractStreamJwt(req);
   if (!key || typeof key !== "string" || !key.startsWith("pdfs/") || key.includes("..")) {
     return res.status(400).json({ message: "Invalid PDF key" });
   }
@@ -701,7 +717,7 @@ router.get("/proxy", async (req, res) => {
 
 router.get("/hls/{*hlsPath}", async (req, res) => {
   try {
-    const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+    const token = extractStreamJwt(req);
     if (!token) {
       return res.status(401).json({ message: "Authentication required" });
     }

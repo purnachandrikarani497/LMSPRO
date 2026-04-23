@@ -6,10 +6,10 @@ import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
 import "package:razorpay_flutter/razorpay_flutter.dart";
 
-import "../config/api_config.dart";
 import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
 import "../utils/formatters.dart";
+import "../utils/media_urls.dart";
 import "../widgets/learnhub_app_bar.dart";
 import "../widgets/learnhub_drawer.dart";
 import "../widgets/profile_menu_button.dart";
@@ -31,6 +31,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   bool _enrolling = false;
   final Set<String> _expanded = {};
   Razorpay? _razorpay;
+  /// Spurious PAYMENT_ERROR can follow a successful UPI flow; ignore errors after success.
+  bool _razorpaySucceeded = false;
 
   @override
   void initState() {
@@ -51,10 +53,12 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 
   Future<void> _onRazorpaySuccess(PaymentSuccessResponse response) async {
+    _razorpaySucceeded = true;
     final paymentId = response.paymentId;
     final orderId = response.orderId;
     final signature = response.signature;
     if (paymentId == null || orderId == null || signature == null) {
+      _razorpaySucceeded = false;
       if (mounted) {
         setState(() => _enrolling = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -81,6 +85,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       );
       setState(() {});
     } catch (e) {
+      _razorpaySucceeded = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("$e", style: LhText.body())),
@@ -92,6 +97,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 
   void _onRazorpayError(PaymentFailureResponse response) {
+    if (_razorpaySucceeded) return;
     if (mounted) setState(() => _enrolling = false);
     if (response.code == Razorpay.PAYMENT_CANCELLED) return;
     if (!mounted) return;
@@ -101,6 +107,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 
   void _onRazorpayExternalWallet(ExternalWalletResponse response) {
+    if (_razorpaySucceeded) return;
     if (mounted) setState(() => _enrolling = false);
   }
 
@@ -110,18 +117,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     if (_started) return;
     _started = true;
     _future = context.read<AppState>().courses.fetchCourse(widget.courseId);
-  }
-
-  String _thumbUrl(dynamic thumb) {
-    if (thumb == null) return "";
-    final s = thumb.toString();
-    if (s.isEmpty) return "";
-    if (s.startsWith("http")) return s;
-    if (s.startsWith("thumbnails/")) {
-      final base = ApiConfig.baseUrl.replaceAll(RegExp(r"/api/?$"), "");
-      return "$base/api/upload/thumb?key=${Uri.encodeComponent(s)}";
-    }
-    return s;
   }
 
   double _rating(Map<String, dynamic> c) {
@@ -139,7 +134,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     if (app.isEnrolledInCourse(widget.courseId)) return;
 
     setState(() => _enrolling = true);
+    var resetEnrollingInFinally = true;
     try {
+      _razorpaySucceeded = false;
       final data = await app.enrollInCourse(widget.courseId);
       if (!context.mounted) return;
       if (data.containsKey("orderId")) {
@@ -165,8 +162,17 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             "name": app.user?.name ?? "",
           },
         };
-        _razorpay!.open(options);
-        if (mounted) setState(() => _enrolling = false);
+        try {
+          _razorpay!.open(options);
+          resetEnrollingInFinally = false;
+        } catch (e) {
+          if (mounted) {
+            setState(() => _enrolling = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Could not open checkout: $e", style: LhText.body())),
+            );
+          }
+        }
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
@@ -183,7 +189,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         SnackBar(content: Text(msg ?? "Could not enroll")),
       );
     } finally {
-      if (mounted) setState(() => _enrolling = false);
+      if (mounted && resetEnrollingInFinally) setState(() => _enrolling = false);
     }
   }
 
@@ -206,19 +212,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       drawer: const LearnHubDrawer(),
       backgroundColor: LearnHubTheme.gray50,
       appBar: LearnHubAppBar(
-        leadingWidth: 112,
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(Icons.menu_rounded, color: LearnHubTheme.foreground),
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            ),
-            IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: LearnHubTheme.foreground),
-              onPressed: () => context.canPop() ? context.pop() : context.go("/courses"),
-            ),
-          ],
+        leading: IconButton(
+          icon: Icon(Icons.menu_rounded, color: LearnHubTheme.foreground),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         actions: [
           if (isAdmin)
@@ -263,7 +259,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 final price = c["price"];
                 final priceNum = num.tryParse(price?.toString() ?? "") ?? 0;
                 final enrolled = context.read<AppState>().isEnrolledInCourse(widget.courseId);
-                final thumb = _thumbUrl(c["thumbnail"]);
+                final thumb = MediaUrls.courseThumbnailForUi(c["thumbnail"]);
                 final sections = c["sections"] as List<dynamic>? ?? [];
                 final lessonsN = c["lessons"] is int
                     ? c["lessons"] as int

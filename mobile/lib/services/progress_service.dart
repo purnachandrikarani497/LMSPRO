@@ -1,4 +1,7 @@
+import "dart:convert";
 import "dart:typed_data";
+
+import "package:dio/dio.dart";
 
 import "api_client.dart";
 
@@ -69,8 +72,48 @@ class ProgressService {
     await _api.deletePath("progress/$courseId/lessons/$lessonId/notes/$noteIndex");
   }
 
-  /// Authenticated PDF bytes (`GET /api/upload/stream/pdf/...` — Bearer via [ApiClient]).
-  Future<Uint8List> fetchLessonPdfBytes(String courseId, String lessonId) async {
-    return _api.getBytes("upload/stream/pdf/$courseId/$lessonId");
+  /// Authenticated PDF bytes (`GET /api/upload/stream/pdf/...`).
+  /// Sends the same JWT avenues as lesson video: Bearer, `?token=`, and `X-LMS-Stream-Token`.
+  Future<Uint8List> fetchLessonPdfBytes(
+    String courseId,
+    String lessonId,
+    String token,
+  ) async {
+    try {
+      return await _api.getBytes(
+        "upload/stream/pdf/$courseId/$lessonId",
+        accept: "application/pdf,*/*",
+        streamToken: token,
+        queryParameters: {"token": token},
+        legacyDeployedStreamWorkaround: true,
+      );
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final data = e.response?.data;
+      String? fromBody;
+      if (data is String && data.trim().isNotEmpty) {
+        try {
+          final j = jsonDecode(data);
+          if (j is Map && j["message"] != null) {
+            fromBody = j["message"]?.toString();
+          }
+        } catch (_) {
+          final t = data.trim();
+          fromBody = t.length <= 200 ? t : t.substring(0, 200);
+        }
+      } else if (data is List<int> && data.isNotEmpty) {
+        try {
+          final s = utf8.decode(data);
+          final j = jsonDecode(s);
+          if (j is Map && j["message"] != null) {
+            fromBody = j["message"]?.toString();
+          }
+        } catch (_) {}
+      }
+      if (fromBody != null) {
+        throw Exception("$fromBody${code != null ? " ($code)" : ""}");
+      }
+      throw Exception(e.message ?? "Could not download PDF (${code ?? "?"})");
+    }
   }
 }

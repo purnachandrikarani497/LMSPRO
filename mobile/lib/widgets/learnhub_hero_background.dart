@@ -39,12 +39,12 @@ class LearnHubHeroBackground extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  LearnHubTheme.navyDark.withValues(alpha: 0.72),
-                  LearnHubTheme.navy.withValues(alpha: 0.52),
-                  LearnHubTheme.navyDark.withValues(alpha: 0.62),
+                  const Color(0xFF0F2744).withValues(alpha: 0.82),
+                  LearnHubTheme.navy.withValues(alpha: 0.78),
+                  LearnHubTheme.navyDark.withValues(alpha: 0.88),
                 ],
               ),
             ),

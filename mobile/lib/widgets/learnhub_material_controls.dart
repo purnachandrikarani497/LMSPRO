@@ -5,7 +5,7 @@ import 'package:chewie/src/center_seek_button.dart';
 import 'package:chewie/src/chewie_player.dart';
 import 'package:chewie/src/chewie_progress_colors.dart';
 import 'package:chewie/src/helpers/utils.dart';
-import 'package:chewie/src/progress_bar.dart';
+import 'learnhub_video_progress_bar.dart';
 import 'package:chewie/src/material/widgets/options_dialog.dart';
 import 'package:chewie/src/material/widgets/playback_speed_dialog.dart';
 import 'package:chewie/src/models/option_item.dart';
@@ -14,6 +14,8 @@ import 'package:chewie/src/notifiers/index.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+
+import '../theme/learnhub_theme.dart';
 
 /// Chewie [MaterialControls] fork: slim scrubber, Notes + PiP + fullscreen along bottom row (Udemy-style).
 class LearnHubMaterialControls extends StatefulWidget {
@@ -48,6 +50,8 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
   bool _displayTapped = false;
   Timer? _bufferingDisplayTimer;
   bool _displayBufferingIndicator = false;
+  /// Some devices report position/duration sparsely; refresh time + scrubber while controls are visible.
+  Timer? _positionUiTimer;
 
   final barHeight = 48.0 * 1.5;
   final marginSize = 5.0;
@@ -133,6 +137,7 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
     _hideTimer?.cancel();
     _initTimer?.cancel();
     _showAfterExpandCollapseTimer?.cancel();
+    _positionUiTimer?.cancel();
   }
 
   @override
@@ -277,8 +282,8 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
           minimum: chewieController.controlsSafeAreaMinimum,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: chewieController.isFullScreen ? 88 : 80,
-              maxHeight: chewieController.isFullScreen ? 120 : 110,
+              minHeight: chewieController.isFullScreen ? 48 : 44,
+              maxHeight: chewieController.isFullScreen ? 72 : 56,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -293,28 +298,25 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
                       if (chewieController.allowMuting) _buildMuteButton(controller),
                     ],
                   )
-                else ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FittedBox(
+                else
+                  // One tight row: time + mute sit directly beside the scrubber (avoids ~72px mute stretching layout).
+                  SizedBox(
+                    height: 40,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (widget.onOpenNotes != null) _buildNotesButton(),
+                        if (widget.onOpenNotes != null) const SizedBox(width: 4),
+                        FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: _buildPosition(iconColor),
                         ),
-                      ),
-                      if (chewieController.allowMuting) _buildMuteButton(controller),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  // Bounded height — without this the scrubber row collapses / clips to zero.
-                  SizedBox(
-                    height: 36,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (widget.onOpenNotes != null) _buildNotesButton(),
-                        if (widget.onOpenNotes != null) const SizedBox(width: 4),
+                        if (chewieController.allowMuting) ...[
+                          const SizedBox(width: 6),
+                          _buildMuteButton(controller),
+                        ],
+                        const SizedBox(width: 8),
                         Expanded(child: _buildProgressBarCore()),
                         if (widget.onMiniPlayer != null) ...[
                           const SizedBox(width: 6),
@@ -327,7 +329,6 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
                       ],
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -351,14 +352,13 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
       child: AnimatedOpacity(
         opacity: notifier.hideStuff ? 0.0 : 1.0,
         duration: const Duration(milliseconds: 300),
-        child: ClipRect(
-          child: Container(
-            height: barHeight,
-            padding: const EdgeInsets.only(left: 6.0),
-            child: Icon(
-              _latestValue.volume > 0 ? Icons.volume_up : Icons.volume_off,
-              color: Colors.white,
-            ),
+        child: SizedBox(
+          height: 36,
+          width: 40,
+          child: Icon(
+            _latestValue.volume > 0 ? Icons.volume_up : Icons.volume_off,
+            color: Colors.white,
+            size: 22,
           ),
         ),
       ),
@@ -483,15 +483,36 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
   }
 
   Widget _buildPosition(Color? iconColor) {
-    final position = _latestValue.position;
-    final duration = _latestValue.duration;
+    final v = controller.value;
+    final position = v.position;
+    final duration = v.duration;
+    final bufEnd =
+        v.buffered.isEmpty ? Duration.zero : v.buffered.last.end;
+
+    final String posLabel;
+    if (!v.isInitialized) {
+      posLabel = "--:--";
+    } else {
+      posLabel = formatDuration(position);
+    }
+
+    final String durLabel;
+    if (duration.inMilliseconds > 0) {
+      durLabel = formatDuration(duration);
+    } else if (bufEnd.inMilliseconds > position.inMilliseconds) {
+      durLabel = "~${formatDuration(bufEnd)}";
+    } else if (v.isPlaying) {
+      durLabel = "…";
+    } else {
+      durLabel = "…";
+    }
 
     return RichText(
       text: TextSpan(
-        text: '${formatDuration(position)} ',
+        text: "$posLabel ",
         children: <InlineSpan>[
           TextSpan(
-            text: '/ ${formatDuration(duration)}',
+            text: "/ $durLabel",
             style: TextStyle(
               fontSize: 14.0,
               color: Colors.white.withValues(alpha: .75),
@@ -553,6 +574,15 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
 
     _updateState();
 
+    _positionUiTimer?.cancel();
+    _positionUiTimer = Timer.periodic(const Duration(milliseconds: 320), (_) {
+      if (!mounted) return;
+      if (notifier.hideStuff) return;
+      final val = controller.value;
+      if (!val.isInitialized) return;
+      setState(() {});
+    });
+
     if (controller.value.isPlaying || chewieController.autoPlay) {
       _startHideTimer();
     }
@@ -613,12 +643,14 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
     _cancelAndRestartTimer();
     final position = _latestValue.position + relativeSeek;
     final duration = _latestValue.duration;
+    final knownTotal = duration.inMilliseconds > 0;
 
     if (position < Duration.zero) {
       controller.seekTo(Duration.zero);
-    } else if (position > duration) {
+    } else if (knownTotal && position > duration) {
       controller.seekTo(duration);
     } else {
+      // Duration often stays 0 until metadata/buffer is ready; still seek ahead.
       controller.seekTo(position);
     }
   }
@@ -725,14 +757,14 @@ class _LearnHubMaterialControlsState extends State<LearnHubMaterialControls>
   ChewieProgressColors get _progressColors =>
       chewieController.materialProgressColors ??
       ChewieProgressColors(
-        playedColor: Theme.of(context).colorScheme.secondary,
-        handleColor: Theme.of(context).colorScheme.secondary,
-        bufferedColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
-        backgroundColor: Theme.of(context).disabledColor.withValues(alpha: .5),
+        playedColor: LearnHubTheme.amber500,
+        handleColor: LearnHubTheme.amber500,
+        bufferedColor: Colors.white.withValues(alpha: 0.28),
+        backgroundColor: Colors.white.withValues(alpha: 0.18),
       );
 
   Widget _buildProgressBarCore() {
-    return VideoProgressBar(
+    return LearnHubSafeVideoProgressBar(
       controller,
       barHeight: 3,
       handleHeight: 5,

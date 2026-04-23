@@ -179,7 +179,14 @@ class _LoginScreenState extends State<LoginScreen>
       }
       if (mounted) {
         setState(() {
-          _error = e.description ?? e.toString();
+          _error = "Google Sign-In error (${e.code}): ${e.description ?? e.toString()}";
+          _loading = false;
+        });
+      }
+    } on PlatformException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = "Platform error: ${e.code} – ${e.message}";
           _loading = false;
         });
       }

@@ -3,9 +3,7 @@ import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
-import "package:url_launcher/url_launcher.dart";
 
-import "../config/api_config.dart";
 import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
@@ -17,7 +15,8 @@ class AdminCourseManageScreen extends StatefulWidget {
   final String courseId;
 
   @override
-  State<AdminCourseManageScreen> createState() => _AdminCourseManageScreenState();
+  State<AdminCourseManageScreen> createState() =>
+      _AdminCourseManageScreenState();
 }
 
 class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
@@ -74,16 +73,23 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
     );
   }
 
-  Future<String?> _promptText({required String title, String hint = "", String initial = ""}) async {
+  Future<String?> _promptText(
+      {required String title, String hint = "", String initial = ""}) async {
     final c = TextEditingController(text: initial);
     final r = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title, style: LhText.display(fontWeight: FontWeight.w700)),
-        content: TextField(controller: c, decoration: InputDecoration(hintText: hint), autofocus: true),
+        content: TextField(
+            controller: c,
+            decoration: InputDecoration(hintText: hint),
+            autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text("OK")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, c.text.trim()),
+              child: const Text("OK")),
         ],
       ),
     );
@@ -93,7 +99,8 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
 
   Future<void> _addSection() async {
     final app = context.read<AppState>();
-    final title = await _promptText(title: "New section", hint: "Section title");
+    final title =
+        await _promptText(title: "New section", hint: "Section title");
     if (title == null || title.isEmpty) return;
     try {
       await app.admin.createSection(widget.courseId, title);
@@ -106,7 +113,8 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
   Future<void> _renameSection(Map section) async {
     final app = context.read<AppState>();
     final sid = _oid(section);
-    final title = await _promptText(title: "Rename section", initial: "${section["title"] ?? ""}");
+    final title = await _promptText(
+        title: "Rename section", initial: "${section["title"] ?? ""}");
     if (title == null || title.isEmpty) return;
     try {
       await app.admin.updateSection(widget.courseId, sid, title);
@@ -122,12 +130,17 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Delete section?", style: LhText.display(fontWeight: FontWeight.w700)),
-        content: Text("Remove “${section["title"]}” and all its lessons?", style: LhText.body()),
+        title: Text("Delete section?",
+            style: LhText.display(fontWeight: FontWeight.w700)),
+        content: Text("Remove “${section["title"]}” and all its lessons?",
+            style: LhText.body()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancel")),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626)),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Delete"),
           ),
@@ -212,12 +225,16 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Delete lesson?", style: LhText.display(fontWeight: FontWeight.w700)),
+        title: Text("Delete lesson?",
+            style: LhText.display(fontWeight: FontWeight.w700)),
         content: Text("Remove “${lesson["title"]}”?", style: LhText.body()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancel")),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626)),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Delete"),
           ),
@@ -236,20 +253,87 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
   Widget _lessonTile(Map lesson) {
     final t = "${lesson["title"] ?? "Lesson"}";
     final typ = "${lesson["lessonType"] ?? "video"}";
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      title: Text(t, style: LhText.body(fontWeight: FontWeight.w700)),
-      subtitle: Text(typ == "pdf" ? "PDF" : "Video", style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground)),
-      trailing: PopupMenuButton<String>(
-        onSelected: (v) {
-          if (v == "e") _editLesson(lesson);
-          if (v == "d") _deleteLesson(lesson);
-        },
-        itemBuilder: (ctx) => [
-          PopupMenuItem(value: "e", child: Text("Edit", style: LhText.body(fontWeight: FontWeight.w600))),
-          PopupMenuItem(value: "d", child: Text("Delete", style: LhText.body(color: const Color(0xFFDC2626)))),
+    final isPdf = typ == "pdf";
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: LearnHubTheme.gray100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isPdf
+                  ? Icons.picture_as_pdf_outlined
+                  : Icons.play_circle_outline_rounded,
+              color: LearnHubTheme.navy,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t,
+                  style: LhText.body(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: LearnHubTheme.foreground,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isPdf ? "PDF lesson" : "Video lesson",
+                  style: LhText.body(
+                      fontSize: 12, color: LearnHubTheme.mutedForeground),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert_rounded, color: LearnHubTheme.gray600),
+            onSelected: (v) {
+              if (v == "e") _editLesson(lesson);
+              if (v == "d") _deleteLesson(lesson);
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                  value: "e",
+                  child: Text("Edit",
+                      style: LhText.body(fontWeight: FontWeight.w600))),
+              PopupMenuItem(
+                value: "d",
+                child: Text("Delete",
+                    style: LhText.body(
+                        color: LearnHubTheme.messageWarning,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+
+  static BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: LearnHubTheme.border),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.05),
+          blurRadius: 20,
+          offset: const Offset(0, 6),
+        ),
+      ],
     );
   }
 
@@ -260,33 +344,124 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
     for (final e in rawLess) {
       if (e is Map) lessons.add(Map<String, dynamic>.from(e));
     }
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        title: Text(title, style: LhText.body(fontWeight: FontWeight.w800, fontSize: 16)),
-        subtitle: Text("${lessons.length} lessons", style: LhText.body(fontSize: 12, color: LearnHubTheme.mutedForeground)),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => _addLessonToSection(section),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text("Add lesson", style: LhText.body(fontWeight: FontWeight.w700)),
+    final n = lessons.length;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Material(
+        color: Colors.white,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: LearnHubTheme.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: true,
+            tilePadding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            childrenPadding: EdgeInsets.zero,
+            backgroundColor: Colors.white,
+            collapsedBackgroundColor: Colors.white,
+            iconColor: LearnHubTheme.navy,
+            collapsedIconColor: LearnHubTheme.mutedForeground,
+            shape: const RoundedRectangleBorder(),
+            collapsedShape: const RoundedRectangleBorder(),
+            title: Text(
+              title,
+              style: LhText.display(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: LearnHubTheme.foreground,
+              ),
             ),
-          ),
-          ...lessons.map((l) => _lessonTile(l)),
-          OverflowBar(
-            alignment: MainAxisAlignment.end,
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                n == 1 ? "1 lesson" : "$n lessons",
+                style: LhText.body(
+                    fontSize: 13, color: LearnHubTheme.mutedForeground),
+              ),
+            ),
             children: [
-              TextButton(onPressed: () => _renameSection(section), child: const Text("Rename")),
-              TextButton(
-                onPressed: () => _deleteSection(section),
-                child: const Text("Delete section", style: TextStyle(color: Color(0xFFDC2626))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addLessonToSection(section),
+                    icon: Icon(Icons.add_rounded,
+                        size: 20, color: LearnHubTheme.navy),
+                    label: Text(
+                      "Add lesson",
+                      style: LhText.body(
+                          fontWeight: FontWeight.w700,
+                          color: LearnHubTheme.navy),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: LearnHubTheme.gray300),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      backgroundColor: LearnHubTheme.gray50,
+                    ),
+                  ),
+                ),
+              ),
+              if (lessons.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Divider(height: 1, color: LearnHubTheme.gray200),
+                ),
+              for (var i = 0; i < lessons.length; i++) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: _lessonTile(lessons[i]),
+                ),
+                if (i < lessons.length - 1)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 62, right: 12),
+                    child: Divider(height: 1, color: LearnHubTheme.gray200),
+                  ),
+              ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
+                child: Divider(height: 1, color: LearnHubTheme.gray200),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _renameSection(section),
+                      icon: Icon(Icons.edit_outlined,
+                          size: 18, color: LearnHubTheme.mutedForeground),
+                      label: Text(
+                        "Rename",
+                        style: LhText.body(
+                            fontWeight: FontWeight.w600,
+                            color: LearnHubTheme.foreground),
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => _deleteSection(section),
+                      icon: Icon(Icons.delete_outline_rounded,
+                          size: 18, color: LearnHubTheme.messageWarning),
+                      label: Text(
+                        "Delete section",
+                        style: LhText.body(
+                            fontWeight: FontWeight.w600,
+                            color: LearnHubTheme.messageWarning),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -298,115 +473,223 @@ class _AdminCourseManageScreenState extends State<AdminCourseManageScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) context.go("/admin");
       });
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))));
+      return const Scaffold(
+          body: Center(
+              child: CircularProgressIndicator(color: Color(0xFFF59E0B))));
     }
 
     final co = _course;
     final padBottom = MediaQuery.paddingOf(context).bottom + 24;
 
     return Scaffold(
-      backgroundColor: LearnHubTheme.background,
+      backgroundColor: LearnHubTheme.gray50,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: LearnHubTheme.foreground,
+        backgroundColor: LearnHubTheme.navy,
+        foregroundColor: LearnHubTheme.onHero,
         elevation: 0,
+        centerTitle: false,
         title: Text(
           co == null ? "Manage course" : "${co["title"] ?? "Course"}",
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: LhText.display(fontSize: 18, fontWeight: FontWeight.w800),
+          style: LhText.display(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: LearnHubTheme.onHero,
+            letterSpacing: -0.2,
+          ),
         ),
         actions: [
-          IconButton(tooltip: "Refresh", onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
+          IconButton(
+            tooltip: "Refresh",
+            onPressed: _loading ? null : _load,
+            icon: Icon(Icons.refresh_rounded,
+                color: LearnHubTheme.onHero.withValues(alpha: 0.95)),
+          ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
           : _error != null
-              ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, style: LhText.body())))
+              ? Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(_error!, style: LhText.body())))
               : co == null
                   ? const SizedBox.shrink()
                   : RefreshIndicator(
                       onRefresh: _load,
                       color: LearnHubTheme.amber500,
                       child: ListView(
-                        padding: EdgeInsets.fromLTRB(20, 16, 20, padBottom),
+                        padding: EdgeInsets.fromLTRB(18, 18, 18, padBottom),
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: LearnHubTheme.border),
-                            ),
+                            padding: const EdgeInsets.all(18),
+                            decoration: _cardDecoration(),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text("Course structure", style: LhText.display(fontSize: 15, fontWeight: FontWeight.w800)),
-                                const SizedBox(height: 6),
-                                Text(
-                                  "${_lessonTotal(co)} lessons · ${(co["sections"] as List?)?.length ?? 0} sections",
-                                  style: LhText.body(fontSize: 13, color: LearnHubTheme.mutedForeground),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: LearnHubTheme.amber500
+                                            .withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.account_tree_outlined,
+                                        color: LearnHubTheme.navy,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Course structure",
+                                            style: LhText.display(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: LearnHubTheme.foreground,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            "${_lessonTotal(co)} lessons · ${(co["sections"] as List?)?.length ?? 0} sections",
+                                            style: LhText.body(
+                                              fontSize: 13,
+                                              color:
+                                                  LearnHubTheme.mutedForeground,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 18),
                                 FilledButton.icon(
                                   onPressed: _addSection,
-                                  icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-                                  label: Text("Add section", style: LhText.body(fontWeight: FontWeight.w800)),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: LearnHubTheme.navy,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: _openWebFallback,
-                                  icon: Icon(Icons.open_in_new_rounded, size: 18, color: LearnHubTheme.mutedForeground),
+                                  icon: Icon(Icons.create_new_folder_outlined,
+                                      size: 20, color: LearnHubTheme.navy),
                                   label: Text(
-                                    "Open web admin (fallback)",
-                                    style: LhText.body(fontSize: 13, color: LearnHubTheme.navy),
+                                    "Add section",
+                                    style: LhText.body(
+                                        fontWeight: FontWeight.w800,
+                                        color: LearnHubTheme.navy),
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: LearnHubTheme.amber500,
+                                    foregroundColor: LearnHubTheme.navy,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          ...(co["sections"] as List<dynamic>? ?? []).whereType<Map>().map((s) => _sectionBlock(Map<String, dynamic>.from(s))),
+                          const SizedBox(height: 8),
+                          ...(co["sections"] as List<dynamic>? ?? [])
+                              .whereType<Map>()
+                              .map((s) =>
+                                  _sectionBlock(Map<String, dynamic>.from(s))),
                           if ((co["sections"] as List?)?.isEmpty != false) ...[
-                            if (((co["lessons"] as List?) ?? []).isNotEmpty) ...[
-                              Text("Lessons (no sections)", style: LhText.display(fontSize: 16, fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 8),
+                            if (((co["lessons"] as List?) ?? [])
+                                .isNotEmpty) ...[
+                              Text(
+                                "Lessons (no sections)",
+                                style: LhText.display(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: LearnHubTheme.foreground,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
                               FilledButton.icon(
                                 onPressed: _addFlatLesson,
-                                icon: const Icon(Icons.add_rounded),
-                                label: Text("Add lesson", style: LhText.body(fontWeight: FontWeight.w800)),
+                                icon: Icon(Icons.add_rounded,
+                                    color: LearnHubTheme.navy),
+                                label: Text("Add lesson",
+                                    style: LhText.body(
+                                        fontWeight: FontWeight.w800,
+                                        color: LearnHubTheme.navy)),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: LearnHubTheme.amber500,
                                   foregroundColor: LearnHubTheme.navy,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              ...() {
-                                final out = <Widget>[];
-                                for (final e in co["lessons"] as List<dynamic>? ?? []) {
-                                  if (e is Map) out.add(Card(child: _lessonTile(Map<String, dynamic>.from(e))));
-                                }
-                                return out;
-                              }(),
-                            ] else if ((co["sections"] as List?)?.isEmpty != false)
-                              Text(
-                                "No sections yet. Tap “Add section”, then add lessons.",
-                                style: LhText.body(color: LearnHubTheme.mutedForeground),
+                              const SizedBox(height: 12),
+                              Container(
+                                decoration: _cardDecoration(),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                child: Column(
+                                  children: () {
+                                    final maps = <Map<String, dynamic>>[];
+                                    for (final e
+                                        in co["lessons"] as List<dynamic>? ??
+                                            []) {
+                                      if (e is Map)
+                                        maps.add(Map<String, dynamic>.from(e));
+                                    }
+                                    final tiles = <Widget>[];
+                                    for (var i = 0; i < maps.length; i++) {
+                                      tiles.add(
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 4, horizontal: 8),
+                                          child: _lessonTile(maps[i]),
+                                        ),
+                                      );
+                                      if (i < maps.length - 1) {
+                                        tiles.add(
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                                left: 62, right: 12),
+                                            child: Divider(
+                                                height: 1,
+                                                color: LearnHubTheme.gray200),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                    return tiles;
+                                  }(),
+                                ),
+                              ),
+                            ] else if ((co["sections"] as List?)?.isEmpty !=
+                                false)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  "No sections yet. Add a section, then add lessons.",
+                                  style: LhText.body(
+                                    fontSize: 14,
+                                    color: LearnHubTheme.mutedForeground,
+                                    height: 1.4,
+                                  ),
+                                ),
                               ),
                           ],
                         ],
                       ),
                     ),
     );
-  }
-
-  Future<void> _openWebFallback() async {
-    final u = Uri.parse(ApiConfig.adminWebCourseManageUrl(widget.courseId));
-    await launchUrl(u, mode: LaunchMode.externalApplication);
   }
 }
 
@@ -457,7 +740,8 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
   }
 
   Future<void> _uploadPdf(AppState app) async {
-    final r = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ["pdf"]);
+    final r = await FilePicker.platform
+        .pickFiles(type: FileType.custom, allowedExtensions: ["pdf"]);
     final p = r?.files.single.path;
     if (p == null) return;
     setState(() => _busy = true);
@@ -468,7 +752,9 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("$e", style: LhText.body()), backgroundColor: const Color(0xFFDC2626)),
+          SnackBar(
+              content: Text("$e", style: LhText.body()),
+              backgroundColor: const Color(0xFFDC2626)),
         );
       }
     } finally {
@@ -492,7 +778,8 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              msg ?? "Video upload requires S3. Paste a hosted video URL instead.",
+              msg ??
+                  "Video upload requires S3. Paste a hosted video URL instead.",
               style: LhText.body(),
             ),
             backgroundColor: const Color(0xFFDC2626),
@@ -502,7 +789,9 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("$e", style: LhText.body()), backgroundColor: const Color(0xFFDC2626)),
+          SnackBar(
+              content: Text("$e", style: LhText.body()),
+              backgroundColor: const Color(0xFFDC2626)),
         );
       }
     } finally {
@@ -513,7 +802,8 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
   void _submit() {
     final t = _title.text.trim();
     if (t.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Title required", style: LhText.body())));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Title required", style: LhText.body())));
       return;
     }
     final body = <String, dynamic>{"title": t, "lessonType": _kind};
@@ -522,14 +812,17 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
     if (_kind == "video") {
       final v = _video.text.trim();
       if (v.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Video URL or upload required", style: LhText.body())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text("Video URL or upload required", style: LhText.body())));
         return;
       }
       body["videoUrl"] = v;
     } else {
       final p = _pdf.text.trim();
       if (p.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("PDF URL or upload required", style: LhText.body())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("PDF URL or upload required", style: LhText.body())));
         return;
       }
       body["pdfUrl"] = p;
@@ -551,12 +844,14 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
             children: [
               TextField(
                 controller: _title,
-                decoration: const InputDecoration(labelText: "Title *", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: "Title *", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: _kind,
-                decoration: const InputDecoration(labelText: "Type", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: "Type", border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: "video", child: Text("Video")),
                   DropdownMenuItem(value: "pdf", child: Text("PDF")),
@@ -582,7 +877,8 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
               ] else ...[
                 TextField(
                   controller: _pdf,
-                  decoration: const InputDecoration(labelText: "PDF URL", border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: "PDF URL", border: OutlineInputBorder()),
                   maxLines: 2,
                 ),
                 OutlinedButton.icon(
@@ -605,8 +901,11 @@ class _LessonFormDialogState extends State<_LessonFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-        FilledButton(onPressed: _busy ? null : _submit, child: const Text("Save")),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel")),
+        FilledButton(
+            onPressed: _busy ? null : _submit, child: const Text("Save")),
       ],
     );
   }

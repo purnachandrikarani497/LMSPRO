@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:google_sign_in/google_sign_in.dart";
@@ -11,15 +13,28 @@ import "theme/learnhub_theme.dart";
 import "widgets/global_mini_player_overlay.dart";
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await ApiConfig.initialize();
-  await GoogleSignIn.instance.initialize(
-    serverClientId: ApiConfig.googleWebClientId.isNotEmpty
-        ? ApiConfig.googleWebClientId
-        : null,
-  );
-  final appState = AppState();
-  runApp(LmsProApp(appState: appState));
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+    };
+
+    await ApiConfig.initialize();
+    try {
+      final clientId = ApiConfig.googleWebClientId;
+      if (clientId.isNotEmpty) {
+        await GoogleSignIn.instance.initialize(
+          serverClientId: clientId,
+        );
+      }
+    } catch (_) {}
+    final appState = AppState();
+    runApp(LmsProApp(appState: appState));
+  }, (error, stack) {
+    // Catch uncaught async errors so the app doesn't crash silently.
+    debugPrint("Uncaught error: $error\n$stack");
+  });
 }
 
 class LmsProApp extends StatefulWidget {

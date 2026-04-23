@@ -3,8 +3,8 @@ import "../theme/lh_text.dart";
 import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
 
-import "../config/api_config.dart";
 import "../providers/app_state.dart";
+import "../utils/media_urls.dart";
 import "../theme/learnhub_theme.dart";
 import "../widgets/course_card.dart";
 import "../widgets/learnhub_app_bar.dart";
@@ -71,18 +71,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
     } else {
       context.go("/courses?category=${Uri.encodeComponent(value)}");
     }
-  }
-
-  String _thumbUrl(dynamic thumb) {
-    if (thumb == null) return "";
-    final s = thumb.toString();
-    if (s.isEmpty) return "";
-    if (s.startsWith("http")) return s;
-    if (s.startsWith("thumbnails/")) {
-      final base = ApiConfig.baseUrl.replaceAll(RegExp(r"/api/?$"), "");
-      return "$base/api/upload/thumb?key=${Uri.encodeComponent(s)}";
-    }
-    return s;
   }
 
   double _rating(Map<String, dynamic> c) {
@@ -305,7 +293,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                                 ratingCount: _ratingCount(c),
                                 price: c["price"],
                                 duration: c["duration"]?.toString(),
-                                thumbnailUrl: _thumbUrl(c["thumbnail"]),
+                                thumbnailUrl: MediaUrls.courseThumbnailForUi(c["thumbnail"]),
                                 isEnrolled: app.isEnrolledInCourse(id),
                                 onTap: () {
                                   if (app.isEnrolledInCourse(id)) {

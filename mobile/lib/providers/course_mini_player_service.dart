@@ -3,9 +3,30 @@ import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:video_player/video_player.dart";
 
+import "../config/api_config.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
 import "../widgets/learnhub_chewie_chrome.dart";
+
+String _streamReferrerOrigin() {
+  final o = ApiConfig.streamReferrerOrigin.trim();
+  if (o.isNotEmpty) {
+    final u = Uri.tryParse(o);
+    if (u != null && u.hasScheme && u.host.isNotEmpty) return u.origin;
+  }
+  return Uri.parse(ApiConfig.baseUrl).origin;
+}
+
+/// Headers for authenticated lesson/video fetches (works with older APIs that require Referer).
+Map<String, String> _lessonStreamHeaders(String qpToken) {
+  final origin = _streamReferrerOrigin();
+  return <String, String>{
+    "Authorization": "Bearer $qpToken",
+    "X-LMS-Stream-Token": qpToken,
+    "Referer": "$origin/",
+    "Origin": origin,
+  };
+}
 
 /// Owns [VideoPlayerController] + [ChewieController] so playback survives route changes.
 /// Udemy-style: [enterMiniMode] shows video only in the global overlay; course learn shows an empty slot.
@@ -83,7 +104,16 @@ class CourseMiniPlayerService extends ChangeNotifier {
       activeCourseId = courseId;
       activeLessonId = lessonId;
       _progressCallback = onVideoProgress;
-      final c = VideoPlayerController.networkUrl(Uri.parse(uri));
+      // ExoPlayer often sends follow-up Range requests; some stacks omit ?token=… on those
+      // requests. The API accepts Bearer on all lesson/video stream endpoints — prefer it.
+      final parsed = Uri.parse(uri);
+      final qpToken = parsed.queryParameters["token"]?.trim();
+      final VideoPlayerController c = (qpToken != null && qpToken.isNotEmpty)
+          ? VideoPlayerController.networkUrl(
+              parsed,
+              httpHeaders: _lessonStreamHeaders(qpToken),
+            )
+          : VideoPlayerController.networkUrl(parsed);
       await c.initialize();
       _video = c;
       if (initialSeconds > 1) {

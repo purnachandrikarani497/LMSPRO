@@ -1,7 +1,7 @@
 name: lmspro_mobile
 description: LearnHub LMS — Flutter app (Android & iOS) using the existing LMSPRO backend API.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.6+7
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -30,11 +30,27 @@ dependencies:
   image_picker: ^1.1.2
   file_picker: ^8.1.6
   razorpay_flutter: ^1.4.0
+  youtube_player_iframe: ^5.2.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/learnhub_icon_square.png"
+  adaptive_icon_background: "#F59E0B"
+  adaptive_icon_foreground: "assets/learnhub_icon_square.png"
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk.ttf

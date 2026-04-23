@@ -1,4 +1,4 @@
-package com.learnhub.lmspro.lmspro_mobile
+package com.learnhub.lms
 
 import io.flutter.embedding.android.FlutterActivity
 

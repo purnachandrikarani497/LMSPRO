@@ -2,8 +2,8 @@ import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
 
-import "../config/api_config.dart";
 import "../providers/app_state.dart";
+import "../utils/media_urls.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
 import "../widgets/course_card.dart";
@@ -24,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   Future<({List<Map<String, dynamic>> courses, List<Map<String, dynamic>> categories})>? _future;
   bool _started = false;
+  bool _showAllCategories = false;
 
   @override
   void didChangeDependencies() {
@@ -37,18 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return (courses: courses, categories: categories);
     }();
     app.refreshEnrollments();
-  }
-
-  String _thumbUrl(dynamic thumb) {
-    if (thumb == null) return "";
-    final s = thumb.toString();
-    if (s.isEmpty) return "";
-    if (s.startsWith("http")) return s;
-    if (s.startsWith("thumbnails/")) {
-      final base = ApiConfig.baseUrl.replaceAll(RegExp(r"/api/?$"), "");
-      return "$base/api/upload/thumb?key=${Uri.encodeComponent(s)}";
-    }
-    return s;
   }
 
   double _rating(Map<String, dynamic> c) {
@@ -162,29 +151,62 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: LhText.body(fontSize: 14, color: LearnHubTheme.mutedForeground),
                               ),
                               const SizedBox(height: 16),
-                              GridView.count(
-                                crossAxisCount: catCross,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
-                                childAspectRatio: 0.95,
-                                children: [
-                                  _CategoryTile(
-                                    icon: "📚",
-                                    label: "All Courses",
-                                    count: totalCourses,
-                                    onTap: () => context.push("/courses"),
-                                  ),
-                                  ...dynamicCategories.map(
-                                    (c) => _CategoryTile(
-                                      icon: c.icon,
-                                      label: c.name,
-                                      count: c.count,
-                                      onTap: () => context.push("/courses?category=${Uri.encodeComponent(c.name)}"),
+                              LayoutBuilder(
+                                builder: (context, c) {
+                                  final categoryTiles = dynamicCategories
+                                      .map(
+                                        (cat) => _CategoryTile(
+                                          icon: cat.icon,
+                                          label: cat.name,
+                                          count: cat.count,
+                                          onTap: () => context.push("/courses?category=${Uri.encodeComponent(cat.name)}"),
+                                        ),
+                                      )
+                                      .toList();
+                                  const maxSlots = 6;
+                                  const allTileSlots = 1;
+                                  const maxCategorySlots = maxSlots - allTileSlots;
+                                  final hasOverflow = categoryTiles.length > maxCategorySlots;
+                                  final visibleCategoryCount = _showAllCategories
+                                      ? categoryTiles.length
+                                      : (hasOverflow ? maxCategorySlots : categoryTiles.length);
+                                  final gridChildren = <Widget>[
+                                    _CategoryTile(
+                                      icon: "📚",
+                                      label: "All Courses",
+                                      count: totalCourses,
+                                      onTap: () => context.push("/courses"),
                                     ),
-                                  ),
-                                ],
+                                    ...categoryTiles.take(visibleCategoryCount),
+                                  ];
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      GridView.count(
+                                        crossAxisCount: catCross,
+                                        shrinkWrap: true,
+                                        physics: const NeverScrollableScrollPhysics(),
+                                        mainAxisSpacing: 10,
+                                        crossAxisSpacing: 10,
+                                        childAspectRatio: 0.95,
+                                        children: gridChildren,
+                                      ),
+                                      if (hasOverflow && !_showAllCategories) ...[
+                                        const SizedBox(height: 4),
+                                        Align(
+                                          alignment: Alignment.center,
+                                          child: TextButton(
+                                            onPressed: () => setState(() => _showAllCategories = true),
+                                            child: Text(
+                                              "View more categories",
+                                              style: LhText.body(fontWeight: FontWeight.w800, color: LearnHubTheme.navy),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -254,7 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ratingCount: _ratingCount(c),
                                           price: c["price"],
                                           duration: c["duration"]?.toString(),
-                                          thumbnailUrl: _thumbUrl(c["thumbnail"]),
+                                          thumbnailUrl: MediaUrls.courseThumbnailForUi(c["thumbnail"]),
                                           isEnrolled: app.isEnrolledInCourse(id),
                                           onTap: () {
                                             if (app.isEnrolledInCourse(id)) {
@@ -306,20 +328,21 @@ class _HeroBlock extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: LearnHubTheme.goldStart.withValues(alpha: 0.35)),
-                  color: LearnHubTheme.goldStart.withValues(alpha: 0.12),
+                  border: Border.all(color: LearnHubTheme.amber500.withValues(alpha: 0.45)),
+                  color: LearnHubTheme.navyDark.withValues(alpha: 0.35),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.star_rounded, size: 18, color: LearnHubTheme.goldStart),
+                    Icon(Icons.star_rounded, size: 18, color: LearnHubTheme.amber500),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         totalStudents > 0
                             ? "Trusted by ${totalStudents.toString()}+ learners worldwide"
                             : "Trusted by learners worldwide",
-                        style: LhText.body(fontSize: 13, fontWeight: FontWeight.w600, color: LearnHubTheme.goldStart),
+                        style: LhText.body(
+                            fontSize: 13, fontWeight: FontWeight.w600, color: LearnHubTheme.brandOrange),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -364,14 +387,6 @@ class _HeroBlock extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.arrow_forward_rounded, size: 20),
                 label: Text("Explore Courses", style: LhText.body(fontWeight: FontWeight.w800, fontSize: 15)),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => context.push("/my-orders"),
-                child: Text(
-                  "My orders",
-                  style: LhText.body(fontWeight: FontWeight.w700, fontSize: 14, color: LearnHubTheme.onHero.withValues(alpha: 0.9)),
-                ),
               ),
             ],
           ),

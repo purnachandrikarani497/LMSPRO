@@ -6,11 +6,19 @@ import "../providers/app_state.dart";
 import "../theme/learnhub_theme.dart";
 import "../theme/lh_text.dart";
 import "../widgets/learnhub_app_bar.dart";
+import "../widgets/learnhub_drawer.dart";
 import "../widgets/profile_menu_button.dart";
 
 /// Lists the current user's enrollments (same data as web purchase history / enrollments).
-class MyOrdersScreen extends StatelessWidget {
+class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
+
+  @override
+  State<MyOrdersScreen> createState() => _MyOrdersScreenState();
+}
+
+class _MyOrdersScreenState extends State<MyOrdersScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String _courseTitle(Map<String, dynamic> e) {
     final c = e["course"];
@@ -49,13 +57,16 @@ class MyOrdersScreen extends StatelessWidget {
     final isAdmin = app.user?.role == "admin";
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: const LearnHubDrawer(),
       backgroundColor: LearnHubTheme.background,
       appBar: LearnHubAppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: LearnHubTheme.foreground),
-          onPressed: () => context.canPop() ? context.pop() : context.go("/home"),
+          icon: Icon(Icons.menu_rounded, color: LearnHubTheme.foreground),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         titleText: "My orders",
+        centerTitle: true,
         actions: [
           if (isAdmin)
             TextButton(

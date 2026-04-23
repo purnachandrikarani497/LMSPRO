@@ -1,7 +1,7 @@
 import "package:flutter/material.dart";
-import "package:google_fonts/google_fonts.dart";
 
 /// Matches web: `Plus Jakarta Sans` (body) and `Space Grotesk` (headings) from `frontend/src/index.css`.
+/// Fonts are bundled in assets/fonts/ and declared in pubspec.yaml (no runtime fetching).
 abstract final class LhText {
   static TextStyle body({
     double fontSize = 14,
@@ -13,7 +13,8 @@ abstract final class LhText {
     TextDecoration? decoration,
     Color? decorationColor,
   }) =>
-      GoogleFonts.plusJakartaSans(
+      TextStyle(
+        fontFamily: "PlusJakartaSans",
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color,
@@ -33,7 +34,8 @@ abstract final class LhText {
     TextDecoration? decoration,
     Color? decorationColor,
   }) =>
-      GoogleFonts.spaceGrotesk(
+      TextStyle(
+        fontFamily: "SpaceGrotesk",
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color,

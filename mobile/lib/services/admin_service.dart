@@ -1,3 +1,5 @@
+import "dart:typed_data";
+
 import "api_client.dart";
 
 /// Admin-only routes (`requireRole(["admin"])`).
@@ -36,6 +38,18 @@ class AdminService {
 
   Future<Map<String, dynamic>> uploadThumbnail(String localPath) async {
     return _api.postMultipartFile("upload/thumbnail", localPath);
+  }
+
+  /// Preferred on mobile: gallery picks may not expose a real filesystem path on Android.
+  Future<Map<String, dynamic>> uploadThumbnailBytes(
+    List<int> bytes,
+    String filename,
+  ) async {
+    return _api.postMultipartBytes(
+      "upload/thumbnail",
+      Uint8List.fromList(bytes),
+      filename.isNotEmpty ? filename : "thumbnail.jpg",
+    );
   }
 
   Future<Map<String, dynamic>> uploadPdf(String localPath) async {

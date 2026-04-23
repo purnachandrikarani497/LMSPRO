@@ -4,8 +4,8 @@ import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:provider/provider.dart";
 
-import "../config/api_config.dart";
 import "../providers/app_state.dart";
+import "../utils/media_urls.dart";
 import "../theme/learnhub_theme.dart";
 import "../utils/formatters.dart";
 import "../widgets/learnhub_app_bar.dart";
@@ -273,13 +273,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         titleText: "Admin",
-        actions: [
-          IconButton(
-            tooltip: "Users & activity",
-            icon: Icon(Icons.people_outline, color: LearnHubTheme.mutedForeground),
-            onPressed: () => context.push("/admin/users"),
-          ),
-        ],
       ),
       body: RefreshIndicator(
         color: LearnHubTheme.amber500,
@@ -305,8 +298,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "Manage courses and performance — same metrics as the web admin.",
-                    style: LhText.body(fontSize: 14, color: LearnHubTheme.mutedForeground),
+                    "Manage courses, enrollments, and ratings from one place.",
+                    style: LhText.body(fontSize: 14, color: LearnHubTheme.gray600),
                   ),
                   if (_loadError != null) ...[
                     const SizedBox(height: 12),
@@ -498,14 +491,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   String _thumbUrl(Map<String, dynamic> c) {
-    final t = c["thumbnail"]?.toString().trim();
-    if (t == null || t.isEmpty) return _fallbackThumb;
-    if (t.startsWith("http")) return t;
-    if (t.startsWith("thumbnails/")) {
-      final base = ApiConfig.baseUrl.replaceAll(RegExp(r"/api/?$"), "");
-      return "$base/api/upload/thumb?key=${Uri.encodeComponent(t)}";
-    }
-    return t;
+    final u = MediaUrls.courseThumbnailForUi(c["thumbnail"]);
+    if (u.isEmpty) return _fallbackThumb;
+    return u;
   }
 }
 

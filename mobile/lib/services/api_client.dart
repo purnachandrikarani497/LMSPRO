@@ -7,6 +7,17 @@ import "../config/api_config.dart";
 
 const _kTokenKey = "lms_token";
 
+String _originForStreamClientHeaders() {
+  var raw = ApiConfig.streamReferrerOrigin.trim();
+  if (raw.isNotEmpty) {
+    final u = Uri.tryParse(raw);
+    if (u != null && u.hasScheme && u.host.isNotEmpty) return u.origin;
+  }
+  final b = Uri.tryParse(ApiConfig.baseUrl.trim());
+  if (b != null && b.hasScheme && b.host.isNotEmpty) return b.origin;
+  return "http://127.0.0.1";
+}
+
 class ApiClient {
   ApiClient() {
     _dio = Dio(
@@ -134,13 +145,57 @@ class ApiClient {
     return d;
   }
 
+  /// Same as [postMultipartFile] but from bytes (reliable for [ImagePicker] on Android).
+  Future<Map<String, dynamic>> postMultipartBytes(
+    String path,
+    Uint8List bytes,
+    String filename, {
+    String fieldName = "file",
+  }) async {
+    final form = FormData.fromMap({
+      fieldName: MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _dio.post<Map<String, dynamic>>(_apiPath(path), data: form);
+    final d = res.data;
+    if (d == null) throw Exception("Empty upload response");
+    return d;
+  }
+
   /// Binary GET (e.g. full PDF download) — auth via interceptor Bearer token.
-  Future<Uint8List> getBytes(String path) async {
+  /// [accept] overrides default JSON Accept for endpoints that return binary (e.g. PDF).
+  /// [streamToken] adds [X-LMS-Stream-Token] (and matches video stream behaviour when proxies strip Authorization).
+  /// Prefer [queryParameters] for `token` so the URI is built the same way as Dio’s video/PDF stream calls.
+  ///
+  /// [legacyDeployedStreamWorkaround]: older deployed LMS returns 403 “PDF must be viewed from the course page”
+  /// when `Sec-Fetch-Dest: document` (sent by some Android stacks) combines with strict parsing. Sending
+  /// `Sec-Fetch-Dest: empty` + fetch-style metadata avoids that **without** a backend redeploy.
+  Future<Uint8List> getBytes(
+    String path, {
+    String? accept,
+    String? streamToken,
+    Map<String, dynamic>? queryParameters,
+    bool legacyDeployedStreamWorkaround = false,
+  }) async {
+    final headers = <String, String>{};
+    if (accept != null) headers["Accept"] = accept;
+    if (streamToken != null && streamToken.isNotEmpty) {
+      headers["X-LMS-Stream-Token"] = streamToken;
+    }
+    if (legacyDeployedStreamWorkaround) {
+      headers["Sec-Fetch-Dest"] = "empty";
+      headers["Sec-Fetch-Mode"] = "cors";
+      headers["Sec-Fetch-Site"] = "cross-site";
+      final origin = _originForStreamClientHeaders();
+      headers["Origin"] = origin;
+      headers["Referer"] = "$origin/";
+    }
     final res = await _dio.get<List<int>>(
       _apiPath(path),
+      queryParameters: queryParameters,
       options: Options(
         responseType: ResponseType.bytes,
         receiveTimeout: const Duration(minutes: 5),
+        headers: headers.isEmpty ? null : headers,
       ),
     );
     final data = res.data;

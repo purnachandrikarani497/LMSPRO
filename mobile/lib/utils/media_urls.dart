@@ -20,7 +20,49 @@ class MediaUrls {
         .toString();
   }
 
-  /// Proxied `videos/...` or `/upload/video?key=` URLs with auth token.
+  /// Same rules as web [getThumbnailSrc]: keys and private S3 URLs go through `/api/upload/thumb` or `/api/upload/proxy`.
+  static String? courseThumbnailUrl(String? thumbnail) {
+    final t = thumbnail?.trim() ?? "";
+    if (t.isEmpty) return null;
+    final o = _origin();
+
+    if (t.contains("/upload/thumb") || t.contains("/upload/proxy")) {
+      if (t.startsWith("http://") || t.startsWith("https://")) return t;
+      if (t.startsWith("/")) return "$o$t";
+      return "$o/$t";
+    }
+
+    if (t.startsWith("thumbnails/")) {
+      return "$o/api/upload/thumb?key=${Uri.encodeComponent(t)}";
+    }
+
+    if (t.startsWith("http://") || t.startsWith("https://")) {
+      try {
+        final u = Uri.parse(t);
+        final path = u.path;
+        final host = u.host.toLowerCase();
+        if (host == "localhost" || host == "127.0.0.1") return t;
+        final keyMatch = RegExp(r"(thumbnails/[^?]+)").firstMatch(path);
+        if (keyMatch != null) {
+          return "$o/api/upload/thumb?key=${Uri.encodeComponent(keyMatch.group(1)!)}";
+        }
+        if (host.contains("unsplash.com") || host.contains("imgur.com")) return t;
+        return "$o/api/upload/proxy?url=${Uri.encodeComponent(t)}";
+      } catch (_) {
+        return t;
+      }
+    }
+
+    if (t.contains(".") && !t.contains("/")) {
+      return "$o/api/upload/thumb?key=${Uri.encodeComponent("thumbnails/$t")}";
+    }
+
+    final path = t.startsWith("/") ? t.substring(1) : t;
+    return "$o/$path";
+  }
+
+  static String courseThumbnailForUi(dynamic thumbnail) => courseThumbnailUrl(thumbnail?.toString()) ?? "";
+
   static String? secureVideoProxy(String? videoUrl, String token) {
     if (videoUrl == null || videoUrl.isEmpty) return null;
     final o = _origin();
