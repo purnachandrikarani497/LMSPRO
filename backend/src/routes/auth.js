@@ -226,23 +226,26 @@ router.post("/forgot-password", async (req, res) => {
     }
 
     /**
-     * Production: must deliver real email. If SMTP fails, clear the token so it can't be reused
-     * and surface the error. Development: fall back to returning the reset link in the response so
-     * the flow is testable without a working SMTP account.
+     * Only NODE_ENV=development gets the optional dev fallback (devLink in JSON + no 500).
+     * If NODE_ENV is unset (common on some hosts), treat like production so SMTP must work.
      */
-    if (!emailSent && process.env.NODE_ENV === "production") {
+    const isDev = process.env.NODE_ENV === "development";
+    if (!emailSent && !isDev) {
       user.resetToken = undefined;
       user.resetTokenExpiry = undefined;
       await user.save();
-      return res.status(500).json({ message: "Could not send reset email. Contact support." });
+      return res.status(500).json({
+        message:
+          "Could not send reset email. On the server, set SMTP_USER, SMTP_PASSWORD, and CLIENT_URL (your public site URL, e.g. https://lmspro.speshway.site)."
+      });
     }
 
     const payload = {
       message: emailSent
         ? "If an account exists for that email, a reset link has been sent"
-        : "Email delivery is not configured. Use the link below to reset your password."
+        : "Email could not be sent from this machine. Check the browser console for a dev-only reset URL, or fix SMTP in backend/.env."
     };
-    if (process.env.NODE_ENV !== "production") {
+    if (isDev) {
       payload.devLink = resetLink;
       if (!emailSent) {
         payload.emailDeliveryFailed = true;

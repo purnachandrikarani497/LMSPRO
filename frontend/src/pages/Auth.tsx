@@ -250,7 +250,7 @@ const Auth = () => {
   const forgotPasswordMutation = useMutation({
     mutationFn: () => api.forgotPassword(forgotEmail.trim()),
     onSuccess: (data) => {
-      const title = data.emailDeliveryFailed ? "Email not configured" : "Check your email";
+      const title = data.emailDeliveryFailed ? "SMTP failed (dev only)" : "Check your email";
       toast({
         title,
         description: data.message,
