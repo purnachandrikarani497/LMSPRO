@@ -55,24 +55,7 @@ router.post("/", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "Already enrolled" });
     }
 
-    const price = Number(course.price) || 0;
-
-    // Free courses: enroll immediately (no Razorpay — used by mobile app and dev)
-    if (price <= 0) {
-      const enrollment = await Enrollment.create({
-        student: req.user._id,
-        course: courseId
-      });
-      await Progress.create({
-        student: req.user._id,
-        course: courseId,
-        lessonsCompleted: [],
-        status: "in_progress"
-      });
-      return res.status(201).json(enrollment);
-    }
-
-    const amountPaise = Math.round(price * 100);
+    const amountPaise = Math.round((Number(course.price) || 0) * 100);
     if (amountPaise < 100) {
       return res.status(400).json({ message: "Course price must be at least 1 INR" });
     }

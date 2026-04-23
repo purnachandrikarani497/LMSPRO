@@ -5,7 +5,6 @@
  * Example policy for public read: { "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::lms-s3-speshway/thumbnails/*" }
  */
 import express from "express";
-import mongoose from "mongoose";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import { pipeline } from "node:stream/promises";
@@ -19,67 +18,8 @@ import { enqueueTranscode, getVideoStatus } from "../services/transcoder.js";
 import { Video } from "../models/Video.js";
 import { Course } from "../models/Course.js";
 import { Enrollment } from "../models/Enrollment.js";
-import { Progress } from "../models/Progress.js";
 
 const router = express.Router();
-
-/** JWT for lesson/video streams: query (?token=), Authorization, or X-LMS-Stream-Token (some CDNs strip Authorization on media GETs). */
-function extractStreamJwt(req) {
-  let q = req.query.token;
-  if (Array.isArray(q)) q = q.find((x) => typeof x === "string" && x.trim().length > 0) ?? q[0];
-  if (typeof q === "string" && q.trim().length > 0) return q.trim();
-  const auth = req.headers.authorization;
-  if (typeof auth === "string") {
-    const m = auth.match(/^Bearer\s+(\S+)/i);
-    if (m) return m[1].trim();
-  }
-  const x = req.headers["x-lms-stream-token"];
-  if (typeof x === "string" && x.trim().length > 0) return x.trim();
-  return null;
-}
-
-/** Match [Enrollment] / [Progress] whether `student` was stored as a string or ObjectId. */
-function studentIdCandidatesForStream(decoded) {
-  const raw = decoded.sub ?? decoded._id;
-  if (raw == null || raw === "") return [];
-  const s = String(raw).trim();
-  const out = [s];
-  if (/^[a-fA-F0-9]{24}$/.test(s)) {
-    try {
-      out.push(new mongoose.Types.ObjectId(s));
-    } catch {
-      /* ignore */
-    }
-  }
-  return out;
-}
-
-/** Match [course] id whether stored as string or ObjectId (same as [student]). */
-function courseIdCandidatesForStream(courseId) {
-  if (courseId == null || courseId === "") return [];
-  const s = String(courseId).trim();
-  const out = [s];
-  if (/^[a-fA-F0-9]{24}$/.test(s)) {
-    try {
-      out.push(new mongoose.Types.ObjectId(s));
-    } catch {
-      /* ignore */
-    }
-  }
-  return out;
-}
-
-/** Student may load lesson streams if admin, enrolled, or has progress for the course (mobile + web). */
-async function userMayAccessStreamContent(decoded, courseId) {
-  if (decoded.role === "admin") return true;
-  const sc = studentIdCandidatesForStream(decoded);
-  const cc = courseIdCandidatesForStream(courseId);
-  if (sc.length === 0 || cc.length === 0) return false;
-  const q = { student: { $in: sc }, course: { $in: cc } };
-  if (await Enrollment.findOne(q)) return true;
-  if (await Progress.findOne(q)) return true;
-  return false;
-}
 
 function extractVideoKeyFromUrl(url) {
   if (!url || typeof url !== "string") return null;
@@ -353,7 +293,21 @@ router.post(
 );
 
 router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
-  const token = extractStreamJwt(req);
+  // Reject direct navigation (opening URL in new tab, address bar, or "Open in new tab" from DevTools)
+  const secFetchDest = req.get("Sec-Fetch-Dest");
+  if (secFetchDest === "document") {
+    return res.status(403).json({ message: "Video must be viewed from the course page" });
+  }
+
+  const referer = req.get("Referer") || req.get("Referrer");
+  const origin = req.get("Origin");
+  const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
+  const fromApp = (referer && allowedOrigins.some((o) => referer.startsWith(o))) || (origin && allowedOrigins.some((o) => origin.startsWith(o)));
+  if (!fromApp) {
+    return res.status(403).json({ message: "Video must be viewed from the course page" });
+  }
+
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   if (!token) return res.status(401).json({ message: "Authentication required" });
   let decoded;
   try {
@@ -377,64 +331,56 @@ router.get("/stream/lesson/:courseId/:lessonId", async (req, res) => {
   const key = extractVideoKeyFromUrl(lesson.videoUrl);
   if (!key) return res.status(404).json({ message: "Video not found" });
 
-  const mayAccess = await userMayAccessStreamContent(decoded, courseId);
-  if (!mayAccess) return res.status(403).json({ message: "Enrollment required" });
+  const isEnrolled = await Enrollment.findOne({ student: decoded.sub || decoded._id, course: courseId });
+  const isAdmin = decoded.role === "admin";
+  if (!isEnrolled && !isAdmin) return res.status(403).json({ message: "Enrollment required" });
 
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) return res.status(503).json({ message: "S3 not configured" });
 
   try {
-    // Single ranged (or full) GET — do not open two S3 streams; the first unused body confuses clients (premature close / abort).
     const getParams = { Bucket: config.s3.bucket, Key: key };
-    const rangeHeader = typeof req.headers.range === "string" ? req.headers.range.trim() : "";
-    if (rangeHeader.startsWith("bytes=")) {
-      getParams.Range = rangeHeader;
-    }
     const obj = await s3.send(new GetObjectCommand(getParams));
-    const stream = obj.Body;
+    const rangeHeader = req.headers.range;
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) getParams.Range = rangeHeader;
+    const objWithRange = rangeHeader ? await s3.send(new GetObjectCommand({ ...getParams, Range: rangeHeader })) : obj;
+    const stream = objWithRange.Body;
 
     res.setHeader("Content-Type", obj.ContentType || "video/mp4");
     res.setHeader("Cache-Control", "private, no-cache");
     res.setHeader("Accept-Ranges", "bytes");
-    if (obj.ContentRange) {
+    if (objWithRange.ContentRange) {
       res.status(206);
-      res.setHeader("Content-Range", obj.ContentRange);
-    } else {
-      res.status(200);
-    }
-    if (obj.ContentLength != null && obj.ContentLength !== undefined) {
-      res.setHeader("Content-Length", String(obj.ContentLength));
+      res.setHeader("Content-Range", objWithRange.ContentRange);
+      if (objWithRange.ContentLength != null) res.setHeader("Content-Length", objWithRange.ContentLength);
     }
     if (stream && typeof stream.pipe === "function") {
-      try {
-        await pipeline(stream, res);
-      } catch (pipeErr) {
-        const msg = String(pipeErr?.message || pipeErr);
-        const benign =
-          msg.includes("Premature close") ||
-          msg.includes("premature close") ||
-          msg.includes("aborted") ||
-          pipeErr?.code === "ERR_STREAM_PREMATURE_CLOSE";
-        if (!benign) throw pipeErr;
-      }
+      await pipeline(stream, res);
     } else {
       const buf = await stream.transformToByteArray();
       res.setHeader("Content-Length", buf.length);
       res.send(Buffer.from(buf));
     }
   } catch (err) {
-    const msg = String(err?.message || err);
-    const benign =
-      msg.includes("Premature close") ||
-      msg.includes("premature close") ||
-      msg.includes("aborted") ||
-      err?.code === "ERR_STREAM_PREMATURE_CLOSE";
-    if (!benign) console.error("Stream fetch error:", msg);
+    console.error("Stream fetch error:", err?.message || err);
     if (!res.headersSent) res.status(502).json({ message: "Could not load video" });
   }
 });
 
 router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
-  const token = extractStreamJwt(req);
+  const secFetchDest = req.get("Sec-Fetch-Dest");
+  if (secFetchDest === "document") {
+    return res.status(403).json({ message: "PDF must be viewed from the course page" });
+  }
+
+  const referer = req.get("Referer") || req.get("Referrer");
+  const origin = req.get("Origin");
+  const allowedOrigins = [config.clientUrl, "http://localhost:5173", "http://localhost:8080", "http://localhost:3000"];
+  const fromApp = (referer && allowedOrigins.some((o) => referer.startsWith(o))) || (origin && allowedOrigins.some((o) => origin.startsWith(o)));
+  if (!fromApp) {
+    return res.status(403).json({ message: "PDF must be viewed from the course page" });
+  }
+
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   if (!token) return res.status(401).json({ message: "Authentication required" });
   let decoded;
   try {
@@ -467,17 +413,18 @@ router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
   const pdfKey = extractPdfKeyFromUrl(lesson.pdfUrl);
   if (!pdfKey) return res.status(404).json({ message: "PDF not found" });
 
-  const mayAccess = await userMayAccessStreamContent(decoded, courseId);
-  if (!mayAccess) return res.status(403).json({ message: "Enrollment required" });
+  const isEnrolled = await Enrollment.findOne({ student: decoded.sub || decoded._id, course: courseId });
+  const isAdmin = decoded.role === "admin";
+  if (!isEnrolled && !isAdmin) return res.status(403).json({ message: "Enrollment required" });
 
   if (!config.s3.accessKeyId || !config.s3.secretAccessKey) {
     return streamLocalPdf(req, res, pdfKey);
   }
 
   try {
-    const rangeHeader = typeof req.headers.range === "string" ? req.headers.range.trim() : "";
+    const rangeHeader = req.headers.range;
     const getParams = { Bucket: config.s3.bucket, Key: pdfKey };
-    if (rangeHeader.startsWith("bytes=")) {
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) {
       getParams.Range = rangeHeader;
     }
     const obj = await s3.send(new GetObjectCommand(getParams));
@@ -492,44 +439,25 @@ router.get("/stream/pdf/:courseId/:lessonId", async (req, res) => {
     if (contentRange) {
       res.status(206);
       res.setHeader("Content-Range", contentRange);
-      if (contentLength != null) res.setHeader("Content-Length", String(contentLength));
-    } else {
-      res.status(200);
-      if (contentLength != null) res.setHeader("Content-Length", String(contentLength));
+      if (contentLength != null) res.setHeader("Content-Length", contentLength);
     }
 
     if (obj.Body && typeof obj.Body.pipe === "function") {
-      try {
-        await pipeline(obj.Body, res);
-      } catch (pipeErr) {
-        const msg = String(pipeErr?.message || pipeErr);
-        const benign =
-          msg.includes("Premature close") ||
-          msg.includes("premature close") ||
-          msg.includes("aborted") ||
-          pipeErr?.code === "ERR_STREAM_PREMATURE_CLOSE";
-        if (!benign) throw pipeErr;
-      }
+      await pipeline(obj.Body, res);
     } else {
       const buf = await obj.Body.transformToByteArray();
       res.setHeader("Content-Length", buf.length);
       res.send(Buffer.from(buf));
     }
   } catch (err) {
-    const msg = String(err?.message || err);
-    const benign =
-      msg.includes("Premature close") ||
-      msg.includes("premature close") ||
-      msg.includes("aborted") ||
-      err?.code === "ERR_STREAM_PREMATURE_CLOSE";
-    if (!benign) console.error("PDF stream error:", msg);
+    console.error("PDF stream error:", err?.message || err);
     if (!res.headersSent) res.status(502).json({ message: "Could not load PDF" });
   }
 });
 
 router.get("/video", async (req, res) => {
   const key = req.query.key;
-  const token = extractStreamJwt(req);
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   if (!key || typeof key !== "string" || !key.startsWith("videos/") || key.includes("..")) {
     return res.status(400).json({ message: "Invalid video key" });
   }
@@ -598,7 +526,7 @@ router.get("/video", async (req, res) => {
 
 router.get("/pdf", async (req, res) => {
   const key = req.query.key;
-  const token = extractStreamJwt(req);
+  const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
   if (!key || typeof key !== "string" || !key.startsWith("pdfs/") || key.includes("..")) {
     return res.status(400).json({ message: "Invalid PDF key" });
   }
@@ -717,7 +645,7 @@ router.get("/proxy", async (req, res) => {
 
 router.get("/hls/{*hlsPath}", async (req, res) => {
   try {
-    const token = extractStreamJwt(req);
+    const token = req.query.token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
     if (!token) {
       return res.status(401).json({ message: "Authentication required" });
     }

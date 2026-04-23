@@ -58,25 +58,14 @@ app.use(
         "http://localhost:8080",
         "http://localhost:8081"
       ];
-      const devLocal =
-        process.env.NODE_ENV !== "production" &&
-        origin &&
-        (origin.startsWith("http://localhost:") ||
-          origin.startsWith("http://127.0.0.1:"));
-      if (!origin || allowedOrigins.includes(origin) || devLocal) {
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(null, false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Cookie",
-      "X-Requested-With",
-      "X-LMS-Stream-Token"
-    ]
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"]
   })
 );
 app.use(
@@ -189,8 +178,8 @@ app.use((err, req, res, next) => {
 
 // start server and attempt DB connection in background
 (async () => {
-  app.listen(config.port, config.host, () => {
-    console.log(`HTTP API listening on ${config.host}:${config.port} (reachable from LAN / device when firewall allows)`);
+  app.listen(config.port, () => {
+    console.log(`Server running on port ${config.port}`);
   });
   
   try {

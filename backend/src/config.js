@@ -7,8 +7,6 @@ dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 
 export const config = {
   port: process.env.PORT || 5000,
-  /** Listen on all interfaces so phones on Wi‑Fi / USB tether can reach the API (not only localhost). */
-  host: process.env.HOST || "0.0.0.0",
   mongoUri: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/lmspro",
   jwtSecret: process.env.JWT_SECRET || "change_this_secret",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
