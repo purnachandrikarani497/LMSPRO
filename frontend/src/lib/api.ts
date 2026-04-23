@@ -178,6 +178,22 @@ const getToken = () => {
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+function formatFailedRequestMessage(text: string): string {
+  if (!text) return "Request failed";
+  try {
+    const data = JSON.parse(text) as { message?: string; error?: string };
+    if (data && typeof data.message === "string") {
+      if (typeof data.error === "string" && data.error.trim()) {
+        return `${data.message}\n\n${data.error}`;
+      }
+      return data.message;
+    }
+  } catch {
+    /* not JSON */
+  }
+  return text;
+}
+
 async function request<T>(path: string, method: HttpMethod, body?: unknown, retryCount = 0): Promise<T> {
   const token = getToken();
   const headers: HeadersInit = {};
@@ -220,7 +236,7 @@ async function request<T>(path: string, method: HttpMethod, body?: unknown, retr
         /* ignore */
       }
     }
-    throw new Error(text || "Request failed");
+    throw new Error(formatFailedRequestMessage(text));
   }
   return response.json() as Promise<T>;
 }
@@ -423,7 +439,11 @@ export const api = {
     return request<{ user: ApiUser }>("/auth/me", "PATCH", data);
   },
   forgotPassword(email: string) {
-    return request<{ message: string; devLink?: string; token?: string }>("/auth/forgot-password", "POST", { email });
+    return request<{ message: string; devLink?: string; emailDeliveryFailed?: boolean; error?: string }>(
+      "/auth/forgot-password",
+      "POST",
+      { email }
+    );
   },
   resetPassword(data: { email: string; token: string; newPassword: string }) {
     return request<{ message: string }>("/auth/reset-password", "POST", data);

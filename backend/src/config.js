@@ -15,12 +15,22 @@ export const config = {
   adminPassword: process.env.ADMIN_PASSWORD || "admin123",
   adminPhone: process.env.ADMIN_PHONE || "",
   email: {
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    secure: process.env.SMTP_SECURE === "true",
-    from: process.env.FROM_EMAIL
+    /** Support common alternate names (our older error text mentioned EMAIL_*). */
+    host: sanitizeEnv(process.env.SMTP_HOST ?? process.env.EMAIL_HOST),
+    port: (() => {
+      const p = parseInt(process.env.SMTP_PORT ?? process.env.EMAIL_PORT ?? "", 10);
+      return Number.isFinite(p) && p > 0 ? p : 587;
+    })(),
+    user: sanitizeEnv(process.env.SMTP_USER ?? process.env.EMAIL_USER),
+    /** App passwords may be pasted with spaces; Nodemailer needs them removed. */
+    pass:
+      sanitizeEnv(
+        process.env.SMTP_PASS ?? process.env.SMTP_PASSWORD ?? process.env.EMAIL_PASS
+      )?.replace(/\s+/g, "") ?? "",
+    secure: (process.env.SMTP_SECURE ?? process.env.EMAIL_SECURE) === "true",
+    from: sanitizeEnv(
+      process.env.FROM_EMAIL ?? process.env.SMTP_FROM ?? process.env.EMAIL_FROM
+    )
   },
   s3: {
     region: process.env.AWS_REGION || "ap-south-1",

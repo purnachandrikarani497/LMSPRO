@@ -215,22 +215,41 @@ router.post("/forgot-password", async (req, res) => {
     // Construct reset link
     const resetLink = `${config.clientUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
-    // Send email using nodemailer
+    let emailSent = true;
+    let emailError;
     try {
       await sendResetEmail(user.email, resetLink);
-    } catch (emailError) {
-      console.error("Failed to send email:", emailError);
-      // In production, we must fail if email isn't sent
-      if (process.env.NODE_ENV === "production") {
-        return res.status(500).json({ message: "Failed to send reset email" });
-      }
+    } catch (err) {
+      emailSent = false;
+      emailError = err;
+      console.error("Failed to send email:", err);
     }
 
-    res.json({
-      message: "If an account exists, a reset link has been sent to your email",
-      devLink: process.env.NODE_ENV !== "production" ? resetLink : undefined,
-      token: resetToken // Return token for immediate reset in UI
-    });
+    /**
+     * Production: must deliver real email. If SMTP fails, clear the token so it can't be reused
+     * and surface the error. Development: fall back to returning the reset link in the response so
+     * the flow is testable without a working SMTP account.
+     */
+    if (!emailSent && process.env.NODE_ENV === "production") {
+      user.resetToken = undefined;
+      user.resetTokenExpiry = undefined;
+      await user.save();
+      return res.status(500).json({ message: "Could not send reset email. Contact support." });
+    }
+
+    const payload = {
+      message: emailSent
+        ? "If an account exists for that email, a reset link has been sent"
+        : "Email delivery is not configured. Use the link below to reset your password."
+    };
+    if (process.env.NODE_ENV !== "production") {
+      payload.devLink = resetLink;
+      if (!emailSent) {
+        payload.emailDeliveryFailed = true;
+        payload.error = emailError?.message;
+      }
+    }
+    res.json(payload);
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ message: "Failed to process request", error: error.message });

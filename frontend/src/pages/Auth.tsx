@@ -116,10 +116,6 @@ const Auth = () => {
   // Forgot password states
   const [forgotEmail, setForgotEmail] = useState("");
   const [isLinkSent, setIsLinkSent] = useState(false);
-  const [resetToken, setResetToken] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showResetPassword, setShowResetPassword] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleAuthSuccess = (data: { token: string; user: { role: string } }) => {
@@ -254,39 +250,30 @@ const Auth = () => {
   const forgotPasswordMutation = useMutation({
     mutationFn: () => api.forgotPassword(forgotEmail.trim()),
     onSuccess: (data) => {
-      toast({ title: "Link sent", description: data.message });
+      const title = data.emailDeliveryFailed ? "Email not configured" : "Check your email";
+      toast({
+        title,
+        description: data.message,
+        variant: data.emailDeliveryFailed ? "destructive" : "default"
+      });
       setIsLinkSent(true);
-      if (data.token) {
-        setResetToken(data.token);
-      }
-      // In development, log the link
-      if (data.devLink) {
-        console.log("Password Reset Link:", data.devLink);
+      if (import.meta.env.DEV && data.devLink) {
+        console.log("Password reset link (dev):", data.devLink);
       }
     },
     onError: (error: Error) => {
-      toast({ title: "Request failed", description: error.message, variant: "destructive" });
+      toast({ title: "Could not send reset email", description: error.message, variant: "destructive" });
     }
   });
 
-  const resetPasswordMutation = useMutation({
-    mutationFn: (data: { email: string; token: string; newPassword: string }) => api.resetPassword(data),
-    onSuccess: (data) => {
-      toast({ title: "Success", description: data.message });
-      setIsDialogOpen(false);
-      setIsLinkSent(false);
-      setShowResetPassword(false);
-      setForgotEmail("");
-      setResetToken("");
-      setNewPassword("");
-      setConfirmPassword("");
-      // Pre-fill login with the reset email
-      setSigninEmail(forgotEmail);
-    },
-    onError: (error: Error) => {
-      toast({ title: "Reset failed", description: error.message, variant: "destructive" });
+  const handleForgotSubmit = () => {
+    const err = validateEmail(forgotEmail);
+    if (err) {
+      toast({ title: "Invalid email", description: err, variant: "destructive" });
+      return;
     }
-  });
+    forgotPasswordMutation.mutate();
+  };
 
   const handleSignin = () => {
     const emailError = validateEmail(signinEmail);
@@ -446,11 +433,7 @@ const Auth = () => {
                     setIsDialogOpen(open);
                     if (!open) {
                       setIsLinkSent(false);
-                      setShowResetPassword(false);
                       setForgotEmail("");
-                      setResetToken("");
-                      setNewPassword("");
-                      setConfirmPassword("");
                     }
                   }}>
                     <DialogTrigger asChild>
@@ -458,35 +441,26 @@ const Auth = () => {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle>
-                          {showResetPassword ? "Update Password" : "Forgot Password"}
-                        </DialogTitle>
+                        <DialogTitle>{isLinkSent ? "Check your email" : "Forgot Password"}</DialogTitle>
                         <DialogDescription>
-                          {!isLinkSent 
-                            ? "Enter your email to receive a password reset link." 
-                            : showResetPassword 
-                              ? "Enter your new password below." 
-                              : "We've sent a link to your email. You can also update it right here."}
+                          {!isLinkSent
+                            ? "Enter your email. We will send a link to reset your password (expires in one hour)."
+                            : "If an account exists for that address, we sent a reset link. Use the link in the email to choose a new password — the link opens a secure reset page."}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         {!isLinkSent ? (
-                          <form
-                            className="space-y-2"
-                            onSubmit={(e) => { 
-                              e.preventDefault(); 
-                              const err = validateEmail(forgotEmail);
-                              if (err) {
-                                toast({ title: "Invalid email", description: err, variant: "destructive" });
-                                return;
-                              }
-                              forgotPasswordMutation.mutate(); 
-                            }}
-                          >
+                          <div className="space-y-2">
                             <Input
                               placeholder="Email Address"
                               type="text"
                               value={forgotEmail}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !forgotPasswordMutation.isPending) {
+                                  e.preventDefault();
+                                  handleForgotSubmit();
+                                }
+                              }}
                               onChange={(e) => {
                                 const value = e.target.value;
                                 if (value.length > emailMaxLength) {
@@ -496,28 +470,23 @@ const Auth = () => {
                                  setForgotEmail(value);
                               }}
                             />
-                            <Button 
-                              type="submit"
-                              className="w-full bg-gradient-gold text-primary font-semibold" 
+                            <Button
+                              type="button"
+                              className="w-full bg-gradient-gold text-primary font-semibold"
                               disabled={forgotPasswordMutation.isPending || !forgotEmail}
+                              onClick={handleForgotSubmit}
                             >
                               {forgotPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}
                             </Button>
-                          </form>
-                        ) : !showResetPassword ? (
+                          </div>
+                        ) : (
                           <div className="text-center space-y-4">
                             <div className="flex justify-center">
                               <CheckCircle2 className="h-12 w-12 text-green-500" />
                             </div>
                             <p className="text-sm text-muted-foreground">
-                              A reset link has been sent to your email.
+                              Check your inbox and spam folder. Reset must be completed using the link in the email.
                             </p>
-                            <Button 
-                              className="w-full bg-gradient-gold text-primary font-semibold" 
-                              onClick={() => setShowResetPassword(true)}
-                            >
-                              Update Password Here
-                            </Button>
                             <Button 
                               variant="ghost" 
                               className="w-full text-xs" 
@@ -526,58 +495,6 @@ const Auth = () => {
                               Close
                             </Button>
                           </div>
-                        ) : (
-                          <form
-                            className="space-y-4 animate-in fade-in slide-in-from-bottom-2"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              resetPasswordMutation.mutate({
-                                email: forgotEmail.trim(),
-                                token: resetToken,
-                                newPassword: newPassword
-                              });
-                            }}
-                          >
-                            <div className="space-y-2">
-                              <Input
-                                placeholder="New Password"
-                                type="password"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Input
-                                placeholder="Confirm Password"
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                              />
-                              {newPassword && confirmPassword && newPassword !== confirmPassword && (
-                                <p className="text-xs text-destructive">Passwords do not match</p>
-                              )}
-                            </div>
-                            <Button 
-                              type="submit"
-                              className="w-full bg-gradient-gold text-primary font-semibold" 
-                              disabled={
-                                resetPasswordMutation.isPending || 
-                                !newPassword || 
-                                newPassword !== confirmPassword ||
-                                newPassword.length < passwordMinLength
-                              }
-                            >
-                              {resetPasswordMutation.isPending ? "Updating..." : "Update Password"}
-                            </Button>
-                            <Button 
-                              type="button"
-                              variant="ghost" 
-                              className="w-full text-xs" 
-                              onClick={() => setShowResetPassword(false)}
-                            >
-                              Back
-                            </Button>
-                          </form>
                         )}
                       </div>
                     </DialogContent>

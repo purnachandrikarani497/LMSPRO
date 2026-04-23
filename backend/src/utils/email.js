@@ -1,19 +1,71 @@
 import nodemailer from "nodemailer";
 import { config } from "../config.js";
 
-const transporter = nodemailer.createTransport({
-  host: config.email.host,
-  port: config.email.port,
-  secure: config.email.secure,
-  auth: {
-    user: config.email.user,
-    pass: config.email.pass
+function createMailTransport() {
+  const user = config.email.user;
+  const pass = config.email.pass;
+  if (!user || !pass) {
+    throw new Error("Set SMTP_USER and SMTP_PASS or SMTP_PASSWORD in backend/.env");
   }
-});
+
+  const host = (config.email.host || "smtp.gmail.com").toLowerCase();
+  const port = config.email.port;
+  const secure = config.email.secure;
+
+  const base = {
+    host,
+    auth: { user, pass },
+    tls: { minVersion: "TLSv1.2" },
+    connectionTimeout: 25_000
+  };
+
+  /**
+   * Gmail: only port 465 uses implicit TLS. Port 587 (or anything else) uses STARTTLS — never set SMTP_SECURE=true with SMTP_PORT=587.
+   */
+  if (host === "smtp.gmail.com") {
+    if (process.env.NODE_ENV === "development" && port === 587 && secure) {
+      console.warn(
+        "[email] Ignoring SMTP_SECURE=true with SMTP_PORT=587. Gmail 587 uses STARTTLS (treating as secure=false)."
+      );
+    }
+    if (port === 465) {
+      return nodemailer.createTransport({
+        ...base,
+        port: 465,
+        secure: true
+      });
+    }
+    return nodemailer.createTransport({
+      ...base,
+      port: 587,
+      secure: false,
+      requireTLS: true
+    });
+  }
+
+  return nodemailer.createTransport({
+    ...base,
+    port,
+    secure
+  });
+}
+
+let transporterCache;
+function getTransporter() {
+  if (!transporterCache) {
+    transporterCache = createMailTransport();
+  }
+  return transporterCache;
+}
 
 export const sendResetEmail = async (email, resetLink) => {
+  const fromAddr = config.email.from || config.email.user;
+  if (!fromAddr) {
+    throw new Error("FROM_EMAIL or SMTP_USER must be set");
+  }
+
   const mailOptions = {
-    from: `"LearnHub LMS" <${config.email.from}>`,
+    from: `"LearnHub LMS" <${fromAddr}>`,
     to: email,
     subject: "Password Reset Link",
     html: `
@@ -35,10 +87,23 @@ export const sendResetEmail = async (email, resetLink) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     console.log(`Email sent successfully to ${email}`);
   } catch (error) {
     console.error("Error sending email:", error);
-    throw new Error("Failed to send reset email");
+    if (process.env.NODE_ENV === "development" && /535|BadCredentials|Invalid login/i.test(String(error?.message))) {
+      const u = config.email.user;
+      const n = config.email.pass?.length ?? 0;
+      console.error(
+        `[email] Gmail rejected auth for ${u}. App password length after trim: ${n} (expect 16). Generate a new App Password at https://myaccount.google.com/apppasswords while signed in as that exact address.`
+      );
+    }
+    const msg =
+      process.env.NODE_ENV === "development" && error?.message
+        ? error.message
+        : "Failed to send reset email";
+    const err = new Error(msg);
+    err.cause = error;
+    throw err;
   }
 };
