@@ -1,0 +1,27 @@
+# Flutter (never commit build products; regenerate with flutter pub get / flutter build)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# Built Android artifacts (if copied outside build/ by mistake)
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local / debug noise
+adb_err.txt
+**/replay_pid*.log
+
+# Env (optional local overrides)
+.env
+*.local.dart
