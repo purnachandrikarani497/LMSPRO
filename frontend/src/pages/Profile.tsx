@@ -38,7 +38,10 @@ const Profile = () => {
   }, []);
 
   const handleNameChange = (value: string) => {
-    if (value.length > NAME_MAX) return;
+    if (value.length > NAME_MAX) {
+      toast({ title: "Max limit reached", description: `Name cannot exceed ${NAME_MAX} characters.`, variant: "destructive" });
+      return;
+    }
     if (value && !/^[a-zA-Z\s]+$/.test(value)) {
       toast({ title: "Invalid character", description: "Name can only contain letters and spaces.", variant: "destructive" });
       return;
@@ -47,13 +50,31 @@ const Profile = () => {
   };
 
   const handleEmailChange = (value: string) => {
-    if (value.length > EMAIL_MAX) return;
+    if (value.length > EMAIL_MAX) {
+      toast({ title: "Max limit reached", description: `Email cannot exceed ${EMAIL_MAX} characters.`, variant: "destructive" });
+      return;
+    }
+    if (value && /\s/.test(value)) {
+      toast({ title: "Invalid input", description: "Email cannot contain spaces.", variant: "destructive" });
+      return;
+    }
     setEmail(value);
   };
 
   const handlePhoneChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, PHONE_DIGITS);
-    if (digits.length > 0 && !/^[6-9]/.test(digits)) return;
+    if (/\s/.test(value)) {
+      toast({ title: "Invalid input", description: "Phone number cannot contain spaces.", variant: "destructive" });
+      return;
+    }
+    const digits = value.replace(/\D/g, "");
+    if (digits.length > PHONE_DIGITS) {
+      toast({ title: "Max limit reached", description: `Phone number cannot exceed ${PHONE_DIGITS} digits.`, variant: "destructive" });
+      return;
+    }
+    if (digits.length > 0 && !/^[6-9]/.test(digits)) {
+      toast({ title: "Invalid phone number", description: "Phone number must start with 6, 7, 8, or 9.", variant: "destructive" });
+      return;
+    }
     setPhone(digits);
   };
 
@@ -157,7 +178,14 @@ const Profile = () => {
             <label className="mb-1 block text-sm font-medium text-card-foreground">Full Name</label>
             <Input
               value={name}
+              maxLength={NAME_MAX}
               onChange={(e) => handleNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (name.length >= NAME_MAX && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                  toast({ title: "Max limit reached", description: `Name cannot exceed ${NAME_MAX} characters.`, variant: "destructive" });
+                }
+              }}
               placeholder="Your name"
             />
           </div>
@@ -166,7 +194,14 @@ const Profile = () => {
             <Input
               type="text"
               value={email}
+              maxLength={EMAIL_MAX}
               onChange={(e) => handleEmailChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (email.length >= EMAIL_MAX && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                  toast({ title: "Max limit reached", description: `Email cannot exceed ${EMAIL_MAX} characters.`, variant: "destructive" });
+                }
+              }}
               placeholder="you@example.com"
             />
           </div>
@@ -175,7 +210,14 @@ const Profile = () => {
             <Input
               type="tel"
               value={phone}
+              maxLength={PHONE_DIGITS}
               onChange={(e) => handlePhoneChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (phone.length >= PHONE_DIGITS && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                  toast({ title: "Max limit reached", description: `Phone number cannot exceed ${PHONE_DIGITS} digits.`, variant: "destructive" });
+                }
+              }}
               placeholder="10 digits"
             />
           </div>

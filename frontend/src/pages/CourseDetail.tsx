@@ -114,6 +114,7 @@ const CourseDetail = () => {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
   const [hoverRating, setHoverRating] = useState(0);
+  const [visibleReviews, setVisibleReviews] = useState(5);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: apiCourse, isLoading, error } = useQuery<ApiCourse>({
@@ -1532,7 +1533,7 @@ const CourseDetail = () => {
                         )}
                       </div>
                       <div className="space-y-6">
-                        {apiCourse?.reviews?.map((r, idx) => (
+                        {apiCourse?.reviews?.slice(0, visibleReviews).map((r, idx) => (
                           <div key={r._id || r.id || idx} className="border-b border-gray-200 pb-4">
                             <div className="flex items-start gap-3">
                               <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold uppercase">
@@ -1557,7 +1558,15 @@ const CourseDetail = () => {
                             </div>
                           </div>
                         ))}
-                        <Button variant="outline">Load more reviews</Button>
+                        {(apiCourse?.reviews?.length ?? 0) > visibleReviews ? (
+                          <Button variant="outline" onClick={() => setVisibleReviews((prev) => prev + 5)}>
+                            Load more reviews
+                          </Button>
+                        ) : (
+                          <Button variant="outline" disabled>
+                            No more reviews
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

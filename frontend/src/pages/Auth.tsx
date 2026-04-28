@@ -237,9 +237,9 @@ const Auth = () => {
         password: signupPassword,
         role: "student"
       }),
-    onSuccess: (data) => {
-      toast({ title: "Account created", description: "You are now signed in" });
-      handleAuthSuccess(data);
+    onSuccess: () => {
+      toast({ title: "Account created!", description: "Please sign in with your new account" });
+      navigate("/auth?tab=signin");
     },
     onError: (err: Error) => {
       const msg = err?.message || "Try again with different details";

@@ -30,7 +30,7 @@ const Courses = () => {
     queryFn: () => api.getCategories()
   });
 
-  const sourceCourses: Course[] = (apiCourses || []).map(mapApiCourseToCourse);
+  const sourceCourses: Course[] = (apiCourses || []).map(mapApiCourseToCourse).reverse();
   const filterCategories = apiCategories.length > 0
     ? apiCategories
     : [...new Set(sourceCourses.map((c) => (c.category || "General").trim()).filter(Boolean))]

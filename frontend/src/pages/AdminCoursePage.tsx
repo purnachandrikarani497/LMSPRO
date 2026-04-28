@@ -20,6 +20,16 @@ import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
+const isValidUrl = (url: string): boolean => {
+  if (!url.trim()) return true; // empty is valid (optional field)
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 type LessonEdit = { title: string; lessonType: "video" | "pdf"; videoUrl: string; pdfUrl: string };
 type Section = { _id?: string; title: string; lessons?: any[] };
 
@@ -175,6 +185,14 @@ const AdminCoursePage = () => {
     const hasAnnErrors = annErrors.some((e) => e.title || e.content);
 
     if (Object.keys(errors).length === 0 && !hasAnnErrors) {
+      if (previewVideoUrl.trim() && !isValidUrl(previewVideoUrl.trim())) {
+        toast({ title: "Invalid Preview Video URL", description: "Please enter a valid URL starting with http:// or https://", variant: "destructive" });
+        return;
+      }
+      if (instructorPhoto.trim() && !isValidUrl(instructorPhoto.trim())) {
+        toast({ title: "Invalid Photo URL", description: "Please enter a valid URL starting with http:// or https://", variant: "destructive" });
+        return;
+      }
       updateCourseMutation.mutate({
         subtitle: courseSubtitle.trim(),
         description: courseDescription.trim(),
@@ -512,8 +530,20 @@ const AdminCoursePage = () => {
                           <Input
                             placeholder="Section title"
                             value={editingSectionTitle}
-                            onChange={(e) => setEditingSectionTitle(e.target.value)}
+                            maxLength={100}
+                            onChange={(e) => {
+                              if (e.target.value.length > 100) {
+                                toast({ title: "Max limit reached", description: "Section title cannot exceed 100 characters.", variant: "destructive" });
+                                return;
+                              }
+                              setEditingSectionTitle(e.target.value);
+                            }}
                             onKeyDown={(e) => {
+                              if (editingSectionTitle.length >= 100 && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey && e.key !== "Enter" && e.key !== "Escape") {
+                                e.preventDefault();
+                                toast({ title: "Max limit reached", description: "Section title cannot exceed 100 characters.", variant: "destructive" });
+                                return;
+                              }
                               if (e.key === "Enter") updateSectionMutation.mutate({ 
                                 sectionId: sid, 
                                 title: editingSectionTitle
@@ -592,8 +622,20 @@ const AdminCoursePage = () => {
               <Input
                 placeholder="New section title"
                 value={newSection}
-                onChange={(e) => setNewSection(e.target.value)}
+                maxLength={100}
+                onChange={(e) => {
+                  if (e.target.value.length > 100) {
+                    toast({ title: "Max limit reached", description: "Section title cannot exceed 100 characters.", variant: "destructive" });
+                    return;
+                  }
+                  setNewSection(e.target.value);
+                }}
                 onKeyDown={(e) => {
+                  if (newSection.length >= 100 && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey && e.key !== "Enter") {
+                    e.preventDefault();
+                    toast({ title: "Max limit reached", description: "Section title cannot exceed 100 characters.", variant: "destructive" });
+                    return;
+                  }
                   if (e.key === "Enter" && newSection.trim()) {
                     addSectionMutation.mutate();
                   }
@@ -639,6 +681,11 @@ const AdminCoursePage = () => {
                 toast({ title: "PDF required", description: "Upload a PDF or paste the document URL from the server", variant: "destructive" });
                 return;
               }
+              const targetSection = selectedSectionId || (sections.length === 0 ? "default" : null);
+              if (!targetSection) {
+                toast({ title: "Select a section", description: "Please click on a section above to add the lesson to it.", variant: "destructive" });
+                return;
+              }
               addLessonMutation.mutate();
             }}
           >
@@ -669,10 +716,100 @@ const AdminCoursePage = () => {
             <Input
               placeholder="Lesson title"
               value={newLesson.title}
+              className="focus-visible:ring-2 focus-visible:ring-amber-500"
               onChange={(e) => setNewLesson((p) => ({ ...p, title: e.target.value }))}
             />
-
           </div>
+
+          {/* Video upload field */}
+          {newLesson.lessonType === "video" && !uploadingVideo && (
+            <div className="mt-3 space-y-2">
+              <label className="text-sm font-medium text-gray-700">Video</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Video URL"
+                  value={newLesson.videoUrl}
+                  onChange={(e) => setNewLesson((p) => ({ ...p, videoUrl: e.target.value }))}
+                  className="flex-1"
+                />
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/ogg"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingVideo(true);
+                      setUploadProgress(0);
+                      setUploadFileName(file.name);
+                      setUploadPhase("uploading");
+                      try {
+                        const { url } = await api.uploadVideo(file, (pct) => {
+                          if (pct < 100) { setUploadPhase("uploading"); setUploadProgress(pct); }
+                          else { setUploadPhase("processing"); }
+                        });
+                        setNewLesson((p) => ({ ...p, videoUrl: url }));
+                        toast({ title: "Video uploaded", description: "Video URL set" });
+                      } catch (err) {
+                        toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Please try again", variant: "destructive" });
+                      } finally {
+                        setUploadingVideo(false);
+                        setUploadProgress(0);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <Upload className="h-4 w-4" /> Upload
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* PDF upload field */}
+          {newLesson.lessonType === "pdf" && !uploadingPdf && (
+            <div className="mt-3 space-y-2">
+              <label className="text-sm font-medium text-gray-700">PDF</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="PDF URL"
+                  value={newLesson.pdfUrl}
+                  onChange={(e) => setNewLesson((p) => ({ ...p, pdfUrl: e.target.value }))}
+                  className="flex-1"
+                />
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingPdf(true);
+                      setUploadProgress(0);
+                      setUploadFileName(file.name);
+                      try {
+                        const { url } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
+                        setNewLesson((p) => ({ ...p, pdfUrl: url }));
+                        toast({ title: "PDF uploaded", description: "PDF URL set" });
+                      } catch (err) {
+                        toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Please try again", variant: "destructive" });
+                      } finally {
+                        setUploadingPdf(false);
+                        setUploadProgress(0);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <Upload className="h-4 w-4" /> Upload
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
           {uploadingVideo && newLesson.lessonType === "video" && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="flex items-center gap-3 mb-2">
@@ -720,9 +857,6 @@ const AdminCoursePage = () => {
             className="mt-4 gap-2"
             disabled={
               addLessonMutation.isPending ||
-              !newLesson.title.trim() ||
-              (newLesson.lessonType === "video" && !newLesson.videoUrl.trim()) ||
-              (newLesson.lessonType === "pdf" && !newLesson.pdfUrl.trim()) ||
               uploadingVideo ||
               uploadingPdf
             }
@@ -1007,12 +1141,18 @@ const AdminCoursePage = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle / Short Description</label>
               <textarea
                 value={courseSubtitle}
-                onChange={(e) => setCourseSubtitle(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value.length > 100) {
+                    toast({ title: "Max limit reached", description: "Subtitle cannot exceed 100 characters.", variant: "destructive" });
+                    return;
+                  }
+                  setCourseSubtitle(e.target.value);
+                }}
                 className="w-full min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 placeholder="Enter a short subtitle (e.g. Python for Beginners)"
-                maxLength={200}
+                maxLength={100}
               />
-              <p className="mt-1 text-[10px] text-gray-400">{courseSubtitle.length}/200 characters</p>
+              <p className="mt-1 text-[10px] text-gray-400">{courseSubtitle.length}/100 characters</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -1035,6 +1175,11 @@ const AdminCoursePage = () => {
                   placeholder="Preview video URL"
                   value={previewVideoUrl}
                   onChange={(e) => setPreviewVideoUrl(e.target.value)}
+                  onBlur={() => {
+                    if (previewVideoUrl.trim() && !isValidUrl(previewVideoUrl.trim())) {
+                      toast({ title: "Invalid URL", description: "Please enter a valid URL starting with http:// or https://", variant: "destructive" });
+                    }
+                  }}
                 />
                 <input
                   type="file"
@@ -1101,6 +1246,11 @@ const AdminCoursePage = () => {
                   <Input
                     value={instructorPhoto}
                     onChange={(e) => setInstructorPhoto(e.target.value)}
+                    onBlur={() => {
+                      if (instructorPhoto.trim() && !isValidUrl(instructorPhoto.trim())) {
+                        toast({ title: "Invalid URL", description: "Please enter a valid URL starting with http:// or https://", variant: "destructive" });
+                      }
+                    }}
                     placeholder="https://... (optional)"
                   />
                 </div>
@@ -1108,7 +1258,20 @@ const AdminCoursePage = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title / Tagline</label>
                   <Input
                     value={instructorTitle}
-                    onChange={(e) => setInstructorTitle(e.target.value)}
+                    maxLength={100}
+                    onChange={(e) => {
+                      if (e.target.value.length > 100) {
+                        toast({ title: "Max limit reached", description: "Title / Tagline cannot exceed 100 characters.", variant: "destructive" });
+                        return;
+                      }
+                      setInstructorTitle(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (instructorTitle.length >= 100 && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                        e.preventDefault();
+                        toast({ title: "Max limit reached", description: "Title / Tagline cannot exceed 100 characters.", variant: "destructive" });
+                      }
+                    }}
                     placeholder="e.g. Software Test Engineer (optional)"
                   />
                 </div>
@@ -1136,7 +1299,12 @@ const AdminCoursePage = () => {
                       <div className="flex-1 min-w-0 space-y-2">
                         <Input
                           value={ann.title}
+                          maxLength={100}
                           onChange={(e) => {
+                            if (e.target.value.length > 100) {
+                              toast({ title: "Max limit reached", description: "Announcement title cannot exceed 100 characters.", variant: "destructive" });
+                              return;
+                            }
                             setAnnouncements((prev) =>
                               prev.map((a, i) => (i === idx ? { ...a, title: e.target.value } : a))
                             );
@@ -1146,6 +1314,12 @@ const AdminCoursePage = () => {
                               next[idx] = { ...next[idx], title: "" };
                               return next;
                             });
+                          }}
+                          onKeyDown={(e) => {
+                            if (ann.title.length >= 100 && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                              e.preventDefault();
+                              toast({ title: "Max limit reached", description: "Announcement title cannot exceed 100 characters.", variant: "destructive" });
+                            }
                           }}
                           placeholder="Announcement title"
                           className="font-medium"

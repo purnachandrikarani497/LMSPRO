@@ -348,6 +348,8 @@ export function SecureVideoPlayer({
       setProgress(0);
       setCurrentTime(0);
     }
+    // Auto-play when video metadata loads
+    safePlay();
   };
 
   const handlePause = () => {
