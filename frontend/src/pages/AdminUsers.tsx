@@ -56,13 +56,13 @@ const AdminUsers = () => {
               Track all users and their enrollment and learning activity.
             </p>
           </div>
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search by name, email or course..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 pr-4"
             />
           </div>
         </div>

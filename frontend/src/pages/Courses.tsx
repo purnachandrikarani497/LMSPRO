@@ -77,7 +77,7 @@ const Courses = () => {
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">All Categories</SelectItem>
               {filterCategories.map((c) => (
                 <SelectItem key={c.name} value={c.name}>

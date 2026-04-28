@@ -651,16 +651,16 @@ const CourseDetail = () => {
                 </Link>
 
                 {/* Breadcrumbs */}
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-500/90">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-500/90">
                   <span className="hover:underline cursor-pointer">{course.category}</span>
                   <ChevronRight className="h-3 w-3 text-gray-600" />
                   <span className="hover:underline cursor-pointer">{course.level}</span>
                   <ChevronRight className="h-3 w-3 text-gray-600" />
-                  <span className="text-gray-400">{course.title.split(" ").slice(0, 3).join(" ")}...</span>
+                  <span className="text-gray-400 break-words max-w-xs">{course.title.split(" ").slice(0, 3).join(" ")}...</span>
                 </div>
 
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-bold sm:text-4xl leading-tight">{course.title}</h1>
+                  <h1 className="text-3xl font-bold sm:text-4xl leading-tight break-words">{course.title}</h1>
                   {course.rating >= 4.7 && (
                     <span className="inline-block rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-500 ring-1 ring-inset ring-amber-500/20">
                       Bestseller
