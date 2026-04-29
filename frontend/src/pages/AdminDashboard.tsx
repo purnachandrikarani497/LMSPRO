@@ -650,7 +650,7 @@ const AdminDashboard = () => {
             </p>
           </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-card" ref={tableRef}>
+          <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-card" ref={tableRef}>
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
@@ -674,7 +674,7 @@ const AdminDashboard = () => {
                     {sortBy === "category" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
                   </button>
                 </TableHead>
-                <TableHead className="hidden md:table-cell">
+                <TableHead className="whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => handleSort("students")}
@@ -694,7 +694,7 @@ const AdminDashboard = () => {
                     {sortBy === "price" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
                   </button>
                 </TableHead>
-                <TableHead className="hidden md:table-cell">
+                <TableHead className="whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => handleSort("rating")}
@@ -740,11 +740,11 @@ const AdminDashboard = () => {
                   <TableCell className="hidden sm:table-cell">
                     <Badge variant="outline" className="text-xs">{course.category}</Badge>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                  <TableCell className="whitespace-nowrap text-muted-foreground text-sm tabular-nums">
                     {(enrollmentCountByCourse[course.id] ?? 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="font-semibold text-sm">{formatPrice(course.price)}</TableCell>
-                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
                     ⭐ {(() => { const r = course.rating ?? 0; return r === 0 ? "0" : r.toFixed(1); })()}
                   </TableCell>
                   <TableCell className="text-right">
