@@ -268,21 +268,31 @@ const AdminSettings = () => {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-border bg-card overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/30">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 bg-muted/30">
                       <span className="text-sm font-medium">All categories</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => seedMutation.mutate()}
                           disabled={seedMutation.isPending}
+                          className="hidden sm:flex"
                         >
                           {seedMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                           Load default categories
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => seedMutation.mutate()}
+                          disabled={seedMutation.isPending}
+                          className="sm:hidden"
+                        >
+                          {seedMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load defaults"}
+                        </Button>
                         <Button size="sm" onClick={openAddDialog}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add category
+                          <Plus className="h-4 w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Add category</span>
                         </Button>
                       </div>
                     </div>

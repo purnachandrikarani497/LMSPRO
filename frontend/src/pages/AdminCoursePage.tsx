@@ -75,6 +75,9 @@ const AdminCoursePage = () => {
   const [previewVideoUrl, setPreviewVideoUrl] = useState("");
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [previewUploadProgress, setPreviewUploadProgress] = useState(0);
+  const [uploadingInstructorPhoto, setUploadingInstructorPhoto] = useState(false);
+  const [videoUrlDialogOpen, setVideoUrlDialogOpen] = useState(false);
+  const [videoUrlInput, setVideoUrlInput] = useState("");
 
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["admin-course", id],
@@ -673,6 +676,10 @@ const AdminCoursePage = () => {
                 toast({ title: "Title required", variant: "destructive" });
                 return;
               }
+              if (newLesson.title.length > 60) {
+                toast({ title: "Invalid title", description: "Lesson title cannot exceed 60 characters.", variant: "destructive" });
+                return;
+              }
               if (newLesson.lessonType === "video" && !newLesson.videoUrl.trim()) {
                 toast({ title: "Video required", description: "Please upload or paste a video URL before adding a lesson", variant: "destructive" });
                 return;
@@ -716,8 +723,21 @@ const AdminCoursePage = () => {
             <Input
               placeholder="Lesson title"
               value={newLesson.title}
+              maxLength={60}
               className="focus-visible:ring-2 focus-visible:ring-amber-500"
-              onChange={(e) => setNewLesson((p) => ({ ...p, title: e.target.value }))}
+              onChange={(e) => {
+                if (e.target.value.length > 60) {
+                  toast({ title: "Max limit reached", description: "Lesson title cannot exceed 60 characters.", variant: "destructive" });
+                  return;
+                }
+                setNewLesson((p) => ({ ...p, title: e.target.value }));
+              }}
+              onKeyDown={(e) => {
+                if (newLesson.title.length >= 60 && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                  toast({ title: "Max limit reached", description: "Lesson title cannot exceed 60 characters.", variant: "destructive" });
+                }
+              }}
             />
           </div>
 
@@ -725,45 +745,20 @@ const AdminCoursePage = () => {
           {newLesson.lessonType === "video" && !uploadingVideo && (
             <div className="mt-3 space-y-2">
               <label className="text-sm font-medium text-gray-700">Video</label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Video URL"
-                  value={newLesson.videoUrl}
-                  onChange={(e) => setNewLesson((p) => ({ ...p, videoUrl: e.target.value }))}
-                  className="flex-1"
-                />
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="video/mp4,video/webm,video/ogg"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setUploadingVideo(true);
-                      setUploadProgress(0);
-                      setUploadFileName(file.name);
-                      setUploadPhase("uploading");
-                      try {
-                        const { url } = await api.uploadVideo(file, (pct) => {
-                          if (pct < 100) { setUploadPhase("uploading"); setUploadProgress(pct); }
-                          else { setUploadPhase("processing"); }
-                        });
-                        setNewLesson((p) => ({ ...p, videoUrl: url }));
-                        toast({ title: "Video uploaded", description: "Video URL set" });
-                      } catch (err) {
-                        toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Please try again", variant: "destructive" });
-                      } finally {
-                        setUploadingVideo(false);
-                        setUploadProgress(0);
-                        e.target.value = "";
-                      }
-                    }}
-                  />
-                  <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    <Upload className="h-4 w-4" /> Upload
-                  </span>
-                </label>
+              <div className="flex gap-2 items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => { setVideoUrlInput(newLesson.videoUrl); setVideoUrlDialogOpen(true); }}
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  {newLesson.videoUrl ? "Change Video URL" : "Add Video URL"}
+                </Button>
+                {newLesson.videoUrl && (
+                  <span className="text-xs text-gray-500 truncate max-w-xs">{newLesson.videoUrl}</span>
+                )}
               </div>
             </div>
           )}
@@ -772,41 +767,44 @@ const AdminCoursePage = () => {
           {newLesson.lessonType === "pdf" && !uploadingPdf && (
             <div className="mt-3 space-y-2">
               <label className="text-sm font-medium text-gray-700">PDF</label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="PDF URL"
-                  value={newLesson.pdfUrl}
-                  onChange={(e) => setNewLesson((p) => ({ ...p, pdfUrl: e.target.value }))}
-                  className="flex-1"
-                />
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setUploadingPdf(true);
+              <div className="flex gap-2 items-center">
+                <input
+                  type="file"
+                  id="pdf-upload-input"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingPdf(true);
+                    setUploadProgress(0);
+                    setUploadFileName(file.name);
+                    try {
+                      const { key } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
+                      setNewLesson((p) => ({ ...p, pdfUrl: key }));
+                      toast({ title: "PDF uploaded", description: "PDF has been uploaded successfully" });
+                    } catch {
+                      toast({ title: "Upload failed", description: "Failed to upload PDF", variant: "destructive" });
+                    } finally {
+                      setUploadingPdf(false);
                       setUploadProgress(0);
-                      setUploadFileName(file.name);
-                      try {
-                        const { url } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
-                        setNewLesson((p) => ({ ...p, pdfUrl: url }));
-                        toast({ title: "PDF uploaded", description: "PDF URL set" });
-                      } catch (err) {
-                        toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Please try again", variant: "destructive" });
-                      } finally {
-                        setUploadingPdf(false);
-                        setUploadProgress(0);
-                        e.target.value = "";
-                      }
-                    }}
-                  />
-                  <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    <Upload className="h-4 w-4" /> Upload
-                  </span>
-                </label>
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => document.getElementById("pdf-upload-input")?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {newLesson.pdfUrl ? "Change PDF" : "Upload PDF"}
+                </Button>
+                {newLesson.pdfUrl && (
+                  <span className="text-xs text-gray-500 truncate max-w-xs">{uploadFileName || newLesson.pdfUrl}</span>
+                )}
               </div>
             </div>
           )}
@@ -924,10 +922,79 @@ const AdminCoursePage = () => {
                         <Input
                           placeholder="Lesson title"
                           value={editForm.title}
-                          onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
+                          maxLength={60}
+                          onChange={(e) => {
+                            if (e.target.value.length > 60) {
+                              toast({ title: "Max limit reached", description: "Lesson title cannot exceed 60 characters.", variant: "destructive" });
+                              return;
+                            }
+                            setEditForm((p) => ({ ...p, title: e.target.value }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (editForm.title.length >= 60 && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "Tab" && !e.metaKey && !e.ctrlKey) {
+                              e.preventDefault();
+                              toast({ title: "Max limit reached", description: "Lesson title cannot exceed 60 characters.", variant: "destructive" });
+                            }
+                          }}
                         />
-
                       </div>
+                      {editForm.lessonType === "pdf" && !uploadingPdf && (
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-gray-700">PDF</label>
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="file"
+                              id="edit-pdf-upload-input"
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setUploadingPdf(true);
+                                setUploadProgress(0);
+                                setUploadFileName(file.name);
+                                try {
+                                  const { key } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
+                                  setEditForm((p) => ({ ...p, pdfUrl: key }));
+                                  toast({ title: "PDF uploaded", description: "PDF has been uploaded successfully" });
+                                } catch {
+                                  toast({ title: "Upload failed", description: "Failed to upload PDF", variant: "destructive" });
+                                } finally {
+                                  setUploadingPdf(false);
+                                  setUploadProgress(0);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5"
+                              onClick={() => document.getElementById("edit-pdf-upload-input")?.click()}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              {editForm.pdfUrl ? "Change PDF" : "Upload PDF"}
+                            </Button>
+                            {editForm.pdfUrl && (
+                              <span className="text-xs text-gray-500 truncate max-w-xs">{uploadFileName || editForm.pdfUrl}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {uploadingPdf && editForm.lessonType === "pdf" && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-4 w-4 text-amber-600 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-900 truncate">{uploadFileName || "Uploading PDF..."}</p>
+                              <p className="text-xs text-gray-500">Uploading... {uploadProgress}%</p>
+                            </div>
+                            <span className="text-xs font-semibold text-amber-700">{uploadProgress}%</span>
+                          </div>
+                          <Progress value={uploadProgress} className="mt-2 h-1.5 bg-amber-100 [&>div]:bg-amber-500" />
+                        </div>
+                      )}
                       {uploadingVideo && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                           <div className="flex items-center gap-3 mb-2">
@@ -1133,6 +1200,34 @@ const AdminCoursePage = () => {
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Video URL Dialog */}
+        <AlertDialog open={videoUrlDialogOpen} onOpenChange={(open) => !open && setVideoUrlDialogOpen(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Add Video URL</AlertDialogTitle>
+              <AlertDialogDescription>Paste the video URL below.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <Input
+              placeholder="https://..."
+              value={videoUrlInput}
+              onChange={(e) => setVideoUrlInput(e.target.value)}
+              className="mt-2"
+              autoFocus
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setVideoUrlDialogOpen(false)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setNewLesson((p) => ({ ...p, videoUrl: videoUrlInput.trim() }));
+                  setVideoUrlDialogOpen(false);
+                }}
+              >
+                Save
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Course Metadata Update Section */}
         <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-4">Course Details</h2>
@@ -1170,17 +1265,7 @@ const AdminCoursePage = () => {
             <div className="border-t border-gray-200 pt-4 mt-6">
               <h3 className="text-base font-semibold text-gray-900 mb-3">Preview Video</h3>
               <p className="text-sm text-gray-500 mb-3">Optional course promo shown on the course page “Preview this course”.</p>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Preview video URL"
-                  value={previewVideoUrl}
-                  onChange={(e) => setPreviewVideoUrl(e.target.value)}
-                  onBlur={() => {
-                    if (previewVideoUrl.trim() && !isValidUrl(previewVideoUrl.trim())) {
-                      toast({ title: "Invalid URL", description: "Please enter a valid URL starting with http:// or https://", variant: "destructive" });
-                    }
-                  }}
-                />
+              <div className="flex items-center gap-3">
                 <input
                   type="file"
                   id="preview-video-upload"
@@ -1211,13 +1296,15 @@ const AdminCoursePage = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon"
-                  title="Upload preview video"
                   onClick={() => document.getElementById("preview-video-upload")?.click()}
                   disabled={uploadingPreview}
                 >
-                  {uploadingPreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploadingPreview ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                  {uploadingPreview ? "Uploading..." : "Upload Preview Video"}
                 </Button>
+                {previewVideoUrl && (
+                  <span className="text-sm text-green-600 truncate max-w-xs">✓ Video uploaded</span>
+                )}
               </div>
               {uploadingPreview && (
                 <div className="mt-2">
@@ -1242,17 +1329,56 @@ const AdminCoursePage = () => {
                   <p className="mt-1 text-[10px] text-gray-400">{courseInstructor.length}/80 characters</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Photo URL</label>
-                  <Input
-                    value={instructorPhoto}
-                    onChange={(e) => setInstructorPhoto(e.target.value)}
-                    onBlur={() => {
-                      if (instructorPhoto.trim() && !isValidUrl(instructorPhoto.trim())) {
-                        toast({ title: "Invalid URL", description: "Please enter a valid URL starting with http:// or https://", variant: "destructive" });
-                      }
-                    }}
-                    placeholder="https://... (optional)"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Instructor Photo</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      id="instructor-photo-upload"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingInstructorPhoto(true);
+                        try {
+                          const { url } = await api.uploadThumbnail(file);
+                          setInstructorPhoto(url);
+                          toast({ title: "Photo uploaded", description: "Instructor photo uploaded successfully" });
+                        } catch (err) {
+                          toast({
+                            title: "Upload failed",
+                            description: err instanceof Error ? err.message : "Please try again",
+                            variant: "destructive"
+                          });
+                        } finally {
+                          setUploadingInstructorPhoto(false);
+                          if (e.target) e.target.value = "";
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById("instructor-photo-upload")?.click()}
+                      disabled={uploadingInstructorPhoto}
+                    >
+                      {uploadingInstructorPhoto ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                      {uploadingInstructorPhoto ? "Uploading..." : "Upload Photo"}
+                    </Button>
+                    {instructorPhoto && (
+                      <div className="flex items-center gap-2">
+                        <img src={instructorPhoto} alt="Instructor" className="h-8 w-8 rounded-full object-cover border border-gray-200" />
+                        <button
+                          type="button"
+                          onClick={() => setInstructorPhoto("")}
+                          className="text-gray-400 hover:text-red-500"
+                          aria-label="Remove photo"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title / Tagline</label>
