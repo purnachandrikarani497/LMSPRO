@@ -505,7 +505,7 @@ const AdminCoursePage = () => {
         {/* Sections Management */}
         <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6">
           <h2 className="text-lg font-bold text-gray-900">Course Sections</h2>
-          <p className="mt-1 text-sm text-gray-600">Organize lessons into sections (like Udemy)</p>
+          <p className="mt-1 text-sm text-gray-600">Organize lessons into sections</p>
           
           <div className="mt-4 space-y-3">
             {sections.map((section) => {
@@ -802,6 +802,23 @@ const AdminCoursePage = () => {
                   </span>
                 )}
               </div>
+              {newLesson.videoUrl && getSecureVideoSrc(newLesson.videoUrl) && (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-gray-700 mb-1">Video preview</p>
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-black w-full max-w-2xl">
+                    <video
+                      key={newLesson.videoUrl}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="max-h-[min(360px,55vh)] w-full"
+                      src={getSecureVideoSrc(newLesson.videoUrl)}
+                    >
+                      Your browser does not support embedded video.
+                    </video>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1034,6 +1051,23 @@ const AdminCoursePage = () => {
                               </span>
                             )}
                           </div>
+                          {editForm.videoUrl && getSecureVideoSrc(editForm.videoUrl) && (
+                            <div className="mt-3">
+                              <p className="text-xs font-medium text-gray-700 mb-1">Video preview</p>
+                              <div className="overflow-hidden rounded-lg border border-gray-200 bg-black w-full max-w-2xl">
+                                <video
+                                  key={editForm.videoUrl}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="max-h-[min(360px,55vh)] w-full"
+                                  src={getSecureVideoSrc(editForm.videoUrl)}
+                                >
+                                  Your browser does not support embedded video.
+                                </video>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       <div className="grid gap-3 sm:grid-cols-2">

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ArrowRight, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,24 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type ApiCourse, type ApiCategory, mapApiCourseToCourse } from "@/lib/api";
 
 const Index = () => {
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const sync = () => {
+      setLoggedIn(!!window.localStorage.getItem("lms_user"));
+    };
+
+    sync();
+    window.addEventListener("lms_user_updated", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("lms_user_updated", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   const { data: apiCourses, isLoading } = useQuery<ApiCourse[]>({
     queryKey: ["courses"],
     queryFn: () => api.getCourses()
@@ -183,11 +202,13 @@ const Index = () => {
           <p className="mx-auto mt-4 max-w-xl text-primary-foreground/70">
             Join thousands of learners who are already building their future with LearnHub.
           </p>
-          <Link to="/auth?tab=signup">
-            <Button size="lg" className="mt-8 bg-gradient-gold px-10 text-base font-semibold text-primary shadow-gold hover:opacity-90">
-              Create Free Account
-            </Button>
-          </Link>
+          {!loggedIn && (
+            <Link to="/auth?tab=signup">
+              <Button size="lg" className="mt-8 bg-gradient-gold px-10 text-base font-semibold text-primary shadow-gold hover:opacity-90">
+                Create Free Account
+              </Button>
+            </Link>
+          )}
         </div>
       </section>
     </div>
