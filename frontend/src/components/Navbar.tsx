@@ -188,7 +188,7 @@ const Navbar = ({ showFullNav = true, adminMenuToggle }: NavbarProps) => {
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent
             side="left"
-            className="md:hidden w-[50vw] max-w-[20rem] bg-card p-0 border-r border-border"
+            className="md:hidden w-[50vw] max-w-[20rem] bg-card p-0 border-r border-border [&>button]:hidden"
           >
             <div className="flex h-[100svh] flex-col">
               {links.length > 0 && (

@@ -3,11 +3,11 @@
  * Excludes transcript per user request.
  *
  * Features: play/pause, rewind/forward 10s, playback speed, time display,
- * volume slider, fullscreen, PiP, settings menu (autoplay, shortcuts, content info),
+ * volume slider, fullscreen, settings menu (autoplay, shortcuts, content info),
  * prev/next navigation, keyboard shortcuts.
  */
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from "react";
 import {
   Play,
   Pause,
@@ -17,7 +17,6 @@ import {
   RotateCcw,
   RotateCw,
   Settings,
-  PictureInPicture,
   ChevronLeft,
   ChevronRight,
   X,
@@ -256,52 +255,43 @@ export function SecureVideoPlayer({
     }
   }, [isExpanded, onExpandToggle]);
 
-  const [pipSupported, setPipSupported] = useState(false);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    let supported = false;
-    if (typeof document !== "undefined" && (document as any).pictureInPictureEnabled) supported = true;
-    // Safari/iOS WebKit presentation mode
-    if (v && (v as any).webkitSupportsPresentationMode) supported = true;
-    setPipSupported(supported);
+  /** Stop playback and leave PiP so navigating away never leaves hidden/orphan audio (Chromium PiP edge cases). */
+  const haltPlaybackAndExitPip = useCallback((video: HTMLVideoElement | null) => {
+    if (!video || typeof window === "undefined") return;
+    try {
+      video.pause();
+    } catch {
+      /* ignore */
+    }
+    try {
+      const doc = document as Document & {
+        pictureInPictureElement?: Element | null;
+        exitPictureInPicture?: () => Promise<void>;
+      };
+      if (doc.pictureInPictureElement === video && typeof doc.exitPictureInPicture === "function") {
+        void doc.exitPictureInPicture().catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      const wv = video as HTMLVideoElement & {
+        webkitPresentationMode?: string;
+        webkitSetPresentationMode?: (mode: string) => void;
+      };
+      if (wv.webkitPresentationMode === "picture-in-picture" && typeof wv.webkitSetPresentationMode === "function") {
+        wv.webkitSetPresentationMode("inline");
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
-
-  const togglePiP = async () => {
-    const v = videoRef.current as any;
-    if (!v) return;
-
-    // Standard Picture-in-Picture API (Chromium, etc.)
-    if (typeof document !== "undefined" && (document as any).pictureInPictureEnabled && v.requestPictureInPicture) {
-      try {
-        if ((document as any).pictureInPictureElement) {
-          await (document as any).exitPictureInPicture();
-        } else {
-          await v.requestPictureInPicture();
-        }
-      } catch (err) {
-        // ignore or optionally report
-        // console.warn('PiP toggle failed', err);
-      }
-      return;
-    }
-
-    // WebKit presentation mode fallback (Safari)
-    if (v.webkitSupportsPresentationMode && typeof v.webkitSetPresentationMode === "function") {
-      try {
-        const mode = v.webkitPresentationMode;
-        if (mode !== "picture-in-picture") v.webkitSetPresentationMode("picture-in-picture");
-        else v.webkitSetPresentationMode("inline");
-      } catch (err) {
-        // console.warn('WebKit PiP toggle failed', err);
-      }
-    }
-  };
 
   const hasResumedRef = useRef(false);
   const lastReportRef = useRef(0);
 
   useEffect(() => {
+    haltPlaybackAndExitPip(videoRef.current);
     hasResumedRef.current = false;
     if (initialTime != null && initialTime > 0) {
       setCurrentTime(initialTime);
@@ -311,7 +301,22 @@ export function SecureVideoPlayer({
     }
     setDuration(0);
     setIsPlaying(false);
-  }, [src]);
+  }, [src, haltPlaybackAndExitPip]);
+
+  useLayoutEffect(() => {
+    const node = videoRef.current;
+    return () => {
+      haltPlaybackAndExitPip(node);
+      try {
+        if (node) {
+          node.removeAttribute("src");
+          node.load();
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [haltPlaybackAndExitPip]);
 
   const handleTimeUpdate = () => {
     const v = videoRef.current;
@@ -379,8 +384,9 @@ export function SecureVideoPlayer({
       if (v && cb && isFinite(v.duration) && v.duration > 0) {
         cb(v.currentTime, v.duration);
       }
+      haltPlaybackAndExitPip(v);
     };
-  }, [src]);
+  }, [src, haltPlaybackAndExitPip]);
 
   const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -494,6 +500,7 @@ export function SecureVideoPlayer({
         preload="auto"
         controlsList="nodownload noremoteplayback"
         disableRemotePlayback
+        disablePictureInPicture
         className="h-full w-full object-contain"
         onClick={togglePlay}
         onTimeUpdate={handleTimeUpdate}
@@ -663,11 +670,6 @@ export function SecureVideoPlayer({
                   </div>
                 )}
               </div>
-              {pipSupported && (
-                <button type="button" onClick={togglePiP} className="rounded p-1.5 text-white hover:bg-white/20" aria-label="Picture-in-picture">
-                  <PictureInPicture className="h-5 w-5" />
-                </button>
-              )}
               {onExpandToggle && (
                 <div className="relative group/expand">
                   <button
