@@ -9,6 +9,47 @@ import { sendResetEmail } from "../utils/email.js";
 
 const router = express.Router();
 
+/**
+ * Resolve the public URL of the SPA for use in password-reset emails.
+ *
+ * Priority:
+ *   1. Explicit CLIENT_URL env var (production hardening; supports comma list,
+ *      first entry wins).
+ *   2. Origin header from the request – CORS already vetted it, so it's
+ *      trustworthy and matches whatever domain/IP/port the user is on.
+ *   3. Same-host fallback built from forwarded proto + host (works for
+ *      reverse-proxy deploys where the API and SPA share a hostname).
+ *   4. Sensible localhost default (dev only).
+ */
+const resolveClientBaseUrl = (req) => {
+  const stripTrailingSlash = (url) => url.replace(/\/+$/, "");
+
+  const envUrl = (process.env.CLIENT_URL || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)[0];
+  if (envUrl) return stripTrailingSlash(envUrl);
+
+  const origin = req.get("origin");
+  if (origin) {
+    try {
+      return stripTrailingSlash(new URL(origin).origin);
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const forwardedHost = req.get("x-forwarded-host");
+  const host = forwardedHost ? forwardedHost.split(",")[0].trim() : req.get("host");
+  if (host) {
+    const forwardedProto = req.get("x-forwarded-proto");
+    const proto = (forwardedProto ? forwardedProto.split(",")[0].trim() : req.protocol) || "http";
+    return `${proto}://${host}`;
+  }
+
+  return "http://localhost:8080";
+};
+
 const createToken = (user) => {
   return jwt.sign({ sub: user._id, role: user.role }, config.jwtSecret, {
     expiresIn: config.jwtExpiresIn
@@ -212,8 +253,10 @@ router.post("/forgot-password", async (req, res) => {
     user.resetTokenExpiry = expiry;
     await user.save();
 
-    // Construct reset link
-    const resetLink = `${config.clientUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+    // Construct reset link from the request's actual public URL so deployed
+    // servers (any IP/domain) work without manually setting CLIENT_URL.
+    const baseUrl = resolveClientBaseUrl(req);
+    const resetLink = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
     let emailSent = true;
     let emailError;
@@ -236,7 +279,7 @@ router.post("/forgot-password", async (req, res) => {
       await user.save();
       return res.status(500).json({
         message:
-          "Could not send reset email. On the server, set SMTP_USER, SMTP_PASSWORD, and CLIENT_URL (your public site URL, e.g. https://lmspro.speshway.site)."
+          "Could not send reset email. On the server, set SMTP_USER and SMTP_PASSWORD (Gmail App Password). The reset link auto-detects the public URL from the request, but you may pin it explicitly with CLIENT_URL."
       });
     }
 

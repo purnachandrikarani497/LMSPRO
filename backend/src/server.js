@@ -48,24 +48,64 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsPath = path.resolve(__dirname, "../uploads");
 
 app.set("trust proxy", 1);
+
+const stripTrailingSlash = (url) => url.replace(/\/+$/, "");
+
+// Build the allow-list once. CLIENT_URL may be a comma-separated list so a
+// single deployment can serve multiple domains (e.g. apex + www).
+const explicitAllowedOrigins = [
+  config.clientUrl,
+  ...(process.env.CLIENT_URL || "").split(",")
+]
+  .map((s) => (s || "").trim())
+  .filter(Boolean)
+  .map(stripTrailingSlash);
+
+const localhostAllowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:8080",
+  "http://localhost:8081"
+];
+
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        config.clientUrl,
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:8081"
-      ];
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
+  cors((req, callback) => {
+    const origin = req.header("Origin");
+    const baseOptions = {
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"]
+    };
+
+    if (!origin) {
+      return callback(null, { ...baseOptions, origin: true });
+    }
+
+    const normalizedOrigin = stripTrailingSlash(origin);
+    if (
+      explicitAllowedOrigins.includes(normalizedOrigin) ||
+      localhostAllowedOrigins.includes(normalizedOrigin)
+    ) {
+      return callback(null, { ...baseOptions, origin: true });
+    }
+
+    // Same-host fallback: when the SPA and API share a hostname (common in
+    // reverse-proxy deploys, or same IP with different ports) we trust the
+    // origin so deployments work without setting CLIENT_URL.
+    try {
+      const originHost = new URL(origin).hostname;
+      const forwardedHost = req.header("x-forwarded-host");
+      const reqHost = (forwardedHost ? forwardedHost.split(",")[0] : req.header("host") || "")
+        .trim()
+        .split(":")[0];
+      if (originHost && reqHost && originHost === reqHost) {
+        return callback(null, { ...baseOptions, origin: true });
       }
-      return callback(null, false);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"]
+    } catch {
+      /* ignore malformed origin */
+    }
+
+    return callback(null, { ...baseOptions, origin: false });
   })
 );
 app.use(

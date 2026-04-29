@@ -60,7 +60,7 @@ const ResetPassword = () => {
           <div className="flex justify-center">
             <CheckCircle2 className="h-16 w-16 text-green-500" />
           </div>
-          <h1 className="text-2xl font-bold text-primary-foreground">Password Reset Successful</h1>
+          <h1 className="text-2xl font-bold text-foreground">Password Reset Successful</h1>
           <p className="text-muted-foreground">Your password has been updated. Redirecting you to sign in...</p>
           <Button asChild className="w-full bg-gradient-gold text-primary font-semibold">
             <Link to="/auth?tab=signin">Go to Sign In</Link>
@@ -86,7 +86,9 @@ const ResetPassword = () => {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-8 shadow-card-hover">
-          <h1 className="mb-2 text-2xl font-bold text-primary-foreground text-center">Set New Password</h1>
+          <h1 className="mb-2 text-center font-heading text-3xl font-extrabold tracking-tight text-gradient-gold drop-shadow-sm">
+            Set New Password
+          </h1>
           <p className="mb-6 text-sm text-muted-foreground text-center">
             Please enter your new password below to secure your account.
           </p>
