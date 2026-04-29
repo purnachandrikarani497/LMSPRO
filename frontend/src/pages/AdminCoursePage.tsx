@@ -16,7 +16,7 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, getSecureVideoSrc } from "@/lib/api";
+import { api, ApiCourse, getSecureVideoSrc, getThumbnailSrc } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
@@ -76,8 +76,22 @@ const AdminCoursePage = () => {
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [previewUploadProgress, setPreviewUploadProgress] = useState(0);
   const [uploadingInstructorPhoto, setUploadingInstructorPhoto] = useState(false);
-  const [videoUrlDialogOpen, setVideoUrlDialogOpen] = useState(false);
-  const [videoUrlInput, setVideoUrlInput] = useState("");
+  const [newLessonPdfPreview, setNewLessonPdfPreview] = useState<string | null>(null);
+  const [newLessonPdfName, setNewLessonPdfName] = useState<string>("");
+  const [editPdfPreview, setEditPdfPreview] = useState<string | null>(null);
+  const [editPdfName, setEditPdfName] = useState<string>("");
+
+  // Revoke object URLs when they change or the component unmounts to avoid leaks.
+  useEffect(() => {
+    return () => {
+      if (newLessonPdfPreview) URL.revokeObjectURL(newLessonPdfPreview);
+    };
+  }, [newLessonPdfPreview]);
+  useEffect(() => {
+    return () => {
+      if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
+    };
+  }, [editPdfPreview]);
 
   const { data: course, isLoading } = useQuery<ApiCourse>({
     queryKey: ["admin-course", id],
@@ -301,6 +315,10 @@ const AdminCoursePage = () => {
       toast({ title: "Lesson added", description: "The lesson has been saved" });
       setNewLesson({ title: "", lessonType: "video", videoUrl: "", pdfUrl: "", duration: "" });
       setNewLessonThumbnail(null);
+      if (newLessonPdfPreview) URL.revokeObjectURL(newLessonPdfPreview);
+      setNewLessonPdfPreview(null);
+      setNewLessonPdfName("");
+      setUploadFileName("");
       queryClient.invalidateQueries({ queryKey: ["admin-course", id] });
       queryClient.invalidateQueries({ queryKey: ["courses"] });
     },
@@ -330,6 +348,9 @@ const AdminCoursePage = () => {
       setEditingLessonId(null);
       setEditThumbnail(null);
       setEditDuration("");
+      if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
+      setEditPdfPreview(null);
+      setEditPdfName("");
       queryClient.invalidateQueries({ queryKey: ["admin-course", id] });
       queryClient.invalidateQueries({ queryKey: ["courses"] });
       queryClient.invalidateQueries({ queryKey: ["course", id] });
@@ -379,6 +400,9 @@ const AdminCoursePage = () => {
     setEditingLessonId(null);
     setEditThumbnail(null);
     setEditDuration("");
+    if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
+    setEditPdfPreview(null);
+    setEditPdfName("");
   };
 
   const extractDurationFromFile = async (file: File): Promise<string | undefined> => {
@@ -448,34 +472,6 @@ const AdminCoursePage = () => {
       return null;
     }
   };
-
-  const extractDuration = async (videoUrl: string): Promise<string | undefined> => {
-    try {
-      const video = document.createElement("video");
-      video.crossOrigin = "anonymous";
-      video.src = getSecureVideoSrc(videoUrl) || videoUrl;
-      
-      const duration = await new Promise<number>((resolve) => {
-        const timeout = setTimeout(() => resolve(NaN), 8000);
-        const handleMetadata = () => {
-          clearTimeout(timeout);
-          resolve(video.duration);
-        };
-        video.addEventListener("loadedmetadata", handleMetadata, { once: true });
-      });
-      
-      if (isNaN(duration) || duration === 0) return undefined;
-      
-      const totalSeconds = Math.round(duration);
-      const mins = Math.floor(totalSeconds / 60);
-      const secs = totalSeconds % 60;
-      return `${mins}:${secs.toString().padStart(2, "0")}`;
-    } catch (e) {
-      console.error("Duration extraction failed:", e);
-      return undefined;
-    }
-  };
-
 
   if (isLoading || !course) {
     return (
@@ -681,11 +677,11 @@ const AdminCoursePage = () => {
                 return;
               }
               if (newLesson.lessonType === "video" && !newLesson.videoUrl.trim()) {
-                toast({ title: "Video required", description: "Please upload or paste a video URL before adding a lesson", variant: "destructive" });
+                toast({ title: "Video required", description: "Please upload a video file before adding a lesson", variant: "destructive" });
                 return;
               }
               if (newLesson.lessonType === "pdf" && !newLesson.pdfUrl.trim()) {
-                toast({ title: "PDF required", description: "Upload a PDF or paste the document URL from the server", variant: "destructive" });
+                toast({ title: "PDF required", description: "Please upload a PDF file before adding a lesson", variant: "destructive" });
                 return;
               }
               const targetSection = selectedSectionId || (sections.length === 0 ? "default" : null);
@@ -745,19 +741,65 @@ const AdminCoursePage = () => {
           {newLesson.lessonType === "video" && !uploadingVideo && (
             <div className="mt-3 space-y-2">
               <label className="text-sm font-medium text-gray-700">Video</label>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
+                <input
+                  type="file"
+                  id="lesson-video-upload-input"
+                  accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingVideo(true);
+                    setUploadProgress(0);
+                    setUploadFileName(file.name);
+                    setUploadPhase("uploading");
+                    try {
+                      // Local thumbnail + duration extraction first, so the
+                      // admin sees a preview even before the upload finishes.
+                      const [thumb, dur] = await Promise.all([
+                        extractThumbnailFromFile(file),
+                        extractDurationFromFile(file)
+                      ]);
+                      if (thumb) setNewLessonThumbnail(thumb);
+                      const { key } = await api.uploadVideo(file, (pct) => {
+                        setUploadProgress(pct);
+                        if (pct >= 100) setUploadPhase("processing");
+                      });
+                      setNewLesson((p) => ({
+                        ...p,
+                        videoUrl: key,
+                        duration: dur || p.duration
+                      }));
+                      toast({ title: "Video uploaded", description: "Video has been uploaded successfully" });
+                    } catch (err) {
+                      toast({
+                        title: "Upload failed",
+                        description: err instanceof Error ? err.message : "Failed to upload video",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setUploadingVideo(false);
+                      setUploadProgress(0);
+                      setUploadPhase("uploading");
+                      e.target.value = "";
+                    }
+                  }}
+                />
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="gap-1.5"
-                  onClick={() => { setVideoUrlInput(newLesson.videoUrl); setVideoUrlDialogOpen(true); }}
+                  onClick={() => document.getElementById("lesson-video-upload-input")?.click()}
                 >
-                  <Video className="h-3.5 w-3.5" />
-                  {newLesson.videoUrl ? "Change Video URL" : "Add Video URL"}
+                  <Upload className="h-3.5 w-3.5" />
+                  {newLesson.videoUrl ? "Change Video" : "Upload Video"}
                 </Button>
                 {newLesson.videoUrl && (
-                  <span className="text-xs text-gray-500 truncate max-w-xs">{newLesson.videoUrl}</span>
+                  <span className="text-xs text-gray-500 truncate max-w-xs">
+                    {uploadFileName || "Video uploaded"}
+                  </span>
                 )}
               </div>
             </div>
@@ -779,6 +821,9 @@ const AdminCoursePage = () => {
                     setUploadingPdf(true);
                     setUploadProgress(0);
                     setUploadFileName(file.name);
+                    setNewLessonPdfName(file.name);
+                    if (newLessonPdfPreview) URL.revokeObjectURL(newLessonPdfPreview);
+                    setNewLessonPdfPreview(URL.createObjectURL(file));
                     try {
                       const { key } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
                       setNewLesson((p) => ({ ...p, pdfUrl: key }));
@@ -803,9 +848,21 @@ const AdminCoursePage = () => {
                   {newLesson.pdfUrl ? "Change PDF" : "Upload PDF"}
                 </Button>
                 {newLesson.pdfUrl && (
-                  <span className="text-xs text-gray-500 truncate max-w-xs">{uploadFileName || newLesson.pdfUrl}</span>
+                  <span className="text-xs text-gray-500 truncate max-w-xs">{newLessonPdfName || uploadFileName || newLesson.pdfUrl}</span>
                 )}
               </div>
+              {newLessonPdfPreview && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-gray-700 mb-1">PDF Preview</p>
+                  <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50 w-full max-w-md">
+                    <iframe
+                      title="PDF preview"
+                      src={`${newLessonPdfPreview}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                      className="w-full h-64 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {uploadingVideo && newLesson.lessonType === "video" && (
@@ -918,6 +975,67 @@ const AdminCoursePage = () => {
                           <img src={editThumbnail} alt="thumbnail" className="w-32 h-24 object-cover rounded border border-gray-200" />
                         </div>
                       )}
+                      {editForm.lessonType === "video" && !uploadingVideo && (
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-gray-700">Video</label>
+                          <div className="flex gap-2 items-center flex-wrap">
+                            <input
+                              type="file"
+                              id="edit-video-upload-input"
+                              accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setUploadingVideo(true);
+                                setUploadProgress(0);
+                                setUploadFileName(file.name);
+                                setUploadPhase("uploading");
+                                try {
+                                  const [thumb, dur] = await Promise.all([
+                                    extractThumbnailFromFile(file),
+                                    extractDurationFromFile(file)
+                                  ]);
+                                  if (thumb) setEditThumbnail(thumb);
+                                  const { key } = await api.uploadVideo(file, (pct) => {
+                                    setUploadProgress(pct);
+                                    if (pct >= 100) setUploadPhase("processing");
+                                  });
+                                  setEditForm((p) => ({ ...p, videoUrl: key }));
+                                  if (dur) setEditDuration(dur);
+                                  toast({ title: "Video uploaded", description: "Video replaced successfully" });
+                                } catch (err) {
+                                  toast({
+                                    title: "Upload failed",
+                                    description: err instanceof Error ? err.message : "Failed to upload video",
+                                    variant: "destructive"
+                                  });
+                                } finally {
+                                  setUploadingVideo(false);
+                                  setUploadProgress(0);
+                                  setUploadPhase("uploading");
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5"
+                              onClick={() => document.getElementById("edit-video-upload-input")?.click()}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              {editForm.videoUrl ? "Change Video" : "Upload Video"}
+                            </Button>
+                            {editForm.videoUrl && (
+                              <span className="text-xs text-gray-500 truncate max-w-xs">
+                                {uploadFileName || "Current video"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Input
                           placeholder="Lesson title"
@@ -953,6 +1071,9 @@ const AdminCoursePage = () => {
                                 setUploadingPdf(true);
                                 setUploadProgress(0);
                                 setUploadFileName(file.name);
+                                setEditPdfName(file.name);
+                                if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
+                                setEditPdfPreview(URL.createObjectURL(file));
                                 try {
                                   const { key } = await api.uploadPdf(file, (pct) => setUploadProgress(pct));
                                   setEditForm((p) => ({ ...p, pdfUrl: key }));
@@ -977,9 +1098,21 @@ const AdminCoursePage = () => {
                               {editForm.pdfUrl ? "Change PDF" : "Upload PDF"}
                             </Button>
                             {editForm.pdfUrl && (
-                              <span className="text-xs text-gray-500 truncate max-w-xs">{uploadFileName || editForm.pdfUrl}</span>
+                              <span className="text-xs text-gray-500 truncate max-w-xs">{editPdfName || uploadFileName || editForm.pdfUrl}</span>
                             )}
                           </div>
+                          {editPdfPreview && (
+                            <div className="mt-2">
+                              <p className="text-xs font-medium text-gray-700 mb-1">PDF Preview</p>
+                              <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50 w-full max-w-md">
+                                <iframe
+                                  title="PDF preview"
+                                  src={`${editPdfPreview}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                                  className="w-full h-64 bg-white"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       {uploadingPdf && editForm.lessonType === "pdf" && (
@@ -1200,34 +1333,6 @@ const AdminCoursePage = () => {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Video URL Dialog */}
-        <AlertDialog open={videoUrlDialogOpen} onOpenChange={(open) => !open && setVideoUrlDialogOpen(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Add Video URL</AlertDialogTitle>
-              <AlertDialogDescription>Paste the video URL below.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <Input
-              placeholder="https://..."
-              value={videoUrlInput}
-              onChange={(e) => setVideoUrlInput(e.target.value)}
-              className="mt-2"
-              autoFocus
-            />
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setVideoUrlDialogOpen(false)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setNewLesson((p) => ({ ...p, videoUrl: videoUrlInput.trim() }));
-                  setVideoUrlDialogOpen(false);
-                }}
-              >
-                Save
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
         {/* Course Metadata Update Section */}
         <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-4">Course Details</h2>
@@ -1306,6 +1411,18 @@ const AdminCoursePage = () => {
                   <span className="text-sm text-green-600 truncate max-w-xs">✓ Video uploaded</span>
                 )}
               </div>
+              {previewVideoUrl && !uploadingPreview && (
+                <div className="mt-4 max-w-lg">
+                  <p className="text-xs font-medium text-gray-600 mb-2">Preview</p>
+                  <video
+                    key={previewVideoUrl}
+                    src={getSecureVideoSrc(previewVideoUrl)}
+                    controls
+                    preload="metadata"
+                    className="w-full rounded-lg border border-gray-200 bg-black aspect-video"
+                  />
+                </div>
+              )}
               {uploadingPreview && (
                 <div className="mt-2">
                   <Progress value={previewUploadProgress} className="h-2 bg-amber-100 [&>div]:bg-amber-500" />
@@ -1330,7 +1447,7 @@ const AdminCoursePage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Instructor Photo</label>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-start gap-4 flex-wrap">
                     <input
                       type="file"
                       id="instructor-photo-upload"
@@ -1356,28 +1473,44 @@ const AdminCoursePage = () => {
                         }
                       }}
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById("instructor-photo-upload")?.click()}
-                      disabled={uploadingInstructorPhoto}
-                    >
-                      {uploadingInstructorPhoto ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                      {uploadingInstructorPhoto ? "Uploading..." : "Upload Photo"}
-                    </Button>
-                    {instructorPhoto && (
-                      <div className="flex items-center gap-2">
-                        <img src={instructorPhoto} alt="Instructor" className="h-8 w-8 rounded-full object-cover border border-gray-200" />
+                    {instructorPhoto ? (
+                      <div className="relative shrink-0">
+                        <img
+                          src={getThumbnailSrc(instructorPhoto) || instructorPhoto}
+                          alt=""
+                          className="h-24 w-24 rounded-full object-cover border-2 border-gray-200 shadow-sm bg-gray-100"
+                        />
                         <button
                           type="button"
                           onClick={() => setInstructorPhoto("")}
-                          className="text-gray-400 hover:text-red-500"
+                          className="absolute -top-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow hover:text-red-600 hover:border-red-200"
                           aria-label="Remove photo"
+                          title="Remove photo"
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                    ) : (
+                      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400">
+                        <Upload className="h-6 w-6" />
+                      </div>
                     )}
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById("instructor-photo-upload")?.click()}
+                        disabled={uploadingInstructorPhoto}
+                      >
+                        {uploadingInstructorPhoto ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                        {uploadingInstructorPhoto
+                          ? "Uploading..."
+                          : instructorPhoto
+                            ? "Change Photo"
+                            : "Upload Photo"}
+                      </Button>
+                      <p className="text-xs text-gray-500">JPG, PNG, WEBP or GIF. Square image works best.</p>
+                    </div>
                   </div>
                 </div>
                 <div>
