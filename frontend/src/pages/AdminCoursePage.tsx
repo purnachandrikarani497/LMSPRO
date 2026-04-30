@@ -16,7 +16,7 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiCourse, getSecureVideoSrc, getThumbnailSrc } from "@/lib/api";
+import { api, ApiCourse, getSecurePdfSrc, getSecureVideoSrc, getThumbnailSrc } from "@/lib/api";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
@@ -80,6 +80,11 @@ const AdminCoursePage = () => {
   const [newLessonPdfName, setNewLessonPdfName] = useState<string>("");
   const [editPdfPreview, setEditPdfPreview] = useState<string | null>(null);
   const [editPdfName, setEditPdfName] = useState<string>("");
+  /** Saved lesson media when edit started — revert uploads and restore when switching type */
+  const [editMediaBaseline, setEditMediaBaseline] = useState<{ videoUrl: string; pdfUrl: string }>({
+    videoUrl: "",
+    pdfUrl: ""
+  });
 
   // Revoke object URLs when they change or the component unmounts to avoid leaks.
   useEffect(() => {
@@ -348,6 +353,7 @@ const AdminCoursePage = () => {
       setEditingLessonId(null);
       setEditThumbnail(null);
       setEditDuration("");
+      setEditMediaBaseline({ videoUrl: "", pdfUrl: "" });
       if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
       setEditPdfPreview(null);
       setEditPdfName("");
@@ -392,6 +398,10 @@ const AdminCoursePage = () => {
         videoUrl: lesson.videoUrl || "",
         pdfUrl: lesson.pdfUrl || ""
       });
+      setEditMediaBaseline({
+        videoUrl: lesson.videoUrl || "",
+        pdfUrl: lesson.pdfUrl || ""
+      });
       setEditDuration(lesson.duration || "");
     }
   };
@@ -403,6 +413,7 @@ const AdminCoursePage = () => {
     if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
     setEditPdfPreview(null);
     setEditPdfName("");
+    setEditMediaBaseline({ videoUrl: "", pdfUrl: "" });
   };
 
   const extractDurationFromFile = async (file: File): Promise<string | undefined> => {
@@ -699,7 +710,12 @@ const AdminCoursePage = () => {
               variant={newLesson.lessonType === "video" ? "default" : "outline"}
               size="sm"
               className="gap-1.5"
-              onClick={() => setNewLesson((p) => ({ ...p, lessonType: "video" }))}
+              onClick={() => {
+                if (newLessonPdfPreview) URL.revokeObjectURL(newLessonPdfPreview);
+                setNewLessonPdfPreview(null);
+                setNewLessonPdfName("");
+                setNewLesson((p) => ({ ...p, lessonType: "video", pdfUrl: "" }));
+              }}
             >
               <Video className="h-3.5 w-3.5" />
               Video
@@ -709,7 +725,11 @@ const AdminCoursePage = () => {
               variant={newLesson.lessonType === "pdf" ? "default" : "outline"}
               size="sm"
               className="gap-1.5"
-              onClick={() => setNewLesson((p) => ({ ...p, lessonType: "pdf" }))}
+              onClick={() => {
+                setNewLessonThumbnail(null);
+                setUploadFileName("");
+                setNewLesson((p) => ({ ...p, lessonType: "pdf", videoUrl: "", duration: "" }));
+              }}
             >
               <FileText className="h-3.5 w-3.5" />
               PDF
@@ -801,6 +821,21 @@ const AdminCoursePage = () => {
                     {uploadFileName || "Video uploaded"}
                   </span>
                 )}
+                {newLesson.videoUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground h-8 shrink-0"
+                    onClick={() => {
+                      setNewLesson((p) => ({ ...p, videoUrl: "", duration: "" }));
+                      setNewLessonThumbnail(null);
+                      setUploadFileName("");
+                    }}
+                  >
+                    Clear video
+                  </Button>
+                )}
               </div>
               {newLesson.videoUrl && getSecureVideoSrc(newLesson.videoUrl) && (
                 <div className="mt-3">
@@ -826,7 +861,7 @@ const AdminCoursePage = () => {
           {newLesson.lessonType === "pdf" && !uploadingPdf && (
             <div className="mt-3 space-y-2">
               <label className="text-sm font-medium text-gray-700">PDF</label>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
                 <input
                   type="file"
                   id="pdf-upload-input"
@@ -866,6 +901,23 @@ const AdminCoursePage = () => {
                 </Button>
                 {newLesson.pdfUrl && (
                   <span className="text-xs text-gray-500 truncate max-w-xs">{newLessonPdfName || uploadFileName || newLesson.pdfUrl}</span>
+                )}
+                {newLesson.pdfUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground h-8 shrink-0"
+                    onClick={() => {
+                      if (newLessonPdfPreview) URL.revokeObjectURL(newLessonPdfPreview);
+                      setNewLessonPdfPreview(null);
+                      setNewLessonPdfName("");
+                      setNewLesson((p) => ({ ...p, pdfUrl: "" }));
+                      setUploadFileName("");
+                    }}
+                  >
+                    Clear PDF
+                  </Button>
                 )}
               </div>
               {newLessonPdfPreview && (
@@ -970,7 +1022,18 @@ const AdminCoursePage = () => {
                           variant={editForm.lessonType === "video" ? "default" : "outline"}
                           size="sm"
                           className="gap-1.5"
-                          onClick={() => setEditForm((p) => ({ ...p, lessonType: "video" }))}
+                          onClick={() => {
+                            if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
+                            setEditPdfPreview(null);
+                            setEditPdfName("");
+                            setUploadFileName("");
+                            setEditForm((p) => ({
+                              ...p,
+                              lessonType: "video",
+                              videoUrl: editMediaBaseline.videoUrl,
+                              pdfUrl: ""
+                            }));
+                          }}
                         >
                           <Video className="h-3.5 w-3.5" />
                           Video
@@ -980,7 +1043,16 @@ const AdminCoursePage = () => {
                           variant={editForm.lessonType === "pdf" ? "default" : "outline"}
                           size="sm"
                           className="gap-1.5"
-                          onClick={() => setEditForm((p) => ({ ...p, lessonType: "pdf" }))}
+                          onClick={() => {
+                            setEditThumbnail(null);
+                            setUploadFileName("");
+                            setEditForm((p) => ({
+                              ...p,
+                              lessonType: "pdf",
+                              pdfUrl: editMediaBaseline.pdfUrl,
+                              videoUrl: ""
+                            }));
+                          }}
                         >
                           <FileText className="h-3.5 w-3.5" />
                           PDF
@@ -1050,6 +1122,25 @@ const AdminCoursePage = () => {
                                 {uploadFileName || "Current video"}
                               </span>
                             )}
+                            {editForm.videoUrl &&
+                              editForm.videoUrl !== editMediaBaseline.videoUrl && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-muted-foreground h-8 shrink-0"
+                                  onClick={() => {
+                                    setEditForm((p) => ({
+                                      ...p,
+                                      videoUrl: editMediaBaseline.videoUrl
+                                    }));
+                                    setEditThumbnail(null);
+                                    setUploadFileName("");
+                                  }}
+                                >
+                                  Revert video
+                                </Button>
+                              )}
                           </div>
                           {editForm.videoUrl && getSecureVideoSrc(editForm.videoUrl) && (
                             <div className="mt-3">
@@ -1093,7 +1184,7 @@ const AdminCoursePage = () => {
                       {editForm.lessonType === "pdf" && !uploadingPdf && (
                         <div className="space-y-1">
                           <label className="text-sm font-medium text-gray-700">PDF</label>
-                          <div className="flex gap-2 items-center">
+                          <div className="flex gap-2 items-center flex-wrap">
                             <input
                               type="file"
                               id="edit-pdf-upload-input"
@@ -1134,19 +1225,47 @@ const AdminCoursePage = () => {
                             {editForm.pdfUrl && (
                               <span className="text-xs text-gray-500 truncate max-w-xs">{editPdfName || uploadFileName || editForm.pdfUrl}</span>
                             )}
+                            {editForm.pdfUrl && editForm.pdfUrl !== editMediaBaseline.pdfUrl && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground h-8 shrink-0"
+                                onClick={() => {
+                                  setEditForm((p) => ({
+                                    ...p,
+                                    pdfUrl: editMediaBaseline.pdfUrl
+                                  }));
+                                  if (editPdfPreview) URL.revokeObjectURL(editPdfPreview);
+                                  setEditPdfPreview(null);
+                                  setEditPdfName("");
+                                  setUploadFileName("");
+                                }}
+                              >
+                                Revert PDF
+                              </Button>
+                            )}
                           </div>
-                          {editPdfPreview && (
-                            <div className="mt-2">
-                              <p className="text-xs font-medium text-gray-700 mb-1">PDF Preview</p>
-                              <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50 w-full max-w-md">
-                                <iframe
-                                  title="PDF preview"
-                                  src={`${editPdfPreview}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                                  className="w-full h-64 bg-white"
-                                />
+                          {(() => {
+                            const securePdf = editForm.pdfUrl ? getSecurePdfSrc(editForm.pdfUrl) : "";
+                            const iframeSrc = editPdfPreview
+                              ? `${editPdfPreview}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`
+                              : securePdf
+                                ? `${securePdf}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`
+                                : "";
+                            return iframeSrc ? (
+                              <div className="mt-2">
+                                <p className="text-xs font-medium text-gray-700 mb-1">PDF preview</p>
+                                <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50 w-full max-w-2xl">
+                                  <iframe
+                                    title="PDF preview"
+                                    src={iframeSrc}
+                                    className="w-full h-[min(24rem,55vh)] min-h-[16rem] bg-white"
+                                  />
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            ) : null;
+                          })()}
                         </div>
                       )}
                       {uploadingPdf && editForm.lessonType === "pdf" && (

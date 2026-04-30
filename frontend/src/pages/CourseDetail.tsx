@@ -1165,6 +1165,12 @@ const CourseDetail = () => {
                               const canOpen = isEnrolled && !!lid;
                               const lessonIsPdf = isPdfLesson(lesson);
                               const isActive = selectedLesson?._id === lid;
+                              const savedTs = lid ? watchTimestamps[lid] : undefined;
+                              const savedDur = lid ? watchDurations[lid] : undefined;
+                              const watchPct =
+                                savedTs != null && savedDur && savedDur > 0
+                                  ? Math.min(100, Math.round((savedTs / savedDur) * 100))
+                                  : 0;
                               return (
                                 <div
                                   key={lesson._id || i}
@@ -1213,8 +1219,42 @@ const CourseDetail = () => {
                                   )}
                                   <div className="min-w-0 flex-1">
                                     <p className="line-clamp-2 font-medium text-gray-900">{lesson.title}</p>
-                                    {lesson.duration && (
-                                      <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                                      {isActive && (
+                                        <button
+                                          type="button"
+                                          className="text-xs font-medium text-amber-600 hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            seekToRef.current?.(0);
+                                          }}
+                                        >
+                                          {lessonIsPdf ? "Reading" : "Now playing"}
+                                        </button>
+                                      )}
+                                      {!isActive && watchPct > 0 && watchPct < 90 && !completed && (
+                                        <button
+                                          type="button"
+                                          className="text-xs font-medium text-amber-600 hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (canOpen) navigate(`/course/${course.id}/lesson/${lid}`);
+                                          }}
+                                        >
+                                          Resume at {formatWatchTime(savedTs!)}
+                                        </button>
+                                      )}
+                                      {lesson.duration && (
+                                        <span className="text-xs text-gray-500">{lesson.duration}</span>
+                                      )}
+                                    </div>
+                                    {watchPct > 0 && !completed && (
+                                      <div className="mt-1 h-1 w-full rounded-full bg-gray-200 overflow-hidden">
+                                        <div
+                                          className="h-full rounded-full bg-amber-500 transition-all"
+                                          style={{ width: `${watchPct}%` }}
+                                        />
+                                      </div>
                                     )}
                                   </div>
                                 </div>

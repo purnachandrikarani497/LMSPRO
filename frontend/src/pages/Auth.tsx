@@ -175,6 +175,9 @@ const Auth = () => {
   useEffect(() => {
     if (!googleClientId) return;
 
+    let resizeCleanup: (() => void) | undefined;
+    let lastMountedWidth = -1;
+
     const mountGoogleButton = () => {
       const el = googleBtnRef.current;
       const g = window.google?.accounts?.id;
@@ -190,8 +193,21 @@ const Auth = () => {
         window.__lmsGoogleGsiInitialized = true;
       }
 
+      const raw =
+        el.getBoundingClientRect().width ||
+        el.offsetWidth ||
+        320;
+      // Google's iframe includes trailing branding; inset keeps the G icon inside the outline border.
+      const inset = 36;
+      const width = Math.max(240, Math.min(Math.floor(raw - inset), 400));
+
+      if (width === lastMountedWidth && el.querySelector("iframe")) {
+        return;
+      }
+      lastMountedWidth = width;
+
       el.innerHTML = "";
-      const width = Math.max(280, Math.min(el.offsetWidth || 400, 448));
+
       g.renderButton(el, {
         theme: "outline",
         size: "large",
@@ -201,8 +217,26 @@ const Auth = () => {
       });
     };
 
+    const attachResizeObserver = () => {
+      const el = googleBtnRef.current;
+      if (!el || typeof ResizeObserver === "undefined") return;
+      let timer: ReturnType<typeof setTimeout>;
+      const ro = new ResizeObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => mountGoogleButton(), 120);
+      });
+      ro.observe(el);
+      resizeCleanup = () => {
+        clearTimeout(timer);
+        ro.disconnect();
+      };
+    };
+
     const onScriptLoad = () => {
-      requestAnimationFrame(() => mountGoogleButton());
+      requestAnimationFrame(() => {
+        mountGoogleButton();
+        attachResizeObserver();
+      });
     };
 
     const existing = document.querySelector<HTMLScriptElement>(
@@ -214,7 +248,10 @@ const Auth = () => {
       } else {
         existing.addEventListener("load", onScriptLoad);
       }
-      return () => existing.removeEventListener("load", onScriptLoad);
+      return () => {
+        existing.removeEventListener("load", onScriptLoad);
+        resizeCleanup?.();
+      };
     }
 
     const script = document.createElement("script");
@@ -225,6 +262,7 @@ const Auth = () => {
     document.body.appendChild(script);
     return () => {
       script.onload = null;
+      resizeCleanup?.();
     };
   }, [googleClientId]);
 
@@ -667,10 +705,12 @@ const Auth = () => {
                   <span className="bg-card px-2 text-muted-foreground">Or continue with Google</span>
                 </div>
               </div>
-              <div
-                ref={googleBtnRef}
-                className="flex min-h-[44px] w-full justify-center [&_iframe]:max-w-full"
-              />
+              <div className="w-full px-2 sm:px-3">
+                <div
+                  ref={googleBtnRef}
+                  className="flex min-h-[44px] w-full max-w-full justify-center [&_iframe]:mx-auto [&_iframe]:block [&_iframe]:max-w-full"
+                />
+              </div>
               {googleMutation.isPending ? (
                 <p className="mt-2 text-center text-xs text-muted-foreground">Signing in with Google…</p>
               ) : null}

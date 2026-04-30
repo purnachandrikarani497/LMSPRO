@@ -150,6 +150,39 @@ export function getSecurePdfUrl(courseId: string, lessonId: string): string {
   return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }
 
+/** Build /upload/pdf URL from stored key or full URL (admin preview). */
+export function getPdfSrc(pdfUrl: string | undefined): string {
+  if (!pdfUrl) return "";
+  if (pdfUrl.startsWith("pdfs/")) {
+    return `${API_BASE_URL}/upload/pdf?key=${encodeURIComponent(pdfUrl)}`;
+  }
+  try {
+    const url = new URL(pdfUrl);
+    if (url.pathname.includes("/upload/pdf") && url.searchParams.has("key")) {
+      const key = url.searchParams.get("key");
+      if (key?.startsWith("pdfs/")) {
+        return `${API_BASE_URL}/upload/pdf?key=${encodeURIComponent(key)}`;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return pdfUrl;
+}
+
+/** PDF URL with auth token for /upload/pdf (admin iframe preview). */
+export function getSecurePdfSrc(pdfUrl: string | undefined): string {
+  if (!pdfUrl) return "";
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;
+  const base = getPdfSrc(pdfUrl);
+  if (!base) return "";
+  if (base.includes("/upload/pdf")) {
+    const sep = base.includes("?") ? "&" : "?";
+    return token ? `${base}${sep}token=${encodeURIComponent(token)}` : base;
+  }
+  return base;
+}
+
 /** Returns HLS master playlist URL with auth token */
 export function getHlsUrl(hlsKey: string): string {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("lms_token") : null;

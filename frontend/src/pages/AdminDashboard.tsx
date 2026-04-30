@@ -664,7 +664,7 @@ const AdminDashboard = () => {
                     {sortBy === "course" && (sortDir === "asc" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
                   </button>
                 </TableHead>
-                <TableHead className="hidden sm:table-cell">
+                <TableHead>
                   <button
                     type="button"
                     onClick={() => handleSort("category")}
@@ -737,7 +737,7 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell">
+                  <TableCell>
                     <Badge variant="outline" className="text-xs">{course.category}</Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground text-sm tabular-nums">
